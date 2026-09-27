@@ -1,0 +1,42 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # RDS 프리티어(db.t4g.micro)는 최대 커넥션 수가 적습니다.
+      # 기본값 10도 과할 수 있어 줄입니다.
+      maximum-pool-size: 5
+  jpa:
+    hibernate:
+      # 개발 초반에는 update, 결제 데이터가 들어가기 시작하면 validate 로 바꾸세요.
+      # update 는 컬럼 삭제·타입 변경을 제대로 처리하지 못해서
+      # 운영 DB 에서 예상 못 한 마이그레이션이 벌어질 수 있습니다.
+      ddl-auto: update
+    show-sql: false
+
+server:
+  # nginx 가 HTTPS 를 종료하고 Spring 에는 HTTP 로 전달합니다.
+  # 없으면 쿠키의 Secure 판정이나 redirect_uri 가 http:// 로 잘못 생성됩니다.
+  forward-headers-strategy: framework
+
+app:
+  cookie:
+    secure: true
+    # app.<도메인> / api.<도메인> 처럼 같은 상위 도메인이면 Lax 로 충분합니다.
+    # 프론트를 *.vercel.app 등 완전히 다른 도메인에 두면 None 으로 바꿔야 합니다.
+    same-site: Lax
+
+# 개발 기간에는 프론트가 배포 서버 Swagger 를 봐야 하므로 켜둡니다.
+# 데모데이 직전에 false 로 바꿔서 API 전체 스펙이 무인증 노출되는 걸 막으세요.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.hama: INFO

@@ -35,3 +35,21 @@ out/
 
 ### VS Code ###
 .vscode/
+
+
+### 시크릿 (절대 커밋 금지) ###
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.key
+src/main/resources/application-secret.yml
+src/main/resources/application-prod.yml
+
+### macOS ###
+.DS_Store
+
+### Claude Code ###
+# settings.json 은 팀 공유(커밋 대상)이므로 .claude/ 통째로 무시하면 안 됩니다.
+.claude/settings.local.json

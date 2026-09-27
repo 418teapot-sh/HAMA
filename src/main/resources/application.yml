@@ -1,3 +1,64 @@
 spring:
   application:
     name: hama
+  profiles:
+    default: local
+  config:
+    # 프로젝트 루트의 .env 를 읽습니다. 없으면 그냥 넘어갑니다(optional).
+    # 로컬에서 외부 API 키를 넣을 때 쓰고, .env 는 .gitignore 로 막혀 있습니다.
+    # dev 는 파일 대신 진짜 환경변수(/etc/hama/app.env)를 씁니다.
+    import: optional:file:.env[.properties]
+  jpa:
+    # 트랜잭션 밖(뷰 렌더링 시점)까지 영속성 컨텍스트를 열어두지 않습니다.
+    # 켜두면 요청 내내 DB 커넥션을 붙잡고 있어 커넥션 풀이 금방 마릅니다.
+    open-in-view: false
+    properties:
+      hibernate:
+        # 투두를 여러 개 한 번에 조회할 때 N+1 쿼리를 줄여줍니다.
+        default_batch_fetch_size: 100
+
+jwt:
+  # 기본값을 두지 않습니다. dev 에서 JWT_SECRET 을 빠뜨리면 조용히 공개된 값으로
+  # 동작하는 대신 부팅이 실패하도록 합니다. (local 값은 application-local.yml)
+  secret: ${JWT_SECRET}
+  access-token-validity: 1800000      # 30분 (ms)
+  refresh-token-validity: 1209600000  # 14일 (ms)
+
+app:
+  cookie:
+    # 리프레시 토큰 쿠키가 재발급·로그아웃 요청에만 붙도록 경로를 좁힙니다.
+    # 모든 API 에 딸려가면 노출 면적만 넓어집니다.
+    path: /api/auth
+    # secure / same-site 는 환경마다 달라서 프로필별 파일에서 정합니다.
+    # (로컬은 http 라서 Secure 쿠키가 브라우저에 저장되지 않습니다)
+
+cors:
+  # 배포 시 CORS_ALLOWED_ORIGINS 로 덮어쓰세요.
+  # allowCredentials(true) 와 함께 쓰려면 와일드카드는 allowedOriginPatterns 로 넣어야 합니다.
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+
+liner:
+  # 키가 없어도 부팅은 되게 합니다. JWT_SECRET 과 달리 빈 값이 보안 문제가 되지 않고,
+  # 키 없는 팀원도 투두/목표 CRUD 는 개발할 수 있어야 합니다.
+  api-key: ${LINER_API_KEY:}
+  base-url: ${LINER_BASE_URL:https://api.liner.com/v1}
+  model: ${LINER_MODEL:liner-mark-1.0}
+  # 라이너가 느릴 때 요청 스레드가 무한정 매달리지 않도록 합니다.
+  timeout-seconds: 30
+
+paddle:
+  api-key: ${PADDLE_API_KEY:}
+  # 웹훅 서명 검증용. 이게 없으면 아무나 "결제 완료" 웹훅을 위조해서
+  # isPremium 을 켤 수 있습니다.
+  webhook-secret: ${PADDLE_WEBHOOK_SECRET:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # health, info 만 노출합니다. "*" 로 두면 /actuator/env 에서
+        # JWT_SECRET · DB 비밀번호 · 라이너 키가 전부 보입니다.
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
