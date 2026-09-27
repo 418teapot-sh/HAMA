@@ -49,3 +49,7 @@ src/main/resources/application-prod.yml
 
 ### macOS ###
 .DS_Store
+
+### Claude Code ###
+# settings.json 은 팀 공유(커밋 대상)이므로 .claude/ 통째로 무시하면 안 됩니다.
+.claude/settings.local.json
