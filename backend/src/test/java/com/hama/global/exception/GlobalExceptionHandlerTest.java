@@ -5,6 +5,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +49,37 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/test/4xx"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("ITEM_NOT_FOUND"))
-                .andExpect(jsonPath("$.error.message").value("3번 투두를 찾을 수 없습니다."));
+                .andExpect(jsonPath("$.error.message").value("3번 투두를 찾을 수 없습니다."))
+                .andExpect(jsonPath("$.data").isEmpty())
+                .andExpect(jsonPath("$.error.fields").isEmpty());
+    }
+
+    @Test
+    void 검증_실패는_data가_아니라_error_fields에_필드별_메시지를_담는다() throws Exception {
+        mockMvc.perform(post("/test/validate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "title": null, "memo": "12345678901" }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.data").isEmpty())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.fields.title").value("제목은 필수입니다."))
+                .andExpect(jsonPath("$.error.fields.memo").value("메모는 10자 이하입니다."));
+    }
+
+    @Test
+    void 한_필드가_여러_검증을_어기면_메시지를_모두_담는다() throws Exception {
+        mockMvc.perform(post("/test/validate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "title": " ", "memo": "" }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields.title").value(org.hamcrest.Matchers.allOf(
+                        org.hamcrest.Matchers.containsString("제목은 필수입니다."),
+                        org.hamcrest.Matchers.containsString("제목은 2자 이상입니다."))));
     }
 
     @Test
@@ -75,6 +108,19 @@ class GlobalExceptionHandlerTest {
         @PostMapping(value = "/test/json", consumes = MediaType.APPLICATION_JSON_VALUE)
         void json(@RequestBody String body) {
         }
+
+        @PostMapping("/test/validate")
+        void validate(@Valid @RequestBody TestRequest request) {
+        }
+    }
+
+    record TestRequest(
+            @NotBlank(message = "제목은 필수입니다.")
+            @Size(min = 2, message = "제목은 2자 이상입니다.")
+            String title,
+            @Size(max = 10, message = "메모는 10자 이하입니다.")
+            String memo
+    ) {
     }
 
     @Getter
