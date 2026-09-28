@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.core.convert.ConversionFailedException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -53,12 +52,13 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationExceptions(MethodArgumentNotValidException e) {
+    public ResponseEntity<ApiResponse<Void>> handleValidationExceptions(MethodArgumentNotValidException e) {
         log.info("[VALIDATION_FAILED] {}", e.getMessage());
 
         // 한 필드가 @NotBlank 와 @Size 를 동시에 어기면 메시지가 둘입니다. put 이면 나중 것만
         // 남고 어느 쪽이 남을지는 실행마다 다릅니다. 둘 다 보여줘야 사용자가 한 번에 고칩니다.
-        // 필드별 메시지는 data 에 { "필드명": "메시지" } 로 담습니다. 프론트는 여기서 폼 에러를 그립니다.
+        // 필드별 메시지는 error.fields 에 { "필드명": "메시지" } 로 담습니다. 프론트는 여기서 폼 에러를 그립니다.
+        // (data 에 담지 않습니다. 실패 응답의 data 는 항상 null 이라는 규칙을 지키기 위해서입니다. ApiResponse 참고)
         Map<String, String> fieldErrors = new HashMap<>();
         e.getBindingResult().getFieldErrors()
                 .forEach(error -> fieldErrors.merge(
@@ -66,10 +66,7 @@ public class GlobalExceptionHandler {
                         (existing, added) -> existing + ", " + added));
 
         return ResponseEntity.status(GlobalErrorCode.VALIDATION_FAILED.getStatus())
-                .body(new ApiResponse<>(false, fieldErrors,
-                        new ApiResponse.ErrorDetail(GlobalErrorCode.VALIDATION_FAILED.name(),
-                                GlobalErrorCode.VALIDATION_FAILED.getMessage()),
-                        MDC.get("traceId")));
+                .body(ApiResponse.validationError(GlobalErrorCode.VALIDATION_FAILED, fieldErrors));
     }
 
     @ExceptionHandler({
@@ -115,10 +112,7 @@ public class GlobalExceptionHandler {
         }
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
                 .headers(headers)
-                .body(new ApiResponse<>(false, null,
-                        new ApiResponse.ErrorDetail("METHOD_NOT_ALLOWED",
-                                "이 URL 에서 지원하지 않는 HTTP 메서드입니다."),
-                        MDC.get("traceId")));
+                .body(ApiResponse.error("METHOD_NOT_ALLOWED", "이 URL 에서 지원하지 않는 HTTP 메서드입니다."));
     }
 
     /**
@@ -162,6 +156,6 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<ApiResponse<Void>> errorResponse(HttpStatus status, String code, String message) {
         return ResponseEntity.status(status)
-                .body(new ApiResponse<>(false, null, new ApiResponse.ErrorDetail(code, message), MDC.get("traceId")));
+                .body(ApiResponse.error(code, message));
     }
 }
