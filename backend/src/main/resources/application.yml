@@ -52,6 +52,13 @@ paddle:
   # isPremium 을 켤 수 있습니다.
   webhook-secret: ${PADDLE_WEBHOOK_SECRET:}
 
+logging:
+  pattern:
+    # TraceIdFilter 가 MDC 에 넣은 traceId 를 로그 한 줄마다 찍습니다.
+    # 이게 없으면 응답에 traceId 가 와도 서버 로그에는 안 남아서 그 값으로 검색할 수 없습니다.
+    # (correlation 은 Boot 기본 로그 패턴 안에 끼워지는 자리라 나머지 형식은 그대로 유지됩니다)
+    correlation: "[%X{traceId:-}] "
+
 management:
   endpoints:
     web:

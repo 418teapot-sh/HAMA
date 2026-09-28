@@ -46,7 +46,74 @@ docker compose up -d      # MySQL 8.0 (hama, hama_test DB 생성)
 - UI: http://localhost:8080/swagger-ui.html
 - OpenAPI 스펙: http://localhost:8080/v3/api-docs
 
-> 아직 `SecurityConfig`가 없어서 지금은 401이 뜹니다. 인증 이슈에서 Swagger 경로를 열 예정입니다.
+> ⚠️ 인증은 아직 없습니다. 지금은 `SecurityConfig`가 모든 요청을 열어둔 상태라 **이대로 배포하면 안 됩니다.** 인증 이슈에서 교체합니다.
+
+## Backend: global 패키지 사용 규칙
+
+`com.hama.global`에는 모든 도메인이 같이 쓰는 코드가 있습니다.
+
+**1. 컨트롤러는 `ApiResponse`로 감싸서 반환합니다.**
+
+```java
+return ApiResponse.success(todoResponse);   // 데이터 있음
+return ApiResponse.noContent();              // 데이터 없음 (DELETE 등)
+```
+
+에러 응답은 `GlobalExceptionHandler`가 만들어주니 컨트롤러에서 직접 만들지 않습니다.
+
+### 응답 형식 (프론트 연동 계약)
+
+모든 API는 아래 두 형식 중 하나로만 응답합니다. 프론트는 `/v3/api-docs`로 이 형식의 타입을 생성합니다.
+
+```jsonc
+// 성공
+{ "success": true,  "data": <T>,  "error": null, "traceId": "a1b2c3d4e5f6a7b8" }
+
+// 실패
+{ "success": false, "data": null, "error": { "code": "...", "message": "...", "fields": null }, "traceId": "..." }
+```
+
+- **실패면 `data`는 항상 `null`** 입니다. 에러 정보는 전부 `error` 안에 있습니다.
+- `error.fields`는 **검증 실패(`VALIDATION_FAILED`)일 때만** `{ "필드명": "메시지" }`가 오고, 그 외에는 `null`입니다.
+  한 필드가 여러 검증을 어기면 메시지가 `", "`로 이어져 옵니다.
+
+  ```json
+  { "success": false, "data": null,
+    "error": { "code": "VALIDATION_FAILED", "message": "입력 데이터 검증에 실패했습니다.",
+               "fields": { "title": "제목은 필수입니다.", "memo": "메모는 10자 이하입니다." } },
+    "traceId": "..." }
+  ```
+- 5xx 에러의 `message`는 에러코드의 기본 문구만 옵니다. 상세 원인은 서버 로그에만 남습니다.
+- 에러 분기는 `message`가 아니라 **`error.code`** 로 합니다. 문구는 바뀔 수 있습니다.
+
+**2. 에러코드는 자기 도메인 패키지에 만듭니다.**
+
+```java
+@Getter
+@RequiredArgsConstructor
+public enum TodoErrorCode implements BaseErrorCode {
+    TODO_NOT_FOUND(HttpStatus.NOT_FOUND, "투두를 찾을 수 없습니다.");
+
+    private final HttpStatus status;
+    private final String message;
+}
+
+throw new BusinessException(TodoErrorCode.TODO_NOT_FOUND);
+```
+
+- `GlobalErrorCode`에는 도메인 에러를 추가하지 않습니다. 여럿이 한 파일을 고치면 merge 충돌이 계속 납니다.
+- 5xx 에러는 원인 예외를 같이 넘깁니다: `new BusinessException(code, e)`. 그래야 로그에 스택이 남습니다.
+
+**3. 엔티티는 `BaseTimeEntity`를 상속합니다.**
+
+```java
+@Entity
+public class Todo extends BaseTimeEntity { ... }
+```
+
+`created_at`, `updated_at`이 자동으로 채워집니다.
+
+**4. 문제가 생기면 `traceId`로 찾습니다.** 모든 응답 본문과 `X-Trace-Id` 헤더에 실려 있고, 서버 로그도 이 값으로 검색됩니다.
 
 ## Frontend: API 타입 생성
 
