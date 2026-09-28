@@ -22,7 +22,9 @@ public class SwaggerConfig {
                 .description("""
                         HAMA API 문서입니다.
 
-                        - 모든 응답은 `{ "success": ..., "data": ..., "error": ..., "traceId": ... }` 형식입니다.
+                        - 성공: `{ "success": true, "data": <T>, "error": null, "traceId": ... }`
+                        - 실패: `{ "success": false, "data": null, "error": { "code", "message", "fields" }, "traceId": ... }`
+                        - `error.fields` 는 검증 실패일 때만 `{ "필드명": "메시지" }`, 그 외에는 null 입니다.
                         - 문제가 생기면 응답의 `traceId`(또는 `X-Trace-Id` 헤더)를 백엔드에 알려주세요. 그 값으로 로그를 찾습니다.
                         """);
 
