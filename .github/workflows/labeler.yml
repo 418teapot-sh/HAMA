@@ -1,0 +1,21 @@
+name: PR Labeler
+
+# pull_request_target: 설정 파일과 워크플로우를 PR 브랜치가 아닌 base 브랜치(develop) 기준으로 읽습니다.
+# PR 코드를 체크아웃하지 않으므로 라벨 쓰기 권한을 줘도 안전합니다.
+# (그래서 이 워크플로우를 추가하는 PR 자체에서는 돌지 않고, 머지 후 다음 PR 부터 동작합니다)
+#
+# 필수 체크가 아닙니다. 라벨만 붙이고 실패해도 머지를 막지 않습니다.
+on:
+  pull_request_target:
+    types: [ opened, synchronize, reopened ]
+
+jobs:
+  labeler:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # sync-labels 기본값(false): 매칭이 풀려도 이미 붙은 라벨은 지우지 않습니다.
+      # 사람이 직접 붙인 영역 라벨([ALL] 작업 등)을 건드리지 않기 위해서입니다.
+      - uses: actions/labeler@v7
