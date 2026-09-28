@@ -1,12 +1,12 @@
 # PR 이 열리면 바뀐 경로의 담당자가 리뷰어로 자동 지정됩니다.
 # 아래로 갈수록 우선순위가 높습니다 (마지막으로 매칭된 줄이 적용).
-# 레포 collaborator 만 넣을 수 있습니다. 초대 전인 계정을 넣으면 그 줄은 무시됩니다.
+# 여러 명이 적혀 있으면 전원에게 요청이 가고, 그중 한 명만 승인해도 됩니다.
 
-# 루트 공통 파일 (README, .gitignore, .github/ 등): BE·FE 모두
-*               @418teapot-sh
+# 루트 공통 파일 (README, .gitignore, .github/ 등): 양쪽 모두에 영향이 있어 전원
+*               @418teapot-sh @jiyun1122 @devmekr @Johminseo @SANGBIN-LEE2
 
 # 백엔드
-/backend/       @418teapot-sh
+/backend/       @418teapot-sh @jiyun1122 @devmekr
 
-# 프론트엔드: 프론트 팀원 초대 후 아이디로 교체
-# /frontend/    @<frontend-github-id>
+# 프론트엔드
+/frontend/      @Johminseo @SANGBIN-LEE2
