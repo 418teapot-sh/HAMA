@@ -1,3 +1,7 @@
+# 프로젝트 이름을 고정합니다. 없으면 폴더명(backend)이 붙어
+# 볼륨이 backend_hama-mysql-data 로 새로 만들어지고 기존 로컬 데이터가 안 보입니다.
+name: hama
+
 services:
   mysql:
     image: mysql:8.0

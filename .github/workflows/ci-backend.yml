@@ -1,5 +1,9 @@
-name: CI Check
+name: CI Backend
 
+# ⚠️ paths 필터를 걸지 마세요.
+# 이 job 은 룰셋 필수 체크입니다. 프론트만 바뀐 PR 에서 실행이 안 되면
+# "필수 체크 대기 중" 으로 남아 머지가 영원히 막힙니다. (테스트는 1분대라 항상 돌려도 됩니다)
+# 경로 필터는 배포 워크플로우에만 겁니다.
 on:
   pull_request:
     branches: [ main, develop ]
@@ -7,12 +11,17 @@ on:
 # 같은 PR 에 커밋을 연달아 푸시하면 이전 실행을 취소합니다.
 # (러너를 붙잡고 있어도 어차피 최신 커밋 결과만 보게 됩니다)
 concurrency:
-  group: ci-check-${{ github.ref }}
+  group: ci-backend-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  test:
+  # job id 가 곧 룰셋 필수 체크 이름입니다. 바꾸면 룰셋도 같이 바꿔야 합니다.
+  ci-backend:
     runs-on: ubuntu-24.04
+
+    defaults:
+      run:
+        working-directory: backend
 
     services:
       mysql:
@@ -41,6 +50,9 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: gradle
+          cache-dependency-path: |
+            backend/**/*.gradle*
+            backend/**/gradle-wrapper.properties
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -53,7 +65,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-report
-          path: build/reports/tests/test/
+          path: backend/build/reports/tests/test/
           retention-days: 7
 
       # test 는 위에서 이미 돌렸으므로 다시 돌리지 않습니다.
