@@ -121,10 +121,14 @@ public class GlobalExceptionHandler {
                         MDC.get("traceId")));
     }
 
+    /**
+     * Content-Type 이 맞지 않습니다(예: JSON API 에 form 으로 보냄). 본문 내용이 틀린 게 아니라
+     * 형식 자체를 못 받는 것이라 400 이 아니라 <b>415</b> 입니다.
+     */
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleWrongMediaType(Exception e) {
         log.info("[NOT_SUPPORTED_MEDIA] {}", e.getMessage());
-        return errorResponse(HttpStatus.BAD_REQUEST, "NOT_SUPPORTED_MEDIA", "허용하지 않는 미디어타입입니다.");
+        return errorResponse(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "NOT_SUPPORTED_MEDIA", "허용하지 않는 미디어타입입니다.");
     }
 
     /**
