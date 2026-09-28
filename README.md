@@ -46,7 +46,49 @@ docker compose up -d      # MySQL 8.0 (hama, hama_test DB 생성)
 - UI: http://localhost:8080/swagger-ui.html
 - OpenAPI 스펙: http://localhost:8080/v3/api-docs
 
-> 아직 `SecurityConfig`가 없어서 지금은 401이 뜹니다. 인증 이슈에서 Swagger 경로를 열 예정입니다.
+> ⚠️ 인증은 아직 없습니다. 지금은 `SecurityConfig`가 모든 요청을 열어둔 상태라 **이대로 배포하면 안 됩니다.** 인증 이슈에서 교체합니다.
+
+## Backend: global 패키지 사용 규칙
+
+`com.hama.global`에는 모든 도메인이 같이 쓰는 코드가 있습니다.
+
+**1. 컨트롤러는 `ApiResponse`로 감싸서 반환합니다.**
+
+```java
+return ApiResponse.success(todoResponse);   // 데이터 있음
+return ApiResponse.noContent();              // 데이터 없음 (DELETE 등)
+```
+
+응답은 항상 `{ "success", "data", "error", "traceId" }` 형식입니다. 에러 응답은 `GlobalExceptionHandler`가 만들어주니 컨트롤러에서 직접 만들지 않습니다.
+
+**2. 에러코드는 자기 도메인 패키지에 만듭니다.**
+
+```java
+@Getter
+@RequiredArgsConstructor
+public enum TodoErrorCode implements BaseErrorCode {
+    TODO_NOT_FOUND(HttpStatus.NOT_FOUND, "투두를 찾을 수 없습니다.");
+
+    private final HttpStatus status;
+    private final String message;
+}
+
+throw new BusinessException(TodoErrorCode.TODO_NOT_FOUND);
+```
+
+- `GlobalErrorCode`에는 도메인 에러를 추가하지 않습니다. 여럿이 한 파일을 고치면 merge 충돌이 계속 납니다.
+- 5xx 에러는 원인 예외를 같이 넘깁니다: `new BusinessException(code, e)`. 그래야 로그에 스택이 남습니다.
+
+**3. 엔티티는 `BaseTimeEntity`를 상속합니다.**
+
+```java
+@Entity
+public class Todo extends BaseTimeEntity { ... }
+```
+
+`created_at`, `updated_at`이 자동으로 채워집니다.
+
+**4. 문제가 생기면 `traceId`로 찾습니다.** 모든 응답 본문과 `X-Trace-Id` 헤더에 실려 있고, 서버 로그도 이 값으로 검색됩니다.
 
 ## Frontend: API 타입 생성
 
