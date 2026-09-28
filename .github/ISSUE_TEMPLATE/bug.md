@@ -1,10 +1,11 @@
 ---
 name: "Bug Template"
 about: 버그 신고 이슈 템플릿
-title: "[Bug] "
+title: ""
 labels: "Fix"
 assignees: ''
 ---
+<!-- 제목 형식: [BE] / [FE] / [ALL] + 설명   예) [BE] JWT 인증 구현 -->
 ## Description 💭
 <!-- 어떤 문제인가요? -->
 

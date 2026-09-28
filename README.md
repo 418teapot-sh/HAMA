@@ -17,9 +17,15 @@ HAMA/
         └── ci-backend.yml
 ```
 
-- 각 앱은 자기 폴더 안에서 독립적으로 빌드·실행합니다. 루트에는 빌드 설정이 없습니다.
-- CI는 앱별 워크플로우로 나눕니다 (`ci-backend.yml`, 이후 `ci-frontend.yml`).
-- 필수 체크 워크플로우에는 `paths` 필터를 걸지 않습니다. 프론트만 바뀐 PR에서 `ci-backend`가 실행되지 않으면 필수 체크가 "대기 중"으로 남아 머지가 영구히 막힙니다. 경로 필터는 배포 워크플로우에만 겁니다.
+각 앱은 자기 폴더 안에서 독립적으로 빌드·실행합니다. 루트에는 빌드 설정이 없습니다.
+
+## CI
+
+- 앱별로 워크플로우를 나눕니다 (`ci-backend.yml`, 이후 `ci-frontend.yml`).
+- job id가 곧 룰셋 필수 체크 이름입니다. job id를 바꾸면 룰셋도 같이 바꿔야 합니다.
+- **필수 체크 워크플로우에는 `paths` 필터를 걸지 않습니다.**
+  프론트만 바뀐 PR에서 `ci-backend`가 실행되지 않으면 필수 체크가 "대기 중"으로 남아 머지가 영구히 막힙니다.
+  경로 필터는 배포 워크플로우에만 겁니다.
 
 ## Backend 로컬 실행
 
@@ -39,7 +45,7 @@ docker compose up -d      # MySQL 8.0 (hama, hama_test DB 생성)
 - UI: http://localhost:8080/swagger-ui.html
 - OpenAPI 스펙: http://localhost:8080/v3/api-docs
 
-> 아직 SecurityConfig가 없어서 지금은 401이 뜹니다. 다음 이슈(global 패키지)에서 열립니다.
+> 아직 `SecurityConfig`가 없어서 지금은 401이 뜹니다. 인증 이슈에서 Swagger 경로를 열 예정입니다.
 
 ## Frontend: API 타입 생성
 
@@ -64,32 +70,150 @@ Boot 3 기준 자료나 코드를 그대로 가져오면 깨지는 부분이 있
   - `@DataJpaTest` → `org.springframework.boot.data.jpa.test.autoconfigure`
 - **springdoc**: Boot 4는 `springdoc-openapi` 3.x를 써야 합니다. 2.x는 Boot 3 전용입니다.
 
-## 컨벤션
+---
 
-### 브랜치
+# 협업 규칙
+
+모노레포라 프론트·백엔드가 같은 이슈 번호와 같은 `develop` 브랜치를 공유합니다.
+누가 어느 영역을 작업 중인지 한눈에 보이도록 아래 규칙을 지킵니다.
+
+## 한눈에 보기
+
+| 대상 | 형식 | 예 |
+|---|---|---|
+| 이슈 제목 | `[BE]` / `[FE]` / `[ALL]` + 설명 | `[BE] JWT 인증 구현` |
+| 브랜치 | `type/번호-설명` (소문자) | `feat/12-jwt-auth` |
+| PR 제목 / squash 커밋 | `Type(BE): 설명` | `Feat(BE): JWT 인증 구현` |
+| 작업 중 커밋 | `Type: 설명` (scope 생략 가능) | `Feat: 토큰 발급 로직 추가` |
+| 라벨 | 타입 + 영역 | `Feat` + `backend` |
+
+- **Type**은 라벨과 똑같이 첫 글자 대문자로 씁니다: `Feat`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
+- **영역 scope**는 대문자 `BE` / `FE`로 씁니다. 양쪽 공통이면 괄호 없이 씁니다 (`Docs: 협업 규칙 문서화`).
+- **브랜치만 소문자**로 씁니다. 리눅스는 대소문자를 구분하고 맥·윈도우는 구분하지 않아서, 대문자가 섞인 브랜치명은 팀원 OS가 다르면 사고가 납니다.
+- 대괄호로 감싼 형식(`[Feat(BE)]: ...`)은 쓰지 않습니다. Conventional Commits의 `type(scope):` 패턴이 깨져서 commitlint 같은 도구나 `git log --grep "^Feat"` 검색이 먹지 않습니다.
+
+## 이슈
+
+**제목**
+
+```
+[BE] 투두 생성 API 구현
+[FE] 로그인 화면 퍼블리싱
+[ALL] 협업 규칙 문서화
+```
+
+영역 태그를 앞에 붙입니다. 이슈 번호가 프론트·백엔드 통합이라
+제목만 보고 담당 영역을 구분할 수 있어야 합니다.
+
+| 태그 | 영역 |
+|---|---|
+| `[BE]` | 백엔드 |
+| `[FE]` | 프론트엔드 |
+| `[ALL]` | 양쪽 공통 (루트 문서, `.github/` 등) |
+
+- 제목 앞자리는 **영역** 태그 자리입니다. `[DOCS]`처럼 타입을 넣지 않습니다. 타입은 라벨로만 표시합니다.
+- 공통 작업도 태그를 생략하지 않고 `[ALL]`을 붙입니다. 생략하면 공통 작업인지 태그를 깜빡한 건지 구분이 안 됩니다.
+
+이슈 템플릿의 기본 제목은 비워뒀습니다. 영역 태그를 직접 붙여주세요.
+
+**라벨은 타입 + 영역 2개**
+
+| 종류 | 라벨 | 용도 |
+|---|---|---|
+| 타입 | `Feat` | 새 기능 |
+| | `Fix` | 버그 수정 |
+| | `Refactor` | 기능 변화 없는 구조 개선 |
+| | `Chore` | 빌드·설정·의존성 |
+| | `Docs` | 문서 |
+| | `Test` | 테스트 |
+| 영역 | `backend` | 백엔드 작업 |
+| | `frontend` | 프론트엔드 작업 |
+
+예) `[BE] JWT 인증 구현` → `Feat` + `backend`
+
+`[ALL]` 이슈는 영역 라벨을 생략하거나 `backend` + `frontend` 둘 다 붙입니다.
+예) `[ALL] 협업 규칙 문서화` → `Docs` (또는 `Docs` + `backend` + `frontend`)
+
+- `all` 같은 별도 영역 라벨은 만들지 않습니다. `label:backend`로 필터링할 때 공통 이슈가 빠져서 오히려 안 보이게 됩니다.
+- 양쪽 필터에 모두 보여야 하는 공통 이슈라면 둘 다 붙이는 쪽을 고릅니다.
+
+영역 라벨이 있으면 이슈 목록에서 `label:backend`로 필터링해 자기 작업만 볼 수 있습니다.
+
+**Assignee를 지정합니다.** 비워두면 누가 잡고 있는지 알 수 없어 중복 작업이 생깁니다.
+
+## 브랜치
 
 ```
 <type>/<이슈번호>-<설명>
 예) feat/12-todo-crud, chore/3-monorepo-restructure
 ```
 
-- `main`: 배포
+- `main`: 배포되는 코드. 배포 시점에만 갱신
 - `develop`: 통합. 작업 브랜치는 `develop`에서 따고 `develop`으로 PR
+- 설명 부분은 영어 소문자 + 하이픈
 
-### 커밋
+**브랜치를 따기 전에 반드시 `develop`을 최신화합니다.**
+
+```bash
+git checkout develop
+git pull
+git checkout -b feat/12-todo-crud
+```
+
+모노레포에서는 프론트·백엔드 머지가 섞여 `develop`이 자주 움직입니다.
+오래된 `develop`에서 브랜치를 따면 나중에 충돌이 납니다.
+
+## 커밋
 
 ```
-<type>: <내용>
-예) feat: 투두 생성 API 추가
+<Type>: <내용>
+예) Feat: 토큰 발급 로직 추가
 ```
 
-| type | 용도 |
+| Type | 용도 |
 |---|---|
-| `feat` | 새 기능 |
-| `fix` | 버그 수정 |
-| `refactor` | 기능 변화 없는 구조 개선 |
-| `chore` | 빌드·설정·의존성 |
-| `docs` | 문서 |
-| `test` | 테스트 |
+| `Feat` | 새 기능 |
+| `Fix` | 버그 수정 |
+| `Refactor` | 기능 변화 없는 구조 개선 |
+| `Chore` | 빌드·설정·의존성 |
+| `Docs` | 문서 |
+| `Test` | 테스트 |
 
-이슈·PR은 `.github`의 템플릿을 따르고, 같은 이름의 라벨을 붙입니다.
+작업 중 커밋은 scope를 생략해도 됩니다. squash 머지되면 작업 중 커밋은 사라지고 PR 제목만 `develop`에 남습니다.
+
+## Pull Request
+
+- **대상 브랜치는 `develop`** (배포용 `develop` → `main` PR은 예외)
+- **제목**: `Type(BE): 설명` / `Type(FE): 설명`, 공통이면 `Type: 설명`
+  - 예) `Feat(BE): JWT 인증 구현`
+  - squash 머지 시 **PR 제목이 그대로 `develop`의 커밋 메시지**가 됩니다. 라벨은 git에 남지 않으니 영역을 제목의 scope로 남깁니다.
+- **본문에 `Closes #N`** — 머지될 때 이슈가 자동으로 닫힙니다
+- **라벨**: 이슈와 동일하게 타입 + 영역 2개
+- **Assignee** 지정
+- **PR 템플릿 체크리스트**를 채웁니다
+
+### 머지 방식
+
+| 방향 | 방식 | 이유 |
+|---|---|---|
+| 작업 브랜치 → `develop` | **Squash** | 작업 중 커밋을 하나로 압축 |
+| `develop` → `main` | **Merge commit** | 이번 배포에 들어간 기능들을 개별 커밋으로 남김 |
+
+### 머지 조건
+
+- `ci-backend` (이후 `ci-frontend`) 체크가 **초록불**이어야 합니다. 빨간불이면 머지하지 않습니다.
+- 리뷰 승인 1명. 가능하면 같은 영역(BE/FE) 담당자가 봅니다.
+
+## 모노레포에서 조심할 것
+
+- **자기 영역 폴더만 수정합니다.** 백엔드는 `backend/`, 프론트는 `frontend/`.
+- **루트 파일은 수정 전에 공유합니다.** `README.md`, `.gitignore`, `.github/` 는
+  양쪽이 모두 쓰는 파일이라 동시에 건드리면 충돌이 납니다.
+- 코드 충돌은 폴더가 갈려 있어 거의 없지만, 위 루트 파일들만 예외입니다.
+
+## Frontend 초기 세팅 체크리스트
+
+- [ ] `frontend/` 에 프로젝트 초기화
+- [ ] `.github/workflows/ci-frontend.yml` 추가 (**`paths` 필터를 걸지 말 것**. 위 [CI](#ci) 참고)
+- [ ] Vercel 연결 시 **Root Directory를 `frontend`로 지정** (기본값인 루트로 두면 빌드 실패)
+- [ ] 룰셋 필수 체크에 `ci-frontend` 추가
