@@ -140,6 +140,16 @@ public class GlobalExceptionHandler {
         return errorResponse(HttpStatus.BAD_REQUEST, "INVALID_MULTIPART", "잘못된 multipart/form-data 요청입니다.");
     }
 
+    /**
+     * 위에서 처리하지 못한 나머지 예외는 전부 500 으로 보냅니다.
+     *
+     * <p>⚠️ 인증을 붙일 때 주의하세요. 이 핸들러는 {@code Exception} 을 통째로 잡아서
+     * Spring Security 의 {@code AccessDeniedException}(403), {@code AuthenticationException}(401)
+     * 까지 먹습니다. 컨트롤러·서비스 안에서 던져진 경우(예: {@code @PreAuthorize} 거절)
+     * 권한 없음이 500 "예상치 못한 오류" 로 나갑니다.
+     * 인증 이슈에서 이 두 예외 전용 핸들러를 <b>먼저</b> 추가해야 합니다.
+     * (필터 단계에서 거절된 요청은 여기까지 오지 않고 Security 의 EntryPoint / AccessDeniedHandler 가 처리합니다)
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneralException(Exception e) {
         log.error("[INTERNAL_SERVER_ERROR] {}", e.getMessage(), e);
