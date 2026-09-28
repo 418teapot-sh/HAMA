@@ -85,7 +85,7 @@ Boot 3 기준 자료나 코드를 그대로 가져오면 깨지는 부분이 있
 | 브랜치 | `type/번호-설명` (소문자) | `feat/12-jwt-auth` |
 | PR 제목 / squash 커밋 | `Type(BE): 설명` | `Feat(BE): JWT 인증 구현` |
 | 작업 중 커밋 | `Type: 설명` (scope 생략 가능) | `Feat: 토큰 발급 로직 추가` |
-| 라벨 | 타입 + 영역 (`[ALL]`은 타입만) | `Feat` + `backend` |
+| 라벨 | 타입 + 영역 | `Feat` + `backend` |
 
 - **Type**은 라벨과 똑같이 첫 글자 대문자로 씁니다: `Feat`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
 - **영역 scope**는 대문자 `BE` / `FE`로 씁니다. 양쪽 공통이면 괄호 없이 씁니다 (`Docs: 협업 규칙 문서화`).
@@ -131,7 +131,11 @@ Boot 3 기준 자료나 코드를 그대로 가져오면 깨지는 부분이 있
 
 예) `[BE] JWT 인증 구현` → `Feat` + `backend`
 
-`[ALL]` 이슈는 영역 라벨 없이 타입 라벨만 붙입니다. 예) `[ALL] 협업 규칙 문서화` → `Docs`
+`[ALL]` 이슈는 영역 라벨을 생략하거나 `backend` + `frontend` 둘 다 붙입니다.
+예) `[ALL] 협업 규칙 문서화` → `Docs` (또는 `Docs` + `backend` + `frontend`)
+
+- `all` 같은 별도 영역 라벨은 만들지 않습니다. `label:backend`로 필터링할 때 공통 이슈가 빠져서 오히려 안 보이게 됩니다.
+- 양쪽 필터에 모두 보여야 하는 공통 이슈라면 둘 다 붙이는 쪽을 고릅니다.
 
 영역 라벨이 있으면 이슈 목록에서 `label:backend`로 필터링해 자기 작업만 볼 수 있습니다.
 
