@@ -59,7 +59,32 @@ return ApiResponse.success(todoResponse);   // 데이터 있음
 return ApiResponse.noContent();              // 데이터 없음 (DELETE 등)
 ```
 
-응답은 항상 `{ "success", "data", "error", "traceId" }` 형식입니다. 에러 응답은 `GlobalExceptionHandler`가 만들어주니 컨트롤러에서 직접 만들지 않습니다.
+에러 응답은 `GlobalExceptionHandler`가 만들어주니 컨트롤러에서 직접 만들지 않습니다.
+
+### 응답 형식 (프론트 연동 계약)
+
+모든 API는 아래 두 형식 중 하나로만 응답합니다. 프론트는 `/v3/api-docs`로 이 형식의 타입을 생성합니다.
+
+```jsonc
+// 성공
+{ "success": true,  "data": <T>,  "error": null, "traceId": "a1b2c3d4e5f6a7b8" }
+
+// 실패
+{ "success": false, "data": null, "error": { "code": "...", "message": "...", "fields": null }, "traceId": "..." }
+```
+
+- **실패면 `data`는 항상 `null`** 입니다. 에러 정보는 전부 `error` 안에 있습니다.
+- `error.fields`는 **검증 실패(`VALIDATION_FAILED`)일 때만** `{ "필드명": "메시지" }`가 오고, 그 외에는 `null`입니다.
+  한 필드가 여러 검증을 어기면 메시지가 `", "`로 이어져 옵니다.
+
+  ```json
+  { "success": false, "data": null,
+    "error": { "code": "VALIDATION_FAILED", "message": "입력 데이터 검증에 실패했습니다.",
+               "fields": { "title": "제목은 필수입니다.", "memo": "메모는 10자 이하입니다." } },
+    "traceId": "..." }
+  ```
+- 5xx 에러의 `message`는 에러코드의 기본 문구만 옵니다. 상세 원인은 서버 로그에만 남습니다.
+- 에러 분기는 `message`가 아니라 **`error.code`** 로 합니다. 문구는 바뀔 수 있습니다.
 
 **2. 에러코드는 자기 도메인 패키지에 만듭니다.**
 
