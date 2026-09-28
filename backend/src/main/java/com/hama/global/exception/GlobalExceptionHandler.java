@@ -42,8 +42,14 @@ public class GlobalExceptionHandler {
             log.info("[{}] {}", errorCode.name(), e.getMessage());
         }
 
+        // 5xx 는 상세 메시지를 클라이언트에 보내지 않고 에러코드의 기본 문구만 보냅니다.
+        // 5xx 메시지에는 외부 API(라이너) 호출 실패나 DB 연결 실패처럼 내부 호스트·엔드포인트·
+        // 키 조각이 섞이기 쉽습니다. 상세는 위에서 로그(스택 포함)로 남겼으니 traceId 로 찾으면 됩니다.
+        // 4xx 는 사용자가 고쳐야 하는 내용이라 던질 때 넣은 메시지를 그대로 보냅니다.
+        String clientMessage = status.is5xxServerError() ? errorCode.getMessage() : e.getMessage();
+
         return ResponseEntity.status(status)
-                .body(ApiResponse.error(errorCode, e.getMessage()));
+                .body(ApiResponse.error(errorCode, clientMessage));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
