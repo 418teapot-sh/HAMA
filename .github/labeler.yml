@@ -1,0 +1,13 @@
+# PR 에서 바뀐 경로를 보고 영역 라벨을 자동으로 붙입니다. (.github/workflows/labeler.yml)
+# 키 = 레포에 이미 있는 라벨 이름 (대소문자 구분)
+#
+# 루트 파일(README, .github/ 등)만 바뀐 PR 에는 영역 라벨을 붙이지 않습니다.
+# [ALL] 작업은 영역 라벨을 생략하거나 직접 둘 다 붙입니다. (README > 협업 규칙)
+
+backend:
+  - changed-files:
+      - any-glob-to-any-file: 'backend/**'
+
+frontend:
+  - changed-files:
+      - any-glob-to-any-file: 'frontend/**'
