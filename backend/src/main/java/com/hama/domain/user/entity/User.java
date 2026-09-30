@@ -24,6 +24,7 @@ public class User extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "user_id")
     private Long id;
 
     /** 소문자로 정규화된 값만 들어옵니다(SignupRequest 참고). 동시 가입은 unique 제약이 최종 방어선입니다. */

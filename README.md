@@ -191,6 +191,7 @@ public class Todo extends BaseTimeEntity { ... }
 public class User extends BaseTimeEntity {
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "user_id")                          // PK 컬럼은 테이블명_id (ERD 와 같게)
     private Long id;
 
     private String email;
