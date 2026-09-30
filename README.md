@@ -40,13 +40,78 @@ docker compose up -d      # MySQL 8.0 (hama, hama_test DB 생성)
 
 - `.env`는 `backend/`에 둡니다. `backend/.env.example`을 복사해서 쓰세요. 없어도 부팅은 됩니다.
 - 테스트: `./gradlew test` (MySQL 컨테이너가 떠 있어야 합니다. `hama_test` DB 사용)
+- PC에 MySQL이 따로 깔려 3306을 쓰고 있으면 `.env`에 `DB_PORT=3307`처럼 다른 포트를 넣으세요.
 
 ### Swagger
 
 - UI: http://localhost:8080/swagger-ui.html
 - OpenAPI 스펙: http://localhost:8080/v3/api-docs
 
-> ⚠️ 인증은 아직 없습니다. 지금은 `SecurityConfig`가 모든 요청을 열어둔 상태라 **이대로 배포하면 안 됩니다.** 인증 이슈에서 교체합니다.
+보호된 API를 테스트하려면: `POST /api/auth/signup`(또는 `/login`) → 응답의 `data.accessToken` 복사 →
+우측 상단 **Authorize**에 토큰만 붙여넣기(`Bearer ` 없이).
+
+## Backend: 인증 (JWT)
+
+| 토큰 | 전달 방식 | 수명 | 프론트 보관 |
+|---|---|---|---|
+| Access Token | 응답 body `data.accessToken` → 요청 헤더 `Authorization: Bearer <토큰>` | 30분 | **메모리** (변수·상태). localStorage 금지 |
+| Refresh Token | `Set-Cookie: refreshToken` (HttpOnly, `Path=/api/auth`) | 14일 | 브라우저가 자동 관리. JS로 읽을 수 없음 |
+
+- Refresh Token은 body에 오지 않습니다. JS가 읽을 수 없는 쿠키라 XSS가 나도 14일짜리 토큰은 털리지 않습니다.
+- 서버 DB에는 Refresh Token의 SHA-256 해시만 저장하고, 재발급할 때마다 새 토큰으로 교체(rotation)합니다.
+- 사용자당 Refresh Token은 하나입니다. 다른 기기에서 로그인하면 이전 기기는 30분 뒤 다시 로그인해야 합니다.
+
+### API
+
+| 메서드 | 경로 | 요청 | 응답 |
+|---|---|---|---|
+| POST | `/api/auth/signup` | `{ email, password(8~64자), nickname(≤30자) }` | `accessToken` + 쿠키. 중복 이메일 409 `EMAIL_ALREADY_EXISTS` |
+| POST | `/api/auth/login` | `{ email, password }` | `accessToken` + 쿠키. 실패 401 `INVALID_CREDENTIALS`, 15분에 5회 초과 429 |
+| POST | `/api/auth/refresh` | body 없음 (쿠키만) | 새 `accessToken` + 새 쿠키. 실패 401 `INVALID_REFRESH_TOKEN` → 다시 로그인 |
+| POST | `/api/auth/logout` | body 없음 (쿠키만) | 쿠키 삭제 + 서버 토큰 삭제. 항상 성공 |
+| GET | `/api/users/me` | Bearer | 내 정보 |
+
+### 프론트 연동
+
+```ts
+// 쿠키가 오가려면 인증 요청에 반드시 credentials 를 켭니다. (axios: withCredentials: true)
+const res = await fetch(`${API}/api/auth/login`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  credentials: 'include',
+  body: JSON.stringify({ email, password }),
+});
+accessToken = (await res.json()).data.accessToken;   // 메모리에만
+
+// API 호출이 401 UNAUTHORIZED 면 → /api/auth/refresh (credentials: 'include') 로 재발급 후 재시도.
+// 새로고침으로 메모리가 날아가도 앱 시작 시 /api/auth/refresh 를 한 번 부르면 로그인이 복구됩니다.
+```
+
+### 백엔드: 로그인한 사용자 id 꺼내기
+
+지금 `Long userId = 1L;`로 임시 작업 중인 곳은 이렇게 바꾸면 됩니다.
+
+```java
+// Before
+@GetMapping("/api/todos")
+public ApiResponse<List<TodoResponse>> getTodos() {
+    Long userId = 1L;
+    ...
+}
+
+// After
+@GetMapping("/api/todos")
+public ApiResponse<List<TodoResponse>> getTodos(@AuthenticationPrincipal AuthUser authUser) {
+    Long userId = authUser.userId();
+    ...
+}
+```
+
+- `AuthUser`는 `com.hama.global.auth.AuthUser`, `@AuthenticationPrincipal`은 `org.springframework.security.core.annotation`입니다.
+- `/api/auth/**`, Swagger, `/actuator/health`·`/actuator/info` 외에는 **전부 로그인 필요**입니다.
+  토큰이 없거나 틀리면 컨트롤러에 오기 전에 401 `UNAUTHORIZED`가 나가므로, 컨트롤러에서 `authUser`가 null인지 검사할 필요 없습니다.
+- 공개 API를 새로 만들어야 하면 `SecurityConfig.PUBLIC_ENDPOINTS`에 추가합니다. `/actuator/**`처럼 넓게 열지 마세요.
+- 테스트에서 인증된 요청이 필요하면 `/api/auth/signup`으로 받은 토큰을 헤더에 붙입니다(`AuthApiIntegrationTest` 참고).
 
 ## Backend: global 패키지 사용 규칙
 
@@ -113,7 +178,56 @@ public class Todo extends BaseTimeEntity { ... }
 
 `created_at`, `updated_at`이 자동으로 채워집니다.
 
-**4. 문제가 생기면 `traceId`로 찾습니다.** 모든 응답 본문과 `X-Trace-Id` 헤더에 실려 있고, 서버 로그도 이 값으로 검색됩니다.
+**4. 엔티티는 정적 팩토리 메서드로만 생성합니다. (팀 컨벤션)**
+
+빌더는 내부에서만 쓰고 외부에 열지 않습니다. 생성 시점의 불변식(기본값, 필수값)을 팩토리 한 곳에서 강제해서,
+호출부가 빌더로 필드를 빠뜨리거나 엉뚱한 값을 넣을 여지를 없앱니다.
+
+```java
+@Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)   // JPA 용
+@Builder(access = AccessLevel.PRIVATE)               // 외부에서 User.builder() 못 씀
+@AllArgsConstructor(access = AccessLevel.PRIVATE)    // @Builder 가 쓰는 생성자
+public class User extends BaseTimeEntity {
+
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "user_id")                          // PK 컬럼은 테이블명_id (ERD 와 같게)
+    private Long id;
+
+    private String email;
+    private String password;
+    private String nickname;
+    private int goalCreatedCount;
+    private boolean isPremium;
+
+    /**
+     * 회원가입으로 생성합니다. 가입 시점의 불변식(무료 시작, 목표 생성 0회)을 여기서 강제합니다.
+     *
+     * @param encodedPassword 반드시 인코딩된 비밀번호. 원문을 넘기지 마세요.
+     */
+    public static User create(String email, String encodedPassword, String nickname) {
+        return User.builder()
+                .email(email)
+                .password(encodedPassword)
+                .nickname(nickname)
+                .goalCreatedCount(0)
+                .isPremium(false)
+                .build();
+    }
+}
+```
+
+- 팩토리 이름은 의도를 드러내게 씁니다: `create`, `of`, `from` 등.
+- 상태 변경도 setter 대신 의도가 드러나는 메서드로 만듭니다.
+
+  ```java
+  user.markPremium();         // ✅   user.setIsPremium(true)        ❌
+  user.increaseGoalCount();   // ✅   user.setGoalCreatedCount(n)    ❌
+  ```
+- 실제 예시: `domain/user/entity/User`, `domain/auth/entity/RefreshToken`
+
+**5. 문제가 생기면 `traceId`로 찾습니다.** 모든 응답 본문과 `X-Trace-Id` 헤더에 실려 있고, 서버 로그도 이 값으로 검색됩니다.
 
 ## Frontend: API 타입 생성
 

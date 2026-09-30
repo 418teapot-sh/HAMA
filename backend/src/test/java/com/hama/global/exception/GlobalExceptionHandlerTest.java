@@ -14,6 +14,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -91,8 +93,32 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.error.code").value("NOT_SUPPORTED_MEDIA"));
     }
 
+    @Test
+    void 컨트롤러에서_던진_AccessDeniedException은_500이_아니라_403() throws Exception {
+        mockMvc.perform(get("/test/forbidden"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void 컨트롤러에서_던진_AuthenticationException은_500이_아니라_401() throws Exception {
+        mockMvc.perform(get("/test/unauthorized"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
     @RestController
     static class TestController {
+
+        @GetMapping("/test/forbidden")
+        void forbidden() {
+            throw new AccessDeniedException("denied");
+        }
+
+        @GetMapping("/test/unauthorized")
+        void unauthorized() {
+            throw new InsufficientAuthenticationException("no auth");
+        }
 
         @GetMapping("/test/5xx")
         void serverError() {

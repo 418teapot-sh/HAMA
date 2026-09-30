@@ -11,6 +11,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -139,14 +141,31 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 컨트롤러·서비스 안에서 던져진 Security 예외입니다(예: {@code @PreAuthorize} 거절).
+     * 전용 핸들러가 없으면 아래 {@code Exception} 핸들러가 먹어서 403 이 500 으로 나갑니다.
+     *
+     * <p>필터 단계에서 거절된 요청은 여기까지 오지 않고 {@code JwtAccessDeniedHandler} 가 처리합니다.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException e) {
+        log.warn("[FORBIDDEN] {}", e.getMessage());
+        return ResponseEntity.status(GlobalErrorCode.FORBIDDEN.getStatus())
+                .body(ApiResponse.error(GlobalErrorCode.FORBIDDEN, GlobalErrorCode.FORBIDDEN.getMessage()));
+    }
+
+    /** {@link #handleAccessDenied} 와 같은 이유입니다. 필터 단계는 {@code JwtAuthenticationEntryPoint} 가 처리합니다. */
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException e) {
+        log.warn("[UNAUTHORIZED] {}", e.getMessage());
+        return ResponseEntity.status(GlobalErrorCode.UNAUTHORIZED.getStatus())
+                .body(ApiResponse.error(GlobalErrorCode.UNAUTHORIZED, GlobalErrorCode.UNAUTHORIZED.getMessage()));
+    }
+
+    /**
      * 위에서 처리하지 못한 나머지 예외는 전부 500 으로 보냅니다.
      *
-     * <p>⚠️ 인증을 붙일 때 주의하세요. 이 핸들러는 {@code Exception} 을 통째로 잡아서
-     * Spring Security 의 {@code AccessDeniedException}(403), {@code AuthenticationException}(401)
-     * 까지 먹습니다. 컨트롤러·서비스 안에서 던져진 경우(예: {@code @PreAuthorize} 거절)
-     * 권한 없음이 500 "예상치 못한 오류" 로 나갑니다.
-     * 인증 이슈에서 이 두 예외 전용 핸들러를 <b>먼저</b> 추가해야 합니다.
-     * (필터 단계에서 거절된 요청은 여기까지 오지 않고 Security 의 EntryPoint / AccessDeniedHandler 가 처리합니다)
+     * <p>{@code Exception} 을 통째로 잡으므로, 특정 예외를 다른 상태코드로 보내려면
+     * 이 메서드가 아니라 전용 핸들러를 추가하세요(위의 Security 예외 핸들러처럼).
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneralException(Exception e) {

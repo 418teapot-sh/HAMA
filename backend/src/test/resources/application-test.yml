@@ -31,7 +31,7 @@ spring:
     database:
       replace: none
   datasource:
-    url: jdbc:mysql://localhost:3306/hama_test?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&useSSL=false
+    url: jdbc:mysql://localhost:${DB_PORT:3306}/hama_test?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&useSSL=false
     username: hama
     password: hama
     driver-class-name: com.mysql.cj.jdbc.Driver

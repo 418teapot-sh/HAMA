@@ -1,6 +1,7 @@
 package com.hama.global.response;
 
 import com.hama.global.exception.BaseErrorCode;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Map;
 import org.slf4j.MDC;
 
@@ -15,10 +16,19 @@ import org.slf4j.MDC;
  * <p>실패일 때 {@code data} 는 항상 null 입니다. 에러 정보는 전부 {@code error} 안에만 담습니다.
  * 규칙에 예외가 있으면 프론트가 에러 처리를 경우마다 따로 짜야 하고, 생성된 타입과도 어긋납니다.
  */
+@Schema(description = "모든 API 의 공통 응답 형식")
 public record ApiResponse<T>(
+        @Schema(description = "성공 여부", example = "true")
         boolean success,
+
+        @Schema(description = "응답 데이터. 실패면 항상 null")
         T data,
+
+        @Schema(description = "에러 정보. 성공이면 null")
         ErrorDetail error,
+
+        @Schema(description = "요청 추적 id. 문제가 생기면 이 값을 백엔드에 알려주세요 (X-Trace-Id 헤더와 같은 값)",
+                example = "a1b2c3d4e5f6a7b8")
         String traceId
 ) {
 
@@ -54,6 +64,18 @@ public record ApiResponse<T>(
      * @param fields 검증 실패일 때만 {@code { "필드명": "메시지" }}, 그 외에는 null.
      *               한 필드가 여러 검증을 어기면 메시지를 ", " 로 이어 붙입니다.
      */
-    public record ErrorDetail(String code, String message, Map<String, String> fields) {
+    @Schema(description = "에러 정보")
+    public record ErrorDetail(
+            @Schema(description = "에러 코드. 프론트는 message 가 아니라 이 값으로 분기합니다", example = "VALIDATION_FAILED")
+            String code,
+
+            @Schema(description = "사용자에게 보여줄 수 있는 메시지. 문구는 바뀔 수 있습니다",
+                    example = "입력 데이터 검증에 실패했습니다.")
+            String message,
+
+            @Schema(description = "검증 실패(VALIDATION_FAILED)일 때만 { 필드명: 메시지 }, 그 외에는 null",
+                    example = "{\"email\": \"이메일 형식이 아닙니다.\"}")
+            Map<String, String> fields
+    ) {
     }
 }
