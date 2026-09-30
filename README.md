@@ -41,6 +41,9 @@ docker compose up -d      # MySQL 8.0 (hama, hama_test DB 생성)
 - `.env`는 `backend/`에 둡니다. `backend/.env.example`을 복사해서 쓰세요. 없어도 부팅은 됩니다.
 - 테스트: `./gradlew test` (MySQL 컨테이너가 떠 있어야 합니다. `hama_test` DB 사용)
 - PC에 MySQL이 따로 깔려 3306을 쓰고 있으면 `.env`에 `DB_PORT=3307`처럼 다른 포트를 넣으세요.
+- 부팅 시 Flyway가 `Found non-empty schema(s) ... without schema history table` 로 실패하면,
+  예전에 Hibernate가 만든 테이블이 남아 있는 것입니다. 로컬 DB를 비우세요(데이터가 전부 지워집니다):
+  `docker compose down -v && docker compose up -d`
 
 ### Swagger
 
@@ -227,7 +230,24 @@ public class User extends BaseTimeEntity {
   ```
 - 실제 예시: `domain/user/entity/User`, `domain/auth/entity/RefreshToken`
 
-**5. 문제가 생기면 `traceId`로 찾습니다.** 모든 응답 본문과 `X-Trace-Id` 헤더에 실려 있고, 서버 로그도 이 값으로 검색됩니다.
+**5. 테이블을 만들거나 바꾸면 Flyway 마이그레이션 SQL을 같이 커밋합니다.**
+
+스키마는 Hibernate가 아니라 `backend/src/main/resources/db/migration`의 SQL 파일이 만듭니다.
+앱이 켜질 때 Flyway가 아직 안 돌린 파일만 번호 순서대로 실행하고, Hibernate는 엔티티와 테이블이 맞는지
+검사만 합니다(`ddl-auto: validate`). 안 맞으면 앱이 뜨지 않습니다.
+
+- 파일 이름: `V{다음 번호}__{설명}.sql` (언더스코어 두 개). 예: `V2__create_todo.sql`
+- **이미 develop에 머지된 파일은 절대 고치지 않습니다.** 고칠 게 있으면 새 번호로 `ALTER TABLE`을 씁니다.
+  이미 실행된 파일이 바뀌면 체크섬이 달라져 모든 환경에서 부팅이 실패합니다.
+- 다른 사람과 번호가 겹치면 나중에 머지하는 쪽이 번호를 올립니다. 이미 로컬에서 실행한 파일의 번호를 바꿨다면
+  로컬 DB 기록과 어긋나 부팅이 실패하니 `docker compose down -v && docker compose up -d`로 초기화하세요.
+- **SQL을 직접 짤 필요는 없습니다.** 로컬에서 `bootRun`하면 엔티티 기준 `CREATE TABLE`이
+  `backend/build/generated-schema.sql`에 생깁니다. 새 테이블 부분을 복사해 마이그레이션 파일로 옮기세요.
+  컬럼 추가처럼 기존 테이블을 바꿀 때는 `ALTER TABLE ... ADD COLUMN ...`으로 바뀐 부분만 씁니다.
+- 순서: ① 엔티티 작성 → ② `bootRun` (validate 실패로 안 떠도 파일은 생깁니다) → ③ SQL 복사해서 `V{번호}__설명.sql` → ④ 다시 `bootRun`
+- 실제 예시: `V1__create_users_and_refresh_token.sql`
+
+**6. 문제가 생기면 `traceId`로 찾습니다.** 모든 응답 본문과 `X-Trace-Id` 헤더에 실려 있고, 서버 로그도 이 값으로 검색됩니다.
 
 ## Frontend: API 타입 생성
 
