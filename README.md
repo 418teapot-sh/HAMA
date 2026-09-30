@@ -249,6 +249,49 @@ public class User extends BaseTimeEntity {
 
 **6. 문제가 생기면 `traceId`로 찾습니다.** 모든 응답 본문과 `X-Trace-Id` 헤더에 실려 있고, 서버 로그도 이 값으로 검색됩니다.
 
+## Backend: AI 호출 (`global/ai`)
+
+goals/ai·reviews 등 AI가 필요한 곳은 전부 `com.hama.global.ai.AiClient` 하나로 호출합니다.
+라이너 [Chat Completions](https://liner.com/developers/docs/liner-model-api-chat-completions)(OpenAI 호환) API를 씁니다.
+
+```java
+@Service
+@RequiredArgsConstructor
+public class ReviewService {
+
+    private final AiClient aiClient;
+
+    public String weeklyComment(String summary) {
+        // 텍스트 응답
+        return aiClient.chat(AiRequest.of("weekly-review", "너는 목표 달성 코치야. 두 문장으로 답해.", summary));
+    }
+
+    public RealityResult check(String goal) {
+        // JSON 응답 → DTO. 필드명은 시스템 프롬프트에 적어주세요.
+        return aiClient.chatForJson(
+                AiRequest.of("reality-check", "verdict(FEASIBLE|CHALLENGING|UNREALISTIC), comment 필드를 가진 JSON 으로 답해.", goal),
+                RealityResult.class);
+    }
+}
+```
+
+- 대화형 호출은 `AiRequest.of(purpose, systemPrompt, List<AiMessage>)`에 이력을 오래된 것부터 넣습니다(`AiMessage.user(..)`, `AiMessage.assistant(..)`).
+- `purpose`는 로그 태그입니다. 호출마다 `[AI] purpose=... promptTokens=... completionTokens=...`가 남아 기능별 토큰 사용량을 볼 수 있습니다.
+- **토큰 절감은 `LinerAiClient`에서만 합니다.** 도메인 코드에서 이력을 따로 자르지 마세요. 값은 `application.yml`의 `liner.*`에서 조정합니다.
+  - `max-history-messages`: 최근 N개 이력만 전송 (시스템 프롬프트는 항상 포함)
+  - `max-completion-tokens`: 생성 토큰 상한. `withMaxTokens(n)`으로 더 낮출 수는 있어도 넘길 수는 없습니다.
+  - `reasoning-effort`: 기본 `low`. 플랜 생성처럼 어려운 호출만 `withReasoningEffort("medium")`으로 올립니다.
+- 실패는 전부 `BusinessException`으로 나오니 **잡지 말고 그대로 던지세요.** 응답은 GlobalExceptionHandler가 만듭니다.
+
+| code | 상태 | 상황 |
+|---|---|---|
+| `AI_RATE_LIMIT` | 429 | 라이너 rate limit. 잠시 후 재시도 |
+| `AI_UPSTREAM_ERROR` | 502 | 라이너 오류·타임아웃·응답 파싱 실패. 재시도 가능 |
+| `AI_NOT_CONFIGURED` | 503 | `LINER_API_KEY`가 비어 있음 |
+
+- 로컬에서 실제로 호출하려면 `backend/.env`에 `LINER_API_KEY=...`를 넣습니다. 키가 없어도 부팅과 AI 외 기능은 정상입니다.
+- 테스트에서는 `AiClient`를 mock 하세요. `application-test.yml`은 키를 비워 두어 실수로 실제 API를 부르지 않습니다.
+
 ## Frontend: API 타입 생성
 
 백엔드를 띄운 상태에서 OpenAPI 스펙으로 타입을 뽑습니다.

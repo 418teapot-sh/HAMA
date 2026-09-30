@@ -41,10 +41,15 @@ liner:
   # 키가 없어도 부팅은 되게 합니다. JWT_SECRET 과 달리 빈 값이 보안 문제가 되지 않고,
   # 키 없는 팀원도 투두/목표 CRUD 는 개발할 수 있어야 합니다.
   api-key: ${LINER_API_KEY:}
-  base-url: ${LINER_BASE_URL:https://api.liner.com/v1}
-  model: ${LINER_MODEL:liner-mark-1.0}
+  # OpenAI Chat Completions 호환 API 입니다. (https://liner.com/developers/docs/liner-model-api-chat-completions)
+  base-url: ${LINER_BASE_URL:https://platform.liner.com/api/v1}
+  model: ${LINER_MODEL:liner-mark-1.1}
   # 라이너가 느릴 때 요청 스레드가 무한정 매달리지 않도록 합니다.
   timeout-seconds: 30
+  # 토큰 절감: 아래 값들은 LinerAiClient 한 곳에서만 적용됩니다. 도메인 코드에서 따로 자르지 마세요.
+  max-completion-tokens: 2000
+  max-history-messages: 12
+  reasoning-effort: low
 
 paddle:
   api-key: ${PADDLE_API_KEY:}
