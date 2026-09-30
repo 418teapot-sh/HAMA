@@ -3,12 +3,12 @@ package com.hama.domain.auth.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
 import com.hama.domain.auth.dto.LoginRequest;
 import com.hama.domain.auth.dto.SignupRequest;
-import com.hama.domain.auth.entity.RefreshToken;
 import com.hama.domain.auth.exception.AuthErrorCode;
 import com.hama.domain.auth.repository.RefreshTokenRepository;
 import com.hama.domain.user.entity.User;
@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -46,9 +45,10 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        jwtTokenProvider = new JwtTokenProvider(new JwtProperties(SECRET, 30 * 60 * 1000L, 14L * 24 * 60 * 60 * 1000));
+        JwtProperties properties = new JwtProperties(SECRET, 30 * 60 * 1000L, 14L * 24 * 60 * 60 * 1000);
+        jwtTokenProvider = new JwtTokenProvider(properties);
         authService = new AuthService(jwtTokenProvider, refreshTokenRepository, userRepository, passwordEncoder,
-                new LoginAttemptLimiter(), new RefreshTokenWriter(refreshTokenRepository));
+                new LoginAttemptLimiter(), properties);
     }
 
     private static User savedUser() {
@@ -90,27 +90,6 @@ class AuthServiceTest {
         @Test
         void 이메일은_소문자로_정규화한다() {
             assertThat(new SignupRequest(" Test@HAMA.com ", "password1234", "닉네임").email()).isEqualTo(EMAIL);
-        }
-
-        @Test
-        void 리프레시_토큰_INSERT가_동시성으로_실패해도_재조회로_복구한다() {
-            given(userRepository.existsByEmail(EMAIL)).willReturn(false);
-            given(passwordEncoder.encode("password1234")).willReturn("encoded");
-            given(userRepository.saveAndFlush(any(User.class))).willAnswer(invocation -> {
-                User user = invocation.getArgument(0);
-                ReflectionTestUtils.setField(user, "id", 1L);
-                return user;
-            });
-            RefreshToken concurrentlyInserted = RefreshToken.create(1L, "other-session-hash");
-            given(refreshTokenRepository.findByUserId(1L))
-                    .willReturn(Optional.empty())
-                    .willReturn(Optional.of(concurrentlyInserted));
-            given(refreshTokenRepository.saveAndFlush(any(RefreshToken.class)))
-                    .willThrow(new DataIntegrityViolationException("duplicate"));
-
-            AuthTokens tokens = authService.signup(new SignupRequest(EMAIL, "password1234", "닉네임"));
-
-            assertThat(RefreshTokenHasher.matches(tokens.refreshToken(), concurrentlyInserted.getTokenHash())).isTrue();
         }
     }
 
@@ -160,17 +139,15 @@ class AuthServiceTest {
         @Test
         void 저장된_토큰과_일치하면_새_토큰으로_교체한다() {
             String refreshToken = jwtTokenProvider.createRefreshToken(1L);
-            RefreshToken saved = RefreshToken.create(1L, RefreshTokenHasher.hash(refreshToken));
-            given(refreshTokenRepository.findByUserId(1L)).willReturn(Optional.of(saved));
             given(userRepository.existsById(1L)).willReturn(true);
+            given(refreshTokenRepository.rotate(eq(1L), eq(RefreshTokenHasher.hash(refreshToken)), any(), any()))
+                    .willReturn(1);
 
             AuthTokens tokens = authService.reissue(refreshToken);
 
             assertThat(tokens.refreshToken()).isNotEqualTo(refreshToken);
-            assertThat(RefreshTokenHasher.matches(tokens.refreshToken(), saved.getTokenHash())).isTrue();
-            assertThat(RefreshTokenHasher.matches(refreshToken, saved.getTokenHash()))
-                    .as("rotation 후 이전 토큰은 더 이상 맞지 않아야 합니다")
-                    .isFalse();
+            verify(refreshTokenRepository).rotate(eq(1L), eq(RefreshTokenHasher.hash(refreshToken)),
+                    eq(RefreshTokenHasher.hash(tokens.refreshToken())), any());
         }
 
         @Test
@@ -190,8 +167,9 @@ class AuthServiceTest {
         @Test
         void 저장된_해시와_다르면_401() {
             String refreshToken = jwtTokenProvider.createRefreshToken(1L);
-            given(refreshTokenRepository.findByUserId(1L))
-                    .willReturn(Optional.of(RefreshToken.create(1L, RefreshTokenHasher.hash("다른-토큰"))));
+            given(userRepository.existsById(1L)).willReturn(true);
+            // 교체된 행이 없으면(0) 이미 교체됐거나 로그아웃된 토큰입니다.
+            given(refreshTokenRepository.rotate(any(), any(), any(), any())).willReturn(0);
 
             assertThatThrownBy(() -> authService.reissue(refreshToken))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_REFRESH_TOKEN);
@@ -202,14 +180,12 @@ class AuthServiceTest {
     class 로그아웃 {
 
         @Test
-        void 저장된_토큰과_일치하면_삭제한다() {
+        void 이_기기의_토큰만_삭제한다() {
             String refreshToken = jwtTokenProvider.createRefreshToken(1L);
-            RefreshToken saved = RefreshToken.create(1L, RefreshTokenHasher.hash(refreshToken));
-            given(refreshTokenRepository.findByUserId(1L)).willReturn(Optional.of(saved));
 
             authService.logout(refreshToken);
 
-            verify(refreshTokenRepository).delete(saved);
+            verify(refreshTokenRepository).deleteByUserIdAndTokenHash(1L, RefreshTokenHasher.hash(refreshToken));
         }
 
         @Test

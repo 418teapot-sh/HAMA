@@ -18,11 +18,6 @@ final class RefreshTokenHasher {
         return Base64.getEncoder().encodeToString(sha256(rawToken));
     }
 
-    /** 비교 시간이 값에 따라 달라지지 않도록 {@link MessageDigest#isEqual} 로 비교합니다. */
-    static boolean matches(String rawToken, String hashedToken) {
-        return MessageDigest.isEqual(sha256(rawToken), Base64.getDecoder().decode(hashedToken));
-    }
-
     private static byte[] sha256(String value) {
         try {
             return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));

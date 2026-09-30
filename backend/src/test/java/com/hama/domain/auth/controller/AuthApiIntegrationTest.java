@@ -8,9 +8,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.hama.domain.auth.entity.RefreshToken;
 import com.hama.domain.auth.repository.RefreshTokenRepository;
+import com.hama.domain.auth.service.AuthService;
 import com.hama.domain.user.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
+import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -47,6 +50,9 @@ class AuthApiIntegrationTest {
 
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
+    private AuthService authService;
 
     private record Session(String email, String accessToken, String refreshToken) {
     }
@@ -167,7 +173,7 @@ class AuthApiIntegrationTest {
     void 로그아웃하면_쿠키가_지워지고_DB_에서도_삭제된다() throws Exception {
         Session session = signup();
         Long userId = userRepository.findByEmail(session.email()).orElseThrow().getId();
-        assertThat(refreshTokenRepository.findByUserId(userId)).isPresent();
+        assertThat(refreshTokenCount(userId)).isEqualTo(1);
 
         mockMvc.perform(post("/api/auth/logout")
                         .cookie(new Cookie("refreshToken", session.refreshToken())))
@@ -177,7 +183,47 @@ class AuthApiIntegrationTest {
                         org.hamcrest.Matchers.containsString("Max-Age=0"),
                         org.hamcrest.Matchers.containsString("Path=/api/auth"))));
 
-        assertThat(refreshTokenRepository.findByUserId(userId)).isEmpty();
+        assertThat(refreshTokenCount(userId)).isZero();
+    }
+
+    @Test
+    void 여러_기기에서_로그인해도_각자_재발급된다() throws Exception {
+        Session pc = signup();
+        MvcResult phoneLogin = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "email": "%s", "password": "password1234" }
+                                """.formatted(pc.email())))
+                .andExpect(status().isOk())
+                .andReturn();
+        String phoneRefresh = refreshCookieOf(phoneLogin);
+
+        mockMvc.perform(post("/api/auth/refresh").cookie(new Cookie("refreshToken", pc.refreshToken())))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/auth/refresh").cookie(new Cookie("refreshToken", phoneRefresh)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void 만료된_리프레시_토큰_행은_정리된다() throws Exception {
+        Session expired = signup();
+        Session alive = signup();
+        Long expiredUserId = userRepository.findByEmail(expired.email()).orElseThrow().getId();
+        Long aliveUserId = userRepository.findByEmail(alive.email()).orElseThrow().getId();
+        // 마지막 발급 시각을 15일 전으로 돌려서 만료된 행으로 만듭니다.
+        RefreshToken token = refreshTokenRepository.findAll().stream()
+                .filter(t -> t.getUserId().equals(expiredUserId)).findFirst().orElseThrow();
+        refreshTokenRepository.rotate(expiredUserId, token.getTokenHash(), token.getTokenHash(),
+                LocalDateTime.now().minusDays(15));
+
+        authService.deleteExpiredRefreshTokens();
+
+        assertThat(refreshTokenCount(expiredUserId)).isZero();
+        assertThat(refreshTokenCount(aliveUserId)).isEqualTo(1);
+    }
+
+    private long refreshTokenCount(Long userId) {
+        return refreshTokenRepository.findAll().stream().filter(token -> token.getUserId().equals(userId)).count();
     }
 
     @Test

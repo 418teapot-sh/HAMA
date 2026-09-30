@@ -6,6 +6,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,10 +15,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 사용자당 리프레시 토큰 하나만 저장합니다(user_id unique).
- * 다른 기기에서 로그인하면 이전 기기의 리프레시 토큰은 무효가 됩니다.
+ * 로그인한 기기(세션)마다 한 행입니다. 한 유저가 여러 기기에서 동시에 로그인할 수 있고,
+ * 로그아웃하면 그 기기의 행만 지웁니다.
  */
 @Entity
+// 만료된 행을 지우는 정리 작업(AuthService.deleteExpiredRefreshTokens)용입니다.
+@Table(indexes = @Index(columnList = "updated_at"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Builder(access = AccessLevel.PRIVATE)
@@ -28,11 +32,14 @@ public class RefreshToken extends BaseTimeEntity {
     @Column(name = "refresh_token_id")
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private Long userId;
 
-    /** 원본 토큰이 아니라 RefreshTokenHasher 로 해시한 값. DB 가 유출돼도 토큰을 그대로 쓸 수 없게 합니다. */
-    @Column(nullable = false)
+    /**
+     * 원본 토큰이 아니라 RefreshTokenHasher 로 해시한 값. DB 가 유출돼도 토큰을 그대로 쓸 수 없게 합니다.
+     * 재발급·로그아웃은 이 값으로 행을 찾습니다.
+     */
+    @Column(nullable = false, unique = true)
     private String tokenHash;
 
     public static RefreshToken create(Long userId, String tokenHash) {
@@ -40,10 +47,5 @@ public class RefreshToken extends BaseTimeEntity {
                 .userId(userId)
                 .tokenHash(tokenHash)
                 .build();
-    }
-
-    /** 재발급(rotation). 이전 토큰은 해시가 달라져 더 이상 통과하지 못합니다. */
-    public void rotate(String newTokenHash) {
-        this.tokenHash = newTokenHash;
     }
 }

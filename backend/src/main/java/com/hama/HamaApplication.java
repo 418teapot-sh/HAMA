@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @ConfigurationPropertiesScan
-// LoginAttemptLimiter 의 만료 항목 정리(@Scheduled)에 필요합니다.
+// LoginAttemptLimiter · 만료된 리프레시 토큰 정리(@Scheduled)에 필요합니다.
 @EnableScheduling
 public class HamaApplication {
 
