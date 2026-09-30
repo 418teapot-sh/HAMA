@@ -68,7 +68,7 @@ docker compose up -d      # MySQL 8.0 (hama, hama_test DB 생성)
 
 | 메서드 | 경로 | 요청 | 응답 |
 |---|---|---|---|
-| POST | `/api/auth/signup` | `{ email, password(8~64자), nickname(≤30자) }` | `accessToken` + 쿠키. 중복 이메일 409 `EMAIL_ALREADY_EXISTS` |
+| POST | `/api/auth/signup` | `{ email, password(8~64자), name(≤50자) }` | `accessToken` + 쿠키. 중복 이메일 409 `EMAIL_ALREADY_EXISTS` |
 | POST | `/api/auth/login` | `{ email, password }` | `accessToken` + 쿠키. 실패 401 `INVALID_CREDENTIALS`, 15분에 5회 초과 429 |
 | POST | `/api/auth/refresh` | body 없음 (쿠키만) | 새 `accessToken` + 새 쿠키. 실패 401 `INVALID_REFRESH_TOKEN` → 다시 로그인 |
 | POST | `/api/auth/logout` | body 없음 (쿠키만) | 쿠키 삭제 + 서버 토큰 삭제. 항상 성공 |
@@ -200,7 +200,7 @@ public class User extends BaseTimeEntity {
 
     private String email;
     private String password;
-    private String nickname;
+    private String name;
     private int goalCreatedCount;
     private boolean isPremium;
 
@@ -209,11 +209,11 @@ public class User extends BaseTimeEntity {
      *
      * @param encodedPassword 반드시 인코딩된 비밀번호. 원문을 넘기지 마세요.
      */
-    public static User create(String email, String encodedPassword, String nickname) {
+    public static User create(String email, String encodedPassword, String name) {
         return User.builder()
                 .email(email)
                 .password(encodedPassword)
-                .nickname(nickname)
+                .name(name)
                 .goalCreatedCount(0)
                 .isPremium(false)
                 .build();

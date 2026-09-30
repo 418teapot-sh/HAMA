@@ -21,11 +21,11 @@ public record SignupRequest(
         @Size(min = 8, max = 64, message = "비밀번호는 8~64자입니다.")
         String password,
 
-        @Schema(description = "닉네임 (30자 이하)", example = "하마", maxLength = 30,
+        @Schema(description = "이름 (50자 이하)", example = "하마", maxLength = 50,
                 requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotBlank(message = "닉네임은 필수입니다.")
-        @Size(max = 30, message = "닉네임은 30자 이하입니다.")
-        String nickname
+        @NotBlank(message = "이름은 필수입니다.")
+        @Size(max = 50, message = "이름은 50자 이하입니다.")
+        String name
 ) {
     /** 대소문자만 다른 이메일로 중복 가입되지 않도록 소문자로 맞춥니다. */
     public SignupRequest {

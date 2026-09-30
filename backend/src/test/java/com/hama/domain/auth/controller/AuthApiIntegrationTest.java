@@ -62,7 +62,7 @@ class AuthApiIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "email": "%s", "password": "password1234", "nickname": "하마" }
+                                { "email": "%s", "password": "password1234", "name": "하마" }
                                 """.formatted(email)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -86,7 +86,7 @@ class AuthApiIntegrationTest {
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "email": "user-%s@hama.com", "password": "password1234", "nickname": "하마" }
+                                { "email": "user-%s@hama.com", "password": "password1234", "name": "하마" }
                                 """.formatted(UUID.randomUUID())))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.allOf(

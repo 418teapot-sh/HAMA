@@ -35,8 +35,8 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false)
     private String password;
 
-    @Column(nullable = false, length = 30)
-    private String nickname;
+    @Column(nullable = false, length = 50)
+    private String name;
 
     /** 결제 게이트용. 무료 사용자가 만든 목표 수입니다. */
     @Column(nullable = false)
@@ -53,11 +53,11 @@ public class User extends BaseTimeEntity {
      *
      * @param encodedPassword 반드시 인코딩된 비밀번호. 원문을 넘기지 마세요.
      */
-    public static User create(String email, String encodedPassword, String nickname) {
+    public static User create(String email, String encodedPassword, String name) {
         return User.builder()
                 .email(email)
                 .password(encodedPassword)
-                .nickname(nickname)
+                .name(name)
                 .goalCreatedCount(0)
                 .isPremium(false)
                 .build();

@@ -11,13 +11,13 @@ public record UserResponse(
         @Schema(description = "이메일", example = "hama@example.com")
         String email,
 
-        @Schema(description = "닉네임", example = "하마")
-        String nickname,
+        @Schema(description = "이름", example = "하마")
+        String name,
 
         @Schema(description = "프리미엄(유료) 사용자 여부", example = "false")
         boolean isPremium
 ) {
     public static UserResponse from(User user) {
-        return new UserResponse(user.getId(), user.getEmail(), user.getNickname(), user.isPremium());
+        return new UserResponse(user.getId(), user.getEmail(), user.getName(), user.isPremium());
     }
 }

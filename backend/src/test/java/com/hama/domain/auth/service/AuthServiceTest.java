@@ -52,7 +52,7 @@ class AuthServiceTest {
     }
 
     private static User savedUser() {
-        User user = User.create(EMAIL, "encoded", "닉네임");
+        User user = User.create(EMAIL, "encoded", "하마");
         ReflectionTestUtils.setField(user, "id", 1L);
         return user;
     }
@@ -73,7 +73,7 @@ class AuthServiceTest {
                 return user;
             });
 
-            AuthTokens tokens = authService.signup(new SignupRequest(EMAIL, "password1234", "닉네임"));
+            AuthTokens tokens = authService.signup(new SignupRequest(EMAIL, "password1234", "하마"));
 
             assertThat(jwtTokenProvider.parseAccessUser(tokens.accessToken())).isPresent();
             assertThat(jwtTokenProvider.parseRefreshUserId(tokens.refreshToken())).contains(1L);
@@ -83,13 +83,13 @@ class AuthServiceTest {
         void 이미_가입된_이메일이면_409() {
             given(userRepository.existsByEmail(EMAIL)).willReturn(true);
 
-            assertThatThrownBy(() -> authService.signup(new SignupRequest(EMAIL, "password1234", "닉네임")))
+            assertThatThrownBy(() -> authService.signup(new SignupRequest(EMAIL, "password1234", "하마")))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
         @Test
         void 이메일은_소문자로_정규화한다() {
-            assertThat(new SignupRequest(" Test@HAMA.com ", "password1234", "닉네임").email()).isEqualTo(EMAIL);
+            assertThat(new SignupRequest(" Test@HAMA.com ", "password1234", "하마").email()).isEqualTo(EMAIL);
         }
     }
 
