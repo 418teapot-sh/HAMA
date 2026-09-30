@@ -12,6 +12,15 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        # 아래 스크립트를 부팅마다 새로 씁니다(기본값은 이어 붙이기).
+        hbm2ddl.schema-generation.script.append: false
+        hbm2ddl.delimiter: ";"
+      # 부팅할 때 엔티티 기준 CREATE TABLE 을 build/generated-schema.sql 에 뽑습니다(DB 에는 실행 안 함).
+      # 새 마이그레이션을 쓸 때 여기서 해당 테이블 부분을 복사해 V{번호}__설명.sql 로 옮기면 됩니다.
+      # 스크립트 설정을 켜면 Hibernate 가 ddl-auto 를 무시하므로 검사(validate)를 여기서도 명시합니다.
+      jakarta.persistence.schema-generation.database.action: validate
+      jakarta.persistence.schema-generation.scripts.action: create
+      jakarta.persistence.schema-generation.scripts.create-target: build/generated-schema.sql
 
 jwt:
   # 로컬 전용 더미 키입니다. HS256 은 최소 256비트(32바이트) 이상이어야 해서 충분히 길게 잡았습니다.
