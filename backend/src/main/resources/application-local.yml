@@ -6,8 +6,8 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      # 로컬은 엔티티를 고치면 테이블도 바로 따라오게 둡니다.
-      ddl-auto: update
+      # 스키마는 Flyway(db/migration)가 만들고, Hibernate 는 엔티티와 맞는지 검사만 합니다.
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
