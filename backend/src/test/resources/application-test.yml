@@ -22,7 +22,8 @@ liner:
 
 paddle:
   api-key:
-  webhook-secret:
+  # 웹훅 서명 검증은 외부 호출이 아니라서 값을 넣어 둡니다(PaymentWebhookIntegrationTest 가 이 키로 서명합니다).
+  webhook-secret: test-only-webhook-secret
 
 spring:
   # @DataJpaTest 는 기본적으로 데이터소스를 내장 DB로 바꿔치기합니다.

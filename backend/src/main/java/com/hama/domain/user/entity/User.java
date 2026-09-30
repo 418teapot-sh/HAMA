@@ -70,4 +70,9 @@ public class User extends BaseTimeEntity {
                 .marketingAgreed(marketingAgreed)
                 .build();
     }
+
+    /** 결제 완료(Paddle 웹훅) 시 호출합니다. 이용권은 서비스 종료일(11/20)까지라 만료 처리는 없습니다. */
+    public void markPremium() {
+        this.isPremium = true;
+    }
 }

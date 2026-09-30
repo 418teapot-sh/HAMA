@@ -29,6 +29,8 @@ public class SecurityConfig {
      */
     private static final String[] PUBLIC_ENDPOINTS = {
             "/api/v1/auth/**",
+            // Paddle 이 토큰 없이 호출합니다. 대신 PaymentService 가 Paddle-Signature 서명을 검증합니다.
+            "/api/v1/payments/webhook",
             "/swagger-ui.html",
             "/swagger-ui/**",
             "/v3/api-docs/**",
