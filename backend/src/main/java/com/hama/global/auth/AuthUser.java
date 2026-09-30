@@ -7,13 +7,9 @@ package com.hama.global.auth;
  * <pre>{@code
  * @GetMapping("/api/todos")
  * public ApiResponse<...> myTodos(@AuthenticationPrincipal AuthUser authUser) {
- *     Long userId = authUser.getUserId();
+ *     Long userId = authUser.userId();
  * }
  * }</pre>
  */
 public record AuthUser(Long userId) {
-
-    public Long getUserId() {
-        return userId;
-    }
 }

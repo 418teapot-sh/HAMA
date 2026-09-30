@@ -27,6 +27,6 @@ public class UserController {
                     """)
     @GetMapping("/me")
     public ApiResponse<UserResponse> getMe(@AuthenticationPrincipal AuthUser authUser) {
-        return ApiResponse.success(userService.getMe(authUser.getUserId()));
+        return ApiResponse.success(userService.getMe(authUser.userId()));
     }
 }

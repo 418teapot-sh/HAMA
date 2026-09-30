@@ -101,7 +101,7 @@ public ApiResponse<List<TodoResponse>> getTodos() {
 // After
 @GetMapping("/api/todos")
 public ApiResponse<List<TodoResponse>> getTodos(@AuthenticationPrincipal AuthUser authUser) {
-    Long userId = authUser.getUserId();
+    Long userId = authUser.userId();
     ...
 }
 ```
