@@ -40,6 +40,7 @@ docker compose up -d      # MySQL 8.0 (hama, hama_test DB 생성)
 
 - `.env`는 `backend/`에 둡니다. `backend/.env.example`을 복사해서 쓰세요. 없어도 부팅은 됩니다.
 - 테스트: `./gradlew test` (MySQL 컨테이너가 떠 있어야 합니다. `hama_test` DB 사용)
+- PC에 MySQL이 따로 깔려 3306을 쓰고 있으면 `.env`에 `DB_PORT=3307`처럼 다른 포트를 넣으세요.
 
 ### Swagger
 
