@@ -10,10 +10,8 @@ spring:
       maximum-pool-size: 5
   jpa:
     hibernate:
-      # 개발 초반에는 update, 결제 데이터가 들어가기 시작하면 validate 로 바꾸세요.
-      # update 는 컬럼 삭제·타입 변경을 제대로 처리하지 못해서
-      # 운영 DB 에서 예상 못 한 마이그레이션이 벌어질 수 있습니다.
-      ddl-auto: update
+      # 스키마는 Flyway(db/migration)가 만들고, Hibernate 는 엔티티와 맞는지 검사만 합니다.
+      ddl-auto: validate
     show-sql: false
 
 server:

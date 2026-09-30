@@ -35,8 +35,11 @@ spring:
     username: hama
     password: hama
     driver-class-name: com.mysql.cj.jdbc.Driver
+  flyway:
+    # FlywayCleanTestConfig 가 테스트 시작마다 DB 를 비웁니다. 운영·dev 에서는 기본값(true)이라 clean 이 막혀 있습니다.
+    clean-disabled: false
   jpa:
     hibernate:
-      # 테스트마다 스키마를 새로 만들고 끝나면 버립니다.
-      ddl-auto: create-drop
+      # 스키마는 Flyway(db/migration)가 만들고, Hibernate 는 엔티티와 맞는지 검사만 합니다.
+      ddl-auto: validate
     show-sql: false
