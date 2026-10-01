@@ -1,0 +1,40 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # 1단계는 같은 EC2(1GB)의 MySQL 컨테이너, 2단계는 RDS 프리티어(db.t4g.micro)라
+      # 둘 다 커넥션마다 드는 메모리가 부담입니다. 기본값 10도 과할 수 있어 줄입니다.
+      maximum-pool-size: 5
+  jpa:
+    hibernate:
+      # 스키마는 Flyway(db/migration)가 만들고, Hibernate 는 엔티티와 맞는지 검사만 합니다.
+      ddl-auto: validate
+    show-sql: false
+
+server:
+  # nginx 가 HTTPS 를 종료하고 Spring 에는 HTTP 로 전달합니다.
+  # 없으면 쿠키의 Secure 판정이나 redirect_uri 가 http:// 로 잘못 생성됩니다.
+  forward-headers-strategy: framework
+
+app:
+  cookie:
+    secure: true
+    # app.<도메인> / api.<도메인> 처럼 같은 상위 도메인이면 Lax 로 충분합니다.
+    # 프론트를 *.vercel.app 등 완전히 다른 도메인에 두면 None 으로 바꿔야 합니다.
+    same-site: Lax
+
+# 개발 기간에는 프론트가 배포 서버 Swagger 를 봐야 하므로 켜둡니다.
+# 데모데이 직전에 false 로 바꿔서 API 전체 스펙이 무인증 노출되는 걸 막으세요.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.hama: INFO

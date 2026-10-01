@@ -1,0 +1,33 @@
+# 에디터마다 들여쓰기·줄바꿈이 달라서 생기는 diff 노이즈를 막습니다.
+# IntelliJ, VS Code 가 자동으로 읽습니다. 팀원이 따로 설정할 것 없습니다.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.java]
+indent_size = 4
+
+# start.spring.io 가 탭으로 생성했습니다. 스페이스로 바꾸면 전체 파일이 diff 에 잡혀서 그대로 둡니다.
+[*.{gradle,gradle.kts}]
+indent_style = tab
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.md]
+# 마크다운은 줄 끝 공백 두 개가 줄바꿈 의미라 지우면 안 됩니다.
+trim_trailing_whitespace = false
+
+# .gitattributes 에서 *.bat 은 CRLF 로 고정했습니다. 여기서도 맞춰야 에디터가 LF 로 저장하지 않습니다.
+# (윈도우 cmd 는 LF 줄바꿈 .bat 을 제대로 실행하지 못하는 경우가 있습니다)
+[*.bat]
+end_of_line = crlf
+
+[Makefile]
+indent_style = tab

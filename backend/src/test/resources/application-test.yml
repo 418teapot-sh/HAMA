@@ -1,0 +1,45 @@
+# 테스트도 운영과 같은 MySQL 로 돌립니다.
+#
+# H2 로 돌리면 미묘하게 다르게 동작하는 지점이 있어서
+# "로컬/CI 에선 됐는데 서버에서 안 되는" 사고가 납니다.
+#
+# 로컬:  docker compose up -d   (hama_test DB 도 함께 만들어집니다)
+# CI:    ci-check.yml 의 mysql service container
+
+jwt:
+  secret: test-only-secret-key-do-not-use-in-production-0123456789
+
+app:
+  cookie:
+    path: /api/auth
+    secure: false
+    same-site: Lax
+
+# 키를 비워둬야 라이너·Paddle 클라이언트가 비활성 경로를 탑니다.
+# 더미 값이라도 넣으면 테스트를 돌릴 때마다 실제 외부 API 로 요청이 나갑니다.
+liner:
+  api-key:
+
+paddle:
+  api-key:
+  webhook-secret:
+
+spring:
+  # @DataJpaTest 는 기본적으로 데이터소스를 내장 DB로 바꿔치기합니다.
+  # 그러면 아래 설정이 무시되므로 끕니다.
+  test:
+    database:
+      replace: none
+  datasource:
+    url: jdbc:mysql://localhost:${DB_PORT:3306}/hama_test?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&useSSL=false
+    username: hama
+    password: hama
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  flyway:
+    # FlywayCleanTestConfig 가 테스트 시작마다 DB 를 비웁니다. 운영·dev 에서는 기본값(true)이라 clean 이 막혀 있습니다.
+    clean-disabled: false
+  jpa:
+    hibernate:
+      # 스키마는 Flyway(db/migration)가 만들고, Hibernate 는 엔티티와 맞는지 검사만 합니다.
+      ddl-auto: validate
+    show-sql: false

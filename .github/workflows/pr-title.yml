@@ -1,0 +1,35 @@
+name: PR Title
+
+# squash 머지 시 PR 제목이 그대로 develop 커밋 메시지가 됩니다.
+# 형식이 깨진 제목이 커밋 히스토리에 남지 않도록 머지 전에 검사합니다.
+# 필수 체크로 쓰므로 paths 필터를 걸지 않습니다. (README > CI 참고)
+on:
+  pull_request:
+    branches: [ main, develop ]
+    # 제목만 고쳐도(edited) 다시 검사합니다.
+    types: [ opened, edited, synchronize, reopened ]
+
+concurrency:
+  group: pr-title-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # job id 가 곧 룰셋 필수 체크 이름입니다.
+  pr-title:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check PR title
+        # 제목은 사용자 입력이라 run 에 ${{ }} 로 직접 넣지 않고 env 로 넘깁니다. (스크립트 인젝션 방지)
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(Feat|Fix|Refactor|Chore|Docs|Test)(\((BE|FE)\))?: .+'
+          if [[ "$TITLE" =~ $pattern ]]; then
+            echo "OK: $TITLE"
+          else
+            echo "::error::PR 제목 형식이 맞지 않습니다: \"$TITLE\""
+            echo "형식: Type(BE|FE): 설명   공통이면 Type: 설명"
+            echo "예)   Feat(BE): JWT 인증 구현 / Docs: 협업 규칙 문서화"
+            echo "Type: Feat, Fix, Refactor, Chore, Docs, Test"
+            exit 1
+          fi

@@ -1,0 +1,30 @@
+# 프로젝트 이름을 고정합니다. 없으면 폴더명(backend)이 붙어
+# 볼륨이 backend_hama-mysql-data 로 새로 만들어지고 기존 로컬 데이터가 안 보입니다.
+name: hama
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: hama-mysql
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: hama
+      MYSQL_USER: hama
+      MYSQL_PASSWORD: hama
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - hama-mysql-data:/var/lib/mysql
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  hama-mysql-data:
