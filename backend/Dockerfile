@@ -22,7 +22,9 @@ USER hama
 # 로그 시각을 한국 시간으로 맞춥니다.
 ENV TZ=Asia/Seoul
 # 힙을 컨테이너 메모리 한도 기준으로 잡습니다. 한도는 deploy/docker-compose.yml 의 mem_limit 입니다.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
+# 나머지 40% 는 힙 밖(클래스 메타데이터, 스레드 스택, Netty 버퍼)이 씁니다. Spring 은 여기만 200MB 안팎이라
+# 75% 로 두면 640MB 한도에서 힙 밖이 모자랍니다.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=60"
 ENV SPRING_PROFILES_ACTIVE=dev
 
 EXPOSE 8080
