@@ -1,0 +1,9 @@
+# 빌드 컨텍스트에 필요한 건 gradle 파일과 src 뿐입니다.
+# 특히 .env 가 이미지에 들어가지 않게 막습니다.
+build
+.gradle
+.idea
+.env
+.env.*
+deploy
+docker
