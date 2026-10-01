@@ -45,7 +45,7 @@ public class JwtSecretGuard {
         if (COMMITTED_SECRETS.contains(secret)) {
             throw new IllegalStateException("""
                     JWT_SECRET 이 저장소에 커밋된 값입니다. 이 키를 아는 사람은 누구나 토큰을 위조할 수 있습니다.
-                    /etc/hama/app.env 의 JWT_SECRET 을 외부에 공개되지 않은 값으로 바꾸고 다시 배포하세요.
+                    서버 ~/hama/.env 의 JWT_SECRET 을 외부에 공개되지 않은 값으로 바꾸고 다시 배포하세요.
                     (활성 프로필: %s)""".formatted(String.join(", ", environment.getActiveProfiles())));
         }
 

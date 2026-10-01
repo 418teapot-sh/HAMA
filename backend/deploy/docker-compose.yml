@@ -1,0 +1,49 @@
+# 서버(EC2)용입니다. 로컬 개발용은 backend/docker-compose.yml 입니다.
+# 서버의 ~/hama 에 이 파일과 .env(.env.example 참고)를 두고 실행합니다.
+name: hama
+
+services:
+  app:
+    image: hama-backend:latest
+    container_name: hama-app
+    restart: unless-stopped
+    # 호스트의 Nginx 만 접근하게 localhost 에만 엽니다. 8080 을 바깥에 열지 않습니다.
+    ports:
+      - "127.0.0.1:8080:8080"
+    env_file: .env
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/hama?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_USERNAME: hama
+    # t3.micro(1GB)에서 MySQL 과 나눠 씁니다. 힙은 이 값의 75%(Dockerfile)입니다.
+    mem_limit: 640m
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    container_name: hama-mysql
+    restart: unless-stopped
+    # 포트를 열지 않습니다. app 컨테이너만 내부 네트워크로 접근합니다.
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: hama
+      MYSQL_USER: hama
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # 기본값으로 두면 메모리를 수백 MB 더 씁니다. 1GB 서버라 끕니다.
+      - --performance-schema=OFF
+    volumes:
+      - hama-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+# 컨테이너를 지워도 데이터는 남습니다. `docker compose down -v` 는 데이터까지 지우니 서버에서 쓰지 마세요.
+volumes:
+  hama-mysql-data:
