@@ -14,6 +14,13 @@ import org.springframework.data.repository.query.Param;
 public interface TodoRepository extends JpaRepository<Todo, Long> {
 
     @Query("""
+            select t from Todo t where t.userId = :userId and t.deletedAt is null
+              and t.category = :category and t.todoDate between :from and :to order by t.id
+            """)
+    List<Todo> findActiveBetween(@Param("userId") Long userId, @Param("from") LocalDate from,
+            @Param("to") LocalDate to, @Param("category") TodoCategory category);
+
+    @Query("""
             select t from Todo t
             where t.userId = :userId and t.todoDate = :date and t.deletedAt is null
               and (:category is null or t.category = :category)

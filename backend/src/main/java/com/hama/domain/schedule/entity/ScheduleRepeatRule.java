@@ -56,7 +56,8 @@ public final class ScheduleRepeatRule {
     }
 
     public static ScheduleRepeatRule parse(String source, LocalDateTime startAt, boolean allDay) {
-        if (source == null || source.isBlank() || source.length() > 255 || startAt == null) {
+        if (source == null || source.isBlank() || source.length() > 255 || startAt == null
+                || !source.chars().allMatch(character -> character < 128)) {
             throw invalid();
         }
         Map<String, String> parts = new HashMap<>();

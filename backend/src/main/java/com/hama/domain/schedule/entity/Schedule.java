@@ -15,6 +15,7 @@ import jakarta.persistence.Table;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -80,6 +81,10 @@ public class Schedule extends BaseTimeEntity {
             throw new BusinessException(ScheduleErrorCode.SCHEDULE_INVALID_INPUT);
         }
         if (!isStorableTime(startAt) || !isStorableTime(endAt) || !startAt.isBefore(endAt)) {
+            throw new BusinessException(ScheduleErrorCode.SCHEDULE_INVALID_TIME);
+        }
+        if (!allDay && !startAt.atZone(ZoneId.of("Asia/Seoul")).toInstant()
+                .isBefore(endAt.atZone(ZoneId.of("Asia/Seoul")).toInstant())) {
             throw new BusinessException(ScheduleErrorCode.SCHEDULE_INVALID_TIME);
         }
         if (allDay && (!startAt.toLocalTime().equals(LocalTime.MIDNIGHT)
