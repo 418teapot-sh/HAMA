@@ -1,0 +1,18 @@
+name: Main Source
+
+# main 으로는 develop 에서만 PR 을 올리게 막습니다.
+# 룰셋에는 출발 브랜치를 제한하는 옵션이 없어서 필수 체크로 대신합니다.
+# 급한 수정은 관리자 우회로 처리합니다.
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # job id 가 곧 룰셋 필수 체크 이름입니다. 바꾸면 룰셋도 같이 바꿔야 합니다.
+  main-source:
+    runs-on: ubuntu-24.04
+    steps:
+      - if: github.head_ref != 'develop'
+        run: |
+          echo "main 으로는 develop 에서만 PR 을 올릴 수 있습니다. (현재: ${{ github.head_ref }})"
+          exit 1

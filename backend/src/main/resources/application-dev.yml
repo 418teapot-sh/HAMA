@@ -5,8 +5,8 @@ spring:
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      # RDS 프리티어(db.t4g.micro)는 최대 커넥션 수가 적습니다.
-      # 기본값 10도 과할 수 있어 줄입니다.
+      # 1단계는 같은 EC2(1GB)의 MySQL 컨테이너, 2단계는 RDS 프리티어(db.t4g.micro)라
+      # 둘 다 커넥션마다 드는 메모리가 부담입니다. 기본값 10도 과할 수 있어 줄입니다.
       maximum-pool-size: 5
   jpa:
     hibernate:
