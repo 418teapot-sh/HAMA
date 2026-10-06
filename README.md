@@ -249,6 +249,23 @@ public class User extends BaseTimeEntity {
 
 **6. 문제가 생기면 `traceId`로 찾습니다.** 모든 응답 본문과 `X-Trace-Id` 헤더에 실려 있고, 서버 로그도 이 값으로 검색됩니다.
 
+**7. 목록 API는 `PageResponse`로 감쌉니다.** 응답 `data`는 `{ content, page, size, totalElements }`입니다.
+
+```java
+@GetMapping
+public ApiResponse<PageResponse<ReviewSummary>> list(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "" + PageResponse.DEFAULT_SIZE) int size) {
+    Page<Review> reviews = reviewRepository.findByGoal(goalId, PageResponse.pageRequest(page, size));
+    return ApiResponse.success(PageResponse.from(reviews, ReviewSummary::from));
+}
+```
+
+- `PageResponse.pageRequest(page, size)`가 범위를 검사합니다(page ≥ 0, size 1~100, 아니면 400 `VALIDATION_FAILED`).
+- 정렬은 쿼리의 `order by`로 정합니다. 클라이언트가 보낸 `sort` 파라미터는 받지 않습니다.
+- Spring의 `Page`를 그대로 반환하지 마세요. 내부 필드가 전부 노출되고 프론트 생성 타입이 버전마다 바뀝니다.
+- 실제 예시: `GoalController.list`
+
 ## Backend: AI 호출 (`global/ai`)
 
 goals/ai·reviews 등 AI가 필요한 곳은 전부 `com.hama.global.ai.AiClient` 하나로 호출합니다.
