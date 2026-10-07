@@ -1,0 +1,54 @@
+name: Deploy Frontend
+
+# develop 에 머지되면 Vercel 에 프로덕션 배포합니다(www.todohama.site).
+# HAMA 는 개인 계정 레포라 프론트 Vercel 계정에서 Git 연동(Import)이 안 돼서,
+# Vercel CLI 로 Actions 에서 빌드한 결과물을 올립니다. 그래서 PR 미리보기 배포는 없습니다.
+#
+# 필요한 Secrets: VERCEL_TOKEN(프론트 Vercel 계정 토큰, 11/20 이후 만료), VERCEL_ORG_ID, VERCEL_PROJECT_ID
+# Vercel 프로젝트의 Root Directory 는 비워 두고, 여기서 frontend 폴더 안에서 CLI 를 실행합니다.
+on:
+  push:
+    branches: [ develop ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      # Vercel 에 저장된 프로젝트 설정·프로덕션 환경변수를 받아옵니다.
+      - name: Pull Vercel settings
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
