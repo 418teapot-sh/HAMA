@@ -1,6 +1,6 @@
 name: Deploy Frontend
 
-# develop 에 머지되면 Vercel 에 프로덕션 배포합니다(www.todohama.site).
+# main 에 머지되면 Vercel 에 프로덕션 배포합니다(www.todohama.site). 백엔드와 같은 시점에 나갑니다.
 # develop 으로 가는 PR 은 미리보기로 배포하고, 주소를 PR 댓글로 남깁니다(푸시할 때마다 같은 댓글을 고칩니다).
 # HAMA 는 개인 계정 레포라 프론트 Vercel 계정에서 Git 연동(Import)이 안 돼서,
 # Vercel CLI 로 Actions 에서 빌드한 결과물을 올립니다.
@@ -12,7 +12,7 @@ name: Deploy Frontend
 # Vercel 기본 설정상 미리보기는 프론트 Vercel 팀원만 볼 수 있습니다(Deployment Protection).
 on:
   push:
-    branches: [ develop ]
+    branches: [ main ]
     paths:
       - 'frontend/**'
       - '.github/workflows/deploy-frontend.yml'
