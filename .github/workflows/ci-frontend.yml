@@ -1,0 +1,43 @@
+name: CI Frontend
+
+# ⚠️ paths 필터를 걸지 마세요.
+# 이 job 은 룰셋 필수 체크입니다. 백엔드만 바뀐 PR 에서 실행이 안 되면
+# "필수 체크 대기 중" 으로 남아 머지가 영원히 막힙니다.
+# 경로 필터는 배포 워크플로우에만 겁니다.
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+# 같은 PR 에 커밋을 연달아 푸시하면 이전 실행을 취소합니다.
+concurrency:
+  group: ci-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # job id 가 곧 룰셋 필수 체크 이름입니다. 바꾸면 룰셋도 같이 바꿔야 합니다.
+  ci-frontend:
+    runs-on: ubuntu-24.04
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # package-lock.json 그대로 설치합니다. lock 파일과 package.json 이 어긋나면 실패합니다.
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build

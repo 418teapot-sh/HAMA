@@ -1,0 +1,82 @@
+name: Deploy Frontend
+
+# main 에 머지되면 Vercel 에 프로덕션 배포합니다(www.todohama.site). 백엔드와 같은 시점에 나갑니다.
+# develop 으로 가는 PR 은 미리보기로 배포하고, 주소를 PR 댓글로 남깁니다(푸시할 때마다 같은 댓글을 고칩니다).
+# HAMA 는 개인 계정 레포라 프론트 Vercel 계정에서 Git 연동(Import)이 안 돼서,
+# Vercel CLI 로 Actions 에서 빌드한 결과물을 올립니다.
+#
+# 필요한 Secrets: VERCEL_TOKEN(프론트 Vercel 계정 토큰, 11/20 이후 만료), VERCEL_ORG_ID, VERCEL_PROJECT_ID
+# Vercel 프로젝트의 Root Directory 는 비워 두고, 여기서 frontend 폴더 안에서 CLI 를 실행합니다.
+#
+# 미리보기 주소(*.vercel.app)는 백엔드 CORS 에 없으면 API 호출이 막힙니다(서버 .env 의 CORS_ALLOWED_ORIGINS).
+# Vercel 기본 설정상 미리보기는 프론트 Vercel 팀원만 볼 수 있습니다(Deployment Protection).
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+  pull_request:
+    branches: [ develop ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+
+# 같은 PR 은 새 커밋이 오면 이전 미리보기를 취소하고, 프로덕션 배포는 끊지 않고 차례로 돕니다.
+concurrency:
+  group: deploy-frontend-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  # PR 이면 preview, 아니면 production
+  VERCEL_ENV: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
+  PROD_FLAG: ${{ github.event_name != 'pull_request' && '--prod' || '' }}
+
+jobs:
+  deploy:
+    # 포크에서 온 PR 은 Secrets 를 못 받으므로 건너뜁니다.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      # Vercel 에 저장된 프로젝트 설정·환경변수를 받아옵니다.
+      - name: Pull Vercel settings
+        run: vercel pull --yes --environment=$VERCEL_ENV --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: vercel build $PROD_FLAG --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        id: deploy
+        run: echo "url=$(vercel deploy --prebuilt $PROD_FLAG --token=${{ secrets.VERCEL_TOKEN }})" >> "$GITHUB_OUTPUT"
+
+      - name: Comment preview URL
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --edit-last --create-if-none \
+            --body "🔍 미리보기: ${{ steps.deploy.outputs.url }} (커밋 ${{ github.event.pull_request.head.sha }})"
