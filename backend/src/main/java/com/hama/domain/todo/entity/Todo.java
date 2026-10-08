@@ -37,6 +37,12 @@ public class Todo extends BaseTimeEntity {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Column(name = "goal_id")
+    private Long goalId;
+
+    @Column(name = "period_goal_id")
+    private Long periodGoalId;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(nullable = false, length = 20)
@@ -89,6 +95,18 @@ public class Todo extends BaseTimeEntity {
         todo.endTime = endTime;
         todo.status = TodoStatus.PENDING;
         todo.postponedCount = 0;
+        return todo;
+    }
+
+    public static Todo createGoalTask(Long userId, Long goalId, Long periodGoalId, String content,
+            LocalDate date, LocalTime start, LocalTime end) {
+        if (goalId == null || goalId <= 0 || (periodGoalId != null && periodGoalId <= 0)) {
+            throw new BusinessException(TodoErrorCode.TODO_INVALID_INPUT);
+        }
+        Todo todo = createTask(userId, content, date, start, end);
+        todo.category = TodoCategory.AI_GOAL_TASK;
+        todo.goalId = goalId;
+        todo.periodGoalId = periodGoalId;
         return todo;
     }
 

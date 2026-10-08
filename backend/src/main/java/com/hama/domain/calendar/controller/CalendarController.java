@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/calendar")
 @RequiredArgsConstructor
-@Tag(name = "캘린더", description = "일반 TASK·고정/개인 일정 조회 및 내보내기. AI_GOAL 데이터 연결은 목표 도메인 연동 후 제공됩니다.")
+@Tag(name = "캘린더", description = "일반 TASK·목표 투두·고정/개인 일정 조회 및 내보내기.")
 public class CalendarController {
 
     private final CalendarService service;

@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "투두", description = "일반 TASK 관리. 목표 투두 생성·진행률·AI 미루기는 후속 연동 범위입니다.")
+@Tag(name = "투두", description = "일반 TASK 및 목표 투두 관리. AI 미루기는 후속 범위입니다.")
 @RestController
 @RequestMapping("/api/v1/todos")
 @RequiredArgsConstructor
@@ -38,15 +38,14 @@ public class TodoController {
 
     private final TodoService todoService;
 
-    @Operation(summary = "일반 투두 생성", description = "TASK만 지원하며 goalId와 periodGoalId는 null이어야 합니다.")
+    @Operation(summary = "투두 생성", description = "TASK는 목표 ID가 없어야 합니다. AI_GOAL_TASK는 진행 중인 본인 목표와 기간 안의 날짜가 필요하며 periodGoalId는 선택입니다.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<ApiResponse<TodoResponses.Created>> create(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Valid @RequestBody CreateTodoRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
-                todoService.createTask(authUser.userId(), request.content(), request.todoDate(),
-                        request.startTime(), request.endTime())));
+                todoService.create(authUser.userId(), request)));
     }
 
     @Operation(summary = "날짜별 투두 조회", description = "날짜 생략 시 KST 오늘. 카테고리 생략 시 전체.")
@@ -67,7 +66,7 @@ public class TodoController {
     }
 
     @Operation(summary = "일반 투두 미루기",
-            description = "기존 날짜 이후로만 미룰 수 있습니다. 본문/날짜 생략 시 기존 날짜 +1일, 시간 생략 시 유지.")
+            description = "기존 날짜 이후로만 미룰 수 있습니다. 본문/날짜 생략 시 기존 날짜 +1일, 시간 생략 시 유지. AI_GOAL_TASK는 현재 409 TODO_AI_POSTPONE_NOT_SUPPORTED.")
     @PatchMapping("/{todoId}/postpone")
     public ApiResponse<TodoResponses.Postponed> postpone(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
@@ -75,7 +74,7 @@ public class TodoController {
         return ApiResponse.success(todoService.postpone(authUser.userId(), todoId, request));
     }
 
-    @Operation(summary = "투두 완료", description = "재완료는 409. 일반 TASK의 goalProgressRate는 null입니다.")
+    @Operation(summary = "투두 완료", description = "재완료는 409. 일반 TASK의 goalProgressRate는 null, 목표 투두는 활성 투두 완료 비율(소수 첫째 자리)입니다.")
     @PatchMapping("/{todoId}/complete")
     public ApiResponse<TodoResponses.Completion> complete(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,

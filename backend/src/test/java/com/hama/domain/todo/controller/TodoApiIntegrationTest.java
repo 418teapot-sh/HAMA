@@ -120,7 +120,7 @@ class TodoApiIntegrationTest {
                         {"category":"AI_GOAL_TASK","content":"책","todoDate":"2026-10-04"}
                         """), owner))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.fields.category").exists());
+                .andExpect(jsonPath("$.error.fields.goalId").exists());
         MvcResult result = mvc.perform(auth(post("/api/v1/todos").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"category\":\"TASK\",\"content\":\"책\",\"todoDate\":\"2026-10-04\"}"), owner))
                 .andExpect(status().isCreated()).andReturn();
