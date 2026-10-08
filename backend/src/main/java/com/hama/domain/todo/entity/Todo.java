@@ -46,6 +46,7 @@ public class Todo extends BaseTimeEntity {
     private String content;
 
     @Column(name = "todo_date", nullable = false)
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE)
     private LocalDate todoDate;
 
     @Column(name = "start_time")

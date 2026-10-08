@@ -39,6 +39,7 @@ import tools.jackson.databind.json.JsonMapper;
 @ActiveProfiles("test")
 class CalendarApiIntegrationTest {
 
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
     @Autowired private MockMvc mvc;
     @Autowired private JsonMapper mapper;
     @MockitoSpyBean private IcsWriter icsWriter;
@@ -68,8 +69,11 @@ class CalendarApiIntegrationTest {
         JsonNode untimed = items.valueStream().filter(item -> item.get("title").asString().equals("시간 없음")).findFirst().orElseThrow();
         assertThat(untimed.get("allDay").asBoolean()).isTrue();
         assertThat(untimed.get("startTime").isNull()).isTrue();
-        assertThat(items.valueStream().filter(item -> item.get("title").asString().equals("완료한 일"))
-                .findFirst().orElseThrow().get("status").asString()).isEqualTo("COMPLETED");
+        JsonNode completed = items.valueStream().filter(item -> item.get("title").asString().equals("완료한 일"))
+                .findFirst().orElseThrow();
+        assertThat(completed.get("status").asString()).isEqualTo("COMPLETED");
+        assertThat(completed.get("startTime").asString()).isEqualTo("11:00");
+        assertThat(completed.get("endTime").asString()).isEqualTo("12:00");
         assertThat(items.valueStream().map(item -> item.get("date").asString())).doesNotContain("2026-10-05");
     }
 
@@ -211,6 +215,44 @@ class CalendarApiIntegrationTest {
         assertThat(export(token, "2026-01-01", "2026-04-11", null)).contains("RRULE:FREQ=DAILY;COUNT=101");
         assertThat(body(mvc.perform(auth(get("/api/v1/calendar/schedules/" + id), token))
                 .andExpect(status().isOk()).andReturn()).at("/data/repeatRule").asString()).isEqualTo("count=101;freq=daily");
+    }
+
+    @Test
+    void 일정의_KST원문은_JPA와_JDBC에서_같고_과거_달력과_시간대도_보존한다() throws Exception {
+        String token = signup();
+        for (String[] range : List.of(new String[]{"2026-10-03T23:00:00", "2026-10-04T02:00:00"},
+                new String[]{"1582-10-10T09:00:00", "1582-10-10T10:00:00"},
+                new String[]{"1988-05-08T02:30:00", "1988-05-08T04:00:00"})) {
+            long id = schedule(token, "FIXED", "원문 유지", range[0], range[1], false, null);
+            var start = java.time.LocalDateTime.parse(range[0]);
+            var end = java.time.LocalDateTime.parse(range[1]);
+            jdbc.query("SELECT start_at, end_at, calendar_source_start_at, calendar_source_end_at FROM schedule WHERE schedule_id = ?",
+                    (rs, row) -> {
+                        assertThat(rs.getObject("start_at", java.time.LocalDateTime.class)).isEqualTo(start);
+                        assertThat(rs.getObject("end_at", java.time.LocalDateTime.class)).isEqualTo(end);
+                        assertThat(rs.getObject("calendar_source_start_at", java.time.LocalDateTime.class)).isEqualTo(start);
+                        assertThat(rs.getObject("calendar_source_end_at", java.time.LocalDateTime.class)).isEqualTo(end);
+                        return true;
+                    }, id);
+            JsonNode detail = body(mvc.perform(auth(get("/api/v1/calendar/schedules/" + id), token))
+                    .andExpect(status().isOk()).andReturn()).get("data");
+            assertThat(detail.get("startAt").asString()).isEqualTo(range[0]);
+            assertThat(detail.get("endAt").asString()).isEqualTo(range[1]);
+        }
+    }
+
+    @Test
+    void 투두_날짜는_과거_달력_변환없이_입력한_날짜와_시간으로_조회된다() throws Exception {
+        String token = signup();
+        for (String date : List.of("1000-01-01", "1582-10-10", "9999-12-31")) {
+            long id = todo(token, "날짜 유지", date, "00:00", "23:59");
+            JsonNode items = query(token, date, date, "TASK");
+            assertThat(items.size()).isOne();
+            assertThat(items.get(0).get("refId").asLong()).isEqualTo(id);
+            assertThat(items.get(0).get("date").asString()).isEqualTo(date);
+            assertThat(items.get(0).get("startTime").asString()).isEqualTo("00:00");
+            assertThat(items.get(0).get("endTime").asString()).isEqualTo("23:59");
+        }
     }
 
     private JsonNode query(String token, String from, String to, String types) throws Exception {

@@ -48,10 +48,13 @@ public class Schedule extends BaseTimeEntity {
     @Column(nullable = false, length = 100)
     private String title;
 
+    // KST 벽시계 값을 JDBC 4.2로 전달해 JVM 기본 시간대에 따른 Timestamp 변환을 피합니다.
     @Column(name = "start_at", nullable = false)
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime startAt;
 
     @Column(name = "end_at", nullable = false)
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime endAt;
 
     @Column(name = "all_day", nullable = false)
@@ -70,9 +73,11 @@ public class Schedule extends BaseTimeEntity {
     private Long calendarLastEndEpochSecond;
 
     @Column(name = "calendar_source_start_at")
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime calendarSourceStartAt;
 
     @Column(name = "calendar_source_end_at")
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime calendarSourceEndAt;
 
     @Column(name = "calendar_source_all_day")
