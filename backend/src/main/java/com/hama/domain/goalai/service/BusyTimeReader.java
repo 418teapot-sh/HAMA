@@ -33,7 +33,8 @@ public class BusyTimeReader {
     private final CalendarReadRepository calendar;
     private final ScheduleOccurrences occurrences;
 
-    public Map<LocalDate, List<Interval>> read(long userId, LocalDate from, LocalDate to) {
+    /** @param excludedTodoIds 다시 배치할 투두처럼 바쁜 시간으로 보지 않을 투두 */
+    public Map<LocalDate, List<Interval>> read(long userId, LocalDate from, LocalDate to, Set<Long> excludedTodoIds) {
         Map<LocalDate, List<Interval>> busy = new HashMap<>();
         for (LocalDate chunkFrom = from; !chunkFrom.isAfter(to); chunkFrom = chunkFrom.plusDays(CHUNK_DAYS)) {
             LocalDate chunkTo = chunkFrom.plusDays(CHUNK_DAYS - 1).isAfter(to) ? to : chunkFrom.plusDays(CHUNK_DAYS - 1);
@@ -47,7 +48,8 @@ public class BusyTimeReader {
                             occurrence -> add(busy, occurrence.startAt(), occurrence.endAt(), first, last)));
             forEachPage(afterId -> calendar.tasks(userId, tasks, afterId), CalendarReadRepository.TaskCandidate::id,
                     task -> {
-                        if (task.startTime() != null && task.endTime() != null) {
+                        if (task.startTime() != null && task.endTime() != null
+                                && !excludedTodoIds.contains(task.id())) {
                             busy.computeIfAbsent(task.date(), d -> new ArrayList<>())
                                     .add(new Interval(minute(task.startTime()), minute(task.endTime())));
                         }

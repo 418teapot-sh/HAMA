@@ -21,6 +21,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,7 +75,7 @@ public class GoalAiSelectService {
             throw new BusinessException(GoalAiErrorCode.AI_PLAN_OUTDATED);
         }
 
-        TimeSlotPlacer placer = new TimeSlotPlacer(busyTimes.read(userId, planStart, detail.goalEndDate()));
+        TimeSlotPlacer placer = new TimeSlotPlacer(busyTimes.read(userId, planStart, detail.goalEndDate(), Set.of()));
         int periodGoalCount = 0;
         List<Todo> created = new ArrayList<>();
         List<SelectResponse.UnplacedTodo> unplaced = new ArrayList<>();

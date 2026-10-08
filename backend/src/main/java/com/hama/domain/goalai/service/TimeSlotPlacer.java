@@ -51,6 +51,20 @@ public final class TimeSlotPlacer {
         return new Slot(LocalTime.of(start / 60, start % 60), LocalTime.of((start + minutes) / 60, (start + minutes) % 60));
     }
 
+    /** 이미 정해진 시간을 그대로 쓸 수 있으면 차지하고 true, 다른 구간과 겹치면 false. */
+    public boolean reserve(LocalDate date, LocalTime start, LocalTime end) {
+        int s = start.getHour() * 60 + start.getMinute();
+        int e = end.getHour() * 60 + end.getMinute();
+        List<Interval> intervals = busy.computeIfAbsent(date, d -> new ArrayList<>());
+        for (Interval interval : intervals) {
+            if (interval.start() < e && s < interval.end()) {
+                return false;
+            }
+        }
+        intervals.add(new Interval(s, e));
+        return true;
+    }
+
     private static int ceilToStep(int minute) {
         return (minute + STEP - 1) / STEP * STEP;
     }

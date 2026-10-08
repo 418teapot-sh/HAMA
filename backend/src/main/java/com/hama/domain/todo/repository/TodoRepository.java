@@ -39,4 +39,14 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from Todo t where t.id = :id and t.deletedAt is null")
     Optional<Todo> findActiveForUpdate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select t from Todo t
+            where t.goalId = :goalId and t.deletedAt is null
+              and t.category = com.hama.domain.todo.entity.TodoCategory.AI_GOAL_TASK
+              and t.status = com.hama.domain.todo.entity.TodoStatus.PENDING
+            order by t.todoDate, t.startTime, t.id
+            """)
+    List<Todo> findPendingGoalTasksForUpdate(@Param("goalId") Long goalId);
 }
