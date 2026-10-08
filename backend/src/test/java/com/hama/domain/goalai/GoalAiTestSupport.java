@@ -96,6 +96,31 @@ public abstract class GoalAiTestSupport {
                       "weeklyAvailableHours":10.0,"currentLevel":"LC 350 / RC 350"}}
             """;
 
+    /** 10월(3회×60분)·11~12월(2회×120분) 플랜 A 와 매일 하는 플랜 B. A 는 투두 30개입니다. */
+    protected static final String PLAN_ANSWER = """
+            {"plans":[
+              {"variant":"A","title":"여유형","summary":"주 3일, 하루 1시간.",
+               "milestones":[{"title":"기초 다지기","startDate":"2026-10-01","endDate":"2026-10-31",
+                              "weeklyTasks":[{"content":"LC 파트2 문제 풀이","sessionsPerWeek":3,"minutes":60}]},
+                             {"title":"실전 연습","startDate":"2026-11-01","endDate":"2026-12-31",
+                              "weeklyTasks":[{"content":"모의고사 1회","sessionsPerWeek":2,"minutes":120}]}]},
+              {"variant":"B","title":"집중형","summary":"매일 1.5시간.",
+               "milestones":[{"title":"몰입","startDate":"2026-10-01","endDate":"2026-12-31",
+                              "weeklyTasks":[{"content":"RC 파트7 지문","sessionsPerWeek":7,"minutes":90}]}]}]}
+            """;
+
+    /** 대화 → 확정까지 거친 PLANNING 목표(2026-10-01 ~ 2026-12-31). */
+    protected long planningGoal(User user) throws Exception {
+        long sessionId = readySession(user);
+        return call(post("/api/v1/goals/ai/sessions/" + sessionId + "/confirm"), user, null, 201)
+                .at("/data/goalId").asLong();
+    }
+
+    protected JsonNode generatePlans(User user, long goalId) throws Exception {
+        AI.answer(PLAN_ANSWER);
+        return call(post("/api/v1/goals/ai/plans"), user, Map.of("goalId", goalId), 201).get("data");
+    }
+
     /** 세션을 만들고 답변 한 번으로 READY 까지 갑니다. */
     protected long readySession(User user) throws Exception {
         AI.answer(question("현재 토익 점수는 어느 정도인가요?", "CURRENT_LEVEL"));

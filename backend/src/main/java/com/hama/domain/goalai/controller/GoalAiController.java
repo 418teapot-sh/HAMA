@@ -1,11 +1,14 @@
 package com.hama.domain.goalai.controller;
 
 import com.hama.domain.goalai.dto.DraftResponses;
+import com.hama.domain.goalai.dto.PlanRequests;
+import com.hama.domain.goalai.dto.PlanResponses;
 import com.hama.domain.goalai.dto.RealityResult;
 import com.hama.domain.goalai.dto.SessionRequests;
 import com.hama.domain.goalai.dto.SessionResponses;
 import com.hama.domain.goalai.dto.UpdateGoalDraftRequest;
 import com.hama.domain.goalai.service.GoalAiDraftService;
+import com.hama.domain.goalai.service.GoalAiPlanService;
 import com.hama.domain.goalai.service.GoalAiSessionService;
 import com.hama.global.auth.AuthUser;
 import com.hama.global.response.ApiResponse;
@@ -23,6 +26,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "목표 AI", description = """
@@ -36,6 +40,7 @@ public class GoalAiController {
 
     private final GoalAiSessionService sessionService;
     private final GoalAiDraftService draftService;
+    private final GoalAiPlanService planService;
 
     @Operation(summary = "목표 입력 (세션 시작)",
             description = """
@@ -109,5 +114,29 @@ public class GoalAiController {
             @PathVariable Long sessionId) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(draftService.confirm(authUser.userId(), sessionId)));
+    }
+
+    @Operation(summary = "A/B 플랜 생성",
+            description = """
+                    PLANNING 목표에 A(여유형)·B(집중형) 플랜을 만듭니다. 다시 만들면 선택하지 않은 기존 플랜을 바꿉니다.
+                    투두는 목표 시작일과 오늘 중 늦은 날부터 종료일까지 둡니다. preference 는 RELAXED | BALANCED | INTENSIVE(생략 시 BALANCED).
+                    없는 목표 404(GOAL_NOT_FOUND), 다른 사람의 목표 403, PLANNING 이 아니면 409(GOAL_NOT_PLANNING),
+                    기간이 없거나 이미 끝났으면 400(GOAL_INVALID_PERIOD), 만드는 사이 목표 기간이 바뀌면 409(AI_PLAN_OUTDATED).
+                    """)
+    @PostMapping("/plans")
+    public ResponseEntity<ApiResponse<PlanResponses.PlanList>> generatePlans(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @Valid @RequestBody PlanRequests.Generate request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
+                planService.generate(authUser.userId(), request.goalId(), request.preference())));
+    }
+
+    @Operation(summary = "플랜 조회",
+            description = "목표의 플랜 목록과 선택 여부(selected)를 돌려줍니다. 플랜이 없으면 빈 배열입니다. 404 / 403 은 생성과 같습니다.")
+    @GetMapping("/plans")
+    public ApiResponse<PlanResponses.PlanList> plans(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam Long goalId) {
+        return ApiResponse.success(planService.list(authUser.userId(), goalId));
     }
 }
