@@ -1,5 +1,8 @@
 package com.hama.domain.goalai.service;
 
+import static com.hama.domain.goalai.service.SessionGuards.owned;
+import static com.hama.domain.goalai.service.SessionGuards.requireOpen;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.hama.domain.goalai.dto.GoalDraft;
 import com.hama.domain.goalai.dto.RealityResult;
@@ -8,7 +11,6 @@ import com.hama.domain.goalai.entity.Expects;
 import com.hama.domain.goalai.entity.GoalAiMessage;
 import com.hama.domain.goalai.entity.GoalAiSession;
 import com.hama.domain.goalai.entity.MessageRole;
-import com.hama.domain.goalai.entity.SessionStatus;
 import com.hama.domain.goalai.exception.GoalAiErrorCode;
 import com.hama.domain.goalai.repository.GoalAiMessageRepository;
 import com.hama.domain.goalai.repository.GoalAiSessionRepository;
@@ -17,12 +19,10 @@ import com.hama.global.ai.AiErrorCode;
 import com.hama.global.ai.AiMessage;
 import com.hama.global.ai.AiRequest;
 import com.hama.global.exception.BusinessException;
-import com.hama.global.exception.GlobalErrorCode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -116,20 +116,6 @@ public class GoalAiSessionService {
                     json.read(session.getDraftJson(), GoalDraft.class),
                     json.read(session.getRealityJson(), RealityResult.class));
         });
-    }
-
-    GoalAiSession owned(Optional<GoalAiSession> found, Long userId) {
-        GoalAiSession session = found.orElseThrow(() -> new BusinessException(GoalAiErrorCode.AI_SESSION_NOT_FOUND));
-        if (!session.isOwnedBy(userId)) {
-            throw new BusinessException(GlobalErrorCode.FORBIDDEN);
-        }
-        return session;
-    }
-
-    private static void requireOpen(GoalAiSession session) {
-        if (session.getStatus() == SessionStatus.CONFIRMED) {
-            throw new BusinessException(GoalAiErrorCode.AI_SESSION_CONFIRMED);
-        }
     }
 
     private Turn ask(List<AiMessage> history) {
