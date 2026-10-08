@@ -18,7 +18,7 @@ public record CreateGoalRequest(
         @Schema(example = "매일 러닝 30분", maxLength = 100, requiredMode = Schema.RequiredMode.REQUIRED)
         String title,
 
-        @Schema(example = "체력 기르기")
+        @Schema(example = "체력 기르기", description = "UTF-8 기준 65535바이트 이하. 넘으면 400(GOAL_DESCRIPTION_TOO_LONG).")
         String description,
 
         @Size(max = 50, message = "측정 지표명은 50자 이하입니다.")

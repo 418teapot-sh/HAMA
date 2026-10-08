@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
@@ -118,6 +119,11 @@ public class Goal extends BaseTimeEntity {
         return status == GoalStatus.IN_PROGRESS && endDate != null && endDate.isBefore(today);
     }
 
+    /** 진행 중인 목표만 삭제할 수 없습니다. PLANNING 은 AI 흐름을 중간에 그만둔 목표라 지울 수 있어야 합니다. */
+    public boolean isDeletable(LocalDate today) {
+        return status == GoalStatus.PLANNING || isPast(today);
+    }
+
     public boolean isOwnedBy(Long userId) {
         return this.userId.equals(userId);
     }
@@ -144,8 +150,15 @@ public class Goal extends BaseTimeEntity {
                 || content.title().strip().length() > 100) {
             throw new BusinessException(GoalErrorCode.GOAL_INVALID_INPUT);
         }
+        if (content.description() != null
+                && content.description().getBytes(StandardCharsets.UTF_8).length > 65535) {
+            throw new BusinessException(GoalErrorCode.GOAL_DESCRIPTION_TOO_LONG);
+        }
         LocalDate start = content.startDate();
         LocalDate end = content.endDate();
+        if (!isStorableDate(start) || !isStorableDate(end)) {
+            throw new BusinessException(GoalErrorCode.GOAL_INVALID_PERIOD);
+        }
         if (start == null || end == null) {
             if (datesRequired) {
                 throw new BusinessException(GoalErrorCode.GOAL_INVALID_INPUT);
@@ -156,5 +169,10 @@ public class Goal extends BaseTimeEntity {
         if (start.isAfter(end) || end.isBefore(today)) {
             throw new BusinessException(GoalErrorCode.GOAL_INVALID_PERIOD);
         }
+    }
+
+    /** MySQL DATE 가 담을 수 있는 연도(1000~9999)만 받습니다. null 은 필수 여부를 따로 검사합니다. */
+    private static boolean isStorableDate(LocalDate date) {
+        return date == null || (date.getYear() >= 1000 && date.getYear() <= 9999);
     }
 }

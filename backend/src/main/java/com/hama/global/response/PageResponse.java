@@ -34,11 +34,13 @@ public record PageResponse<T>(
     /**
      * 쿼리 파라미터 page·size 를 검증해 정렬 없는 Pageable 로 바꿉니다. 정렬은 쿼리의 order by 가 정합니다.
      * page 는 0 이상, size 는 1~{@value #MAX_SIZE} 이고 벗어나면 400 입니다.
+     * Hibernate 의 offset(setFirstResult)이 int 라서 page × size 가 int 범위를 넘어도 400 입니다.
      */
     public static Pageable pageRequest(int page, int size) {
-        if (page < 0 || size < 1 || size > MAX_SIZE) {
+        if (page < 0 || size < 1 || size > MAX_SIZE || (long) page * size > Integer.MAX_VALUE) {
             throw new BusinessException(GlobalErrorCode.VALIDATION_FAILED,
-                    "page 는 0 이상, size 는 1~%d 사이여야 합니다.".formatted(MAX_SIZE));
+                    "page 는 0 이상, size 는 1~%d 사이, page × size 는 %d 이하여야 합니다."
+                            .formatted(MAX_SIZE, Integer.MAX_VALUE));
         }
         return PageRequest.of(page, size);
     }
