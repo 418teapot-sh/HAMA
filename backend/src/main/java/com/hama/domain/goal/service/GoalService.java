@@ -12,6 +12,7 @@ import com.hama.domain.goal.repository.GoalTodoCount;
 import com.hama.domain.goal.repository.GoalTodoRepository;
 import com.hama.domain.goal.repository.MilestoneRepository;
 import com.hama.domain.goal.repository.PeriodGoalRepository;
+import com.hama.domain.todo.repository.TodoRepository;
 import com.hama.global.exception.BusinessException;
 import com.hama.global.exception.GlobalErrorCode;
 import com.hama.global.response.PageResponse;
@@ -35,15 +36,17 @@ public class GoalService {
     private final MilestoneRepository milestoneRepository;
     private final PeriodGoalRepository periodGoalRepository;
     private final GoalTodoRepository goalTodoRepository;
+    private final TodoRepository todoRepository;
     private final Clock clock;
 
     public GoalService(GoalRepository goalRepository, MilestoneRepository milestoneRepository,
             PeriodGoalRepository periodGoalRepository, GoalTodoRepository goalTodoRepository,
-            @Qualifier("goalClock") Clock clock) {
+            TodoRepository todoRepository, @Qualifier("be3Clock") Clock clock) {
         this.goalRepository = goalRepository;
         this.milestoneRepository = milestoneRepository;
         this.periodGoalRepository = periodGoalRepository;
         this.goalTodoRepository = goalTodoRepository;
+        this.todoRepository = todoRepository;
         this.clock = clock;
     }
 
@@ -96,7 +99,8 @@ public class GoalService {
         }
         LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.SECONDS);
         goal.delete(now);
-        goalTodoRepository.softDeleteByGoal(goal.getId(), now);
+        // SQL UPDATE 로 지우면 같은 트랜잭션에서 이미 불러온 Todo 가 flush 때 deleted_at 을 되돌립니다.
+        todoRepository.findByGoalIdAndDeletedAtIsNull(goal.getId()).forEach(todo -> todo.delete(now));
     }
 
     private GoalResponses.Detail detail(Goal goal) {

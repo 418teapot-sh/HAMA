@@ -13,6 +13,9 @@ import com.hama.domain.goal.entity.PeriodGoal;
 import com.hama.domain.goal.entity.PeriodType;
 import com.hama.domain.goal.repository.MilestoneRepository;
 import com.hama.domain.goal.repository.PeriodGoalRepository;
+import com.hama.domain.goal.service.GoalService;
+import com.hama.domain.todo.entity.Todo;
+import com.hama.domain.todo.repository.TodoRepository;
 import com.hama.domain.user.repository.UserRepository;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -38,6 +41,7 @@ import org.springframework.test.context.bean.override.convention.TestBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -48,7 +52,7 @@ class GoalApiIntegrationTest {
 
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 4);
 
-    @TestBean(name = "goalClock", methodName = "fixedClock")
+    @TestBean(name = "be3Clock", methodName = "fixedClock")
     private Clock clock;
 
     static Clock fixedClock() {
@@ -68,6 +72,12 @@ class GoalApiIntegrationTest {
     private MilestoneRepository milestones;
     @Autowired
     private PeriodGoalRepository periodGoals;
+    @Autowired
+    private TodoRepository todos;
+    @Autowired
+    private GoalService goalService;
+    @Autowired
+    private TransactionTemplate transaction;
 
     private record Session(Long userId, String token) {
     }
@@ -111,7 +121,7 @@ class GoalApiIntegrationTest {
         jdbc.update("UPDATE goal SET status = 'PLANNING' WHERE goal_id = ?", goalId);
     }
 
-    /** Todo 엔티티가 아직 goal_id 를 매핑하지 않아 SQL 로 AI_GOAL_TASK 를 넣습니다. */
+    /** 투두 API 를 거치면 목표 상태·기간 검사까지 맞춰야 해서, AI_GOAL_TASK 는 SQL 로 바로 넣습니다. */
     private long goalTask(Session user, long goalId, Long periodGoalId, boolean completed) {
         KeyHolder key = new GeneratedKeyHolder();
         jdbc.update(connection -> {
@@ -273,6 +283,28 @@ class GoalApiIntegrationTest {
     }
 
     @Test
+    void 수정에서_null_은_값을_지우고_생략한_필드와_title_은_유지한다() throws Exception {
+        Session owner = signup();
+        long goalId = createGoal(owner);
+
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON).content("""
+                        {"title":null,"metricName":null,"unit":null,"startValue":null}
+                        """), owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("매일 러닝 30분"))
+                .andExpect(jsonPath("$.data.metricName").isEmpty())
+                .andExpect(jsonPath("$.data.unit").isEmpty())
+                .andExpect(jsonPath("$.data.startValue").isEmpty())
+                .andExpect(jsonPath("$.data.targetValue").value(74.0))
+                .andExpect(jsonPath("$.data.description").value("체력 기르기"));
+
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"endDate\":null}"), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_INPUT"));
+    }
+
+    @Test
     void 지난_목표는_수정하면_409() throws Exception {
         Session owner = signup();
         long goalId = createGoal(owner);
@@ -392,6 +424,25 @@ class GoalApiIntegrationTest {
                 Boolean.class, task)).isTrue();
         mvc.perform(auth(get("/api/v1/goals"), owner))
                 .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void 같은_트랜잭션에서_불러온_투두가_있어도_목표_삭제가_투두_삭제를_되돌리지_않는다() throws Exception {
+        Session owner = signup();
+        long goalId = createGoal(owner);
+        long task = goalTask(owner, goalId, null, false);
+        makePast(goalId);
+
+        transaction.executeWithoutResult(status -> {
+            Todo loaded = todos.findActiveForUpdate(task).orElseThrow();
+            loaded.changeStatusNote("메모");
+            goalService.delete(owner.userId(), goalId);
+        });
+
+        assertThat(jdbc.queryForObject("SELECT deleted_at IS NOT NULL FROM todo WHERE todo_id = ?",
+                Boolean.class, task)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT status_note FROM todo WHERE todo_id = ?",
+                String.class, task)).isEqualTo("메모");
     }
 
     @Test

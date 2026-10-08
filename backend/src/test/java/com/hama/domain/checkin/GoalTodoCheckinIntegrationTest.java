@@ -49,7 +49,6 @@ class GoalTodoCheckinIntegrationTest {
     @Autowired PlatformTransactionManager transactions;
     @MockitoSpyBean TodoRepository todoRepository;
     @TestBean(name = "be3Clock", methodName = "clock") Clock be3;
-    @TestBean(name = "goalClock", methodName = "clock") Clock goalClock;
 
     static Clock clock() { return Clock.fixed(Instant.parse("2026-10-08T03:00:00Z"), ZoneId.of("Asia/Seoul")); }
     record User(long id, String token) {}
