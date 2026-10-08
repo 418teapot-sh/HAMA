@@ -29,12 +29,12 @@ public class CalendarReadRepository {
     }
 
     public record TaskCandidate(long id, String title, LocalDate date, LocalTime startTime,
-            LocalTime endTime, TodoStatus status, String memo) {
+            LocalTime endTime, TodoStatus status, String memo, CalendarType type, Long goalId) {
         public CalendarEvent event() {
             boolean allDay = startTime == null;
             LocalDateTime start = allDay ? date.atStartOfDay() : date.atTime(startTime);
             LocalDateTime end = allDay ? start.plusDays(1) : date.atTime(endTime);
-            return new CalendarEvent(CalendarType.TASK, id, title, start, end, allDay, null, memo);
+            return new CalendarEvent(type, id, title, start, end, allDay, null, memo);
         }
     }
 
@@ -62,17 +62,23 @@ public class CalendarReadRepository {
     }
 
     public List<TaskCandidate> tasks(long userId, CalendarQuery query, long afterId) {
-        if (!query.types().contains(CalendarType.TASK)) {
-            return List.of();
-        }
+        List<String> categories = query.types().stream()
+                .filter(type -> type == CalendarType.TASK || type == CalendarType.AI_GOAL)
+                .map(type -> type == CalendarType.TASK ? "TASK" : "AI_GOAL_TASK").toList();
+        if (categories.isEmpty()) return List.of();
         return jdbc.query("""
-                SELECT todo_id, content, todo_date, start_time, end_time, status, status_note
-                FROM todo WHERE user_id = :user AND deleted_at IS NULL AND category = 'TASK'
-                  AND todo_id > :cursor AND todo_date BETWEEN :first AND :last
-                ORDER BY todo_id LIMIT 100
-                """, Map.of("user", userId, "cursor", afterId, "first", query.from(), "last", query.to()),
+                SELECT t.todo_id, t.content, t.todo_date, t.start_time, t.end_time, t.status, t.status_note,
+                       t.category, t.goal_id
+                FROM todo t WHERE t.user_id = :user AND t.deleted_at IS NULL AND t.category IN (:categories)
+                  AND t.todo_id > :cursor AND t.todo_date BETWEEN :first AND :last
+                  AND (t.category = 'TASK' OR EXISTS
+                      (SELECT 1 FROM goal g WHERE g.goal_id = t.goal_id AND g.user_id = :user AND g.deleted_at IS NULL))
+                ORDER BY t.todo_id LIMIT 100
+                """, Map.of("user", userId, "cursor", afterId, "first", query.from(), "last", query.to(), "categories", categories),
                 (rs, row) -> new TaskCandidate(rs.getLong("todo_id"), rs.getString("content"), rs.getObject("todo_date", LocalDate.class),
                         rs.getObject("start_time", LocalTime.class), rs.getObject("end_time", LocalTime.class),
-                        TodoStatus.valueOf(rs.getString("status")), rs.getString("status_note")));
+                        TodoStatus.valueOf(rs.getString("status")), rs.getString("status_note"),
+                        "TASK".equals(rs.getString("category")) ? CalendarType.TASK : CalendarType.AI_GOAL,
+                        rs.getObject("goal_id", Long.class)));
     }
 }

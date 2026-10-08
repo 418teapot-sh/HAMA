@@ -34,8 +34,8 @@ public class CalendarService {
                 occurrence -> split(items, schedule, occurrence.startAt(), occurrence.endAt(), query)));
         tasks(userId, query, todo -> {
             requireCapacity(items);
-            items.add(new Item(CalendarType.TASK, todo.id(), todo.title(), todo.date(),
-                    todo.startTime(), todo.endTime(), todo.startTime() == null, null, todo.status()));
+            items.add(new Item(todo.type(), todo.id(), todo.title(), todo.date(),
+                    todo.startTime(), todo.endTime(), todo.startTime() == null, todo.goalId(), todo.status()));
         });
         items.sort(Comparator.comparing(Item::date)
                 .thenComparing(Item::startTime, Comparator.nullsFirst(Comparator.naturalOrder()))
