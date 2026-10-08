@@ -138,6 +138,27 @@ class LinerAiClientTest {
     }
 
     @Test
+    void 토큰_상한에_걸려_잘린_응답은_AI_UPSTREAM_ERROR() {
+        AiClient client = clientReturning(HttpStatus.OK, completion("문장이 중간에서 끊", "length"));
+
+        assertThatThrownBy(() -> client.chat(AiRequest.of("test", null, "hi")))
+                .satisfies(e -> assertErrorCode(e, AiErrorCode.AI_UPSTREAM_ERROR))
+                .cause()
+                .hasMessageContaining("잘렸습니다");
+        AiClient jsonClient = clientReturning(HttpStatus.OK, completion("{\"verdict\":\"FEAS", "length"));
+        assertThatThrownBy(() -> jsonClient.chatForJson(AiRequest.of("test", null, "hi"), Verdict.class))
+                .satisfies(e -> assertErrorCode(e, AiErrorCode.AI_UPSTREAM_ERROR));
+    }
+
+    @Test
+    void content_가_빈_문자열이면_AI_UPSTREAM_ERROR() {
+        AiClient client = clientReturning(HttpStatus.OK, completion(""));
+
+        assertThatThrownBy(() -> client.chat(AiRequest.of("test", null, "hi")))
+                .satisfies(e -> assertErrorCode(e, AiErrorCode.AI_UPSTREAM_ERROR));
+    }
+
+    @Test
     void 사용량_필드가_null_이어도_content_를_돌려준다() {
         AiClient client = clientReturning(HttpStatus.OK, """
                 {"choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],
@@ -191,12 +212,16 @@ class LinerAiClientTest {
     }
 
     private static String completion(String content) {
+        return completion(content, "stop");
+    }
+
+    private static String completion(String content, String finishReason) {
         String escaped = content.replace("\\", "\\\\").replace("\"", "\\\"");
         return """
                 {"id":"chatcmpl-1","object":"chat.completion","model":"liner-mark-1.1",
-                 "choices":[{"index":0,"message":{"role":"assistant","content":"%s"},"finish_reason":"stop"}],
+                 "choices":[{"index":0,"message":{"role":"assistant","content":"%s"},"finish_reason":"%s"}],
                  "usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"prompt_tokens_details":{"cached_tokens":0}}}
-                """.formatted(escaped);
+                """.formatted(escaped, finishReason);
     }
 
     private static void assertErrorCode(Throwable e, AiErrorCode expected) {

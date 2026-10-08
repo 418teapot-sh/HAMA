@@ -1,6 +1,5 @@
 package com.hama.domain.goal.repository;
 
-import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -11,10 +10,9 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
- * 목표 쪽에서 todo 테이블을 집계·일괄 변경합니다.
+ * 목표 쪽에서 todo 테이블을 읽기 전용으로 집계합니다. 목표별 전체·완료 개수를 GROUP BY 한 번으로 끝내려고 SQL 로 둡니다.
  *
- * <p>todo 는 BE3 소유 엔티티이고 아직 goal_id / period_goal_id 를 매핑하지 않아서(V5 마이그레이션 참고)
- * JPQL 대신 SQL 로 직접 조회합니다. Todo 엔티티가 이 컬럼을 매핑하면 JPQL 로 옮겨도 됩니다.
+ * <p>todo 를 바꾸는 작업은 여기서 하지 마세요. SQL 로 바꾸면 영속성 컨텍스트의 Todo 엔티티와 어긋납니다.
  */
 @Repository
 @RequiredArgsConstructor
@@ -66,16 +64,5 @@ public class GoalTodoRepository {
                             new GoalTodoCount(rs.getLong("total"), rs.getLong("completed")));
                 });
         return counts;
-    }
-
-    /** 목표 삭제 시 연결된 투두(카테고리 무관)를 같은 트랜잭션에서 소프트 삭제합니다. */
-    public int softDeleteByGoal(Long goalId, LocalDateTime now) {
-        return jdbc.update("""
-                        UPDATE todo SET deleted_at = :now, updated_at = :now
-                        WHERE goal_id = :goalId AND deleted_at IS NULL
-                        """,
-                new MapSqlParameterSource()
-                        .addValue("goalId", goalId)
-                        .addValue("now", now));
     }
 }

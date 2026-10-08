@@ -29,6 +29,8 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
         Long getGoalId();
     }
 
+    List<Todo> findByGoalIdAndDeletedAtIsNull(Long goalId);
+
     @Query("select t.userId as userId, t.goalId as goalId from Todo t where t.id = :id and t.deletedAt is null")
     Optional<Link> findActiveLink(@Param("id") Long id);
 

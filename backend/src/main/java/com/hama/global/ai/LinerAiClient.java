@@ -141,11 +141,18 @@ public class LinerAiClient implements AiClient {
         }
 
         Choice choice = response.choices().getFirst();
+        String content = choice.message().content();
         if ("length".equals(choice.finishReason())) {
             log.warn("[AI] purpose={} 응답이 max_completion_tokens 에 걸려 잘렸습니다. 프롬프트나 상한을 조정하세요.",
                     request.purpose());
+            throw new BusinessException(AiErrorCode.AI_UPSTREAM_ERROR, new IllegalStateException(
+                    "[%s] 라이너 응답이 토큰 상한에 걸려 잘렸습니다: %s".formatted(request.purpose(), abbreviate(content))));
         }
-        return choice.message().content();
+        if (content.isBlank()) {
+            throw new BusinessException(AiErrorCode.AI_UPSTREAM_ERROR, new IllegalStateException(
+                    "[%s] 라이너 응답 content 가 비어 있습니다: %s".formatted(request.purpose(), abbreviate(responseBody))));
+        }
+        return content;
     }
 
     private void logUsage(AiRequest request, Usage usage) {

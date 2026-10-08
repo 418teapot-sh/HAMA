@@ -90,7 +90,8 @@ public class GoalController {
 
     @Operation(summary = "목표 수정",
             description = """
-                    변경할 필드만 보냅니다. 생략하거나 null 인 필드는 기존 값을 유지합니다. 응답은 상세 조회와 같습니다.
+                    변경할 필드만 보냅니다. 생략한 필드는 기존 값을 유지하고, null 을 보내면 지웁니다(title 은 null 이어도 유지).
+                    진행 중인 목표의 startDate·endDate 를 null 로 보내면 400(GOAL_INVALID_INPUT). 응답은 상세 조회와 같습니다.
                     지난 목표(PAST)는 409(GOAL_NOT_EDITABLE), 기간이 잘못되면 400(GOAL_INVALID_PERIOD), 404 / 403 은 상세와 같습니다.
                     """)
     @PatchMapping("/{goalId}")
