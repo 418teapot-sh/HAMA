@@ -4,12 +4,15 @@ import com.hama.domain.goalai.dto.DraftResponses;
 import com.hama.domain.goalai.dto.PlanRequests;
 import com.hama.domain.goalai.dto.PlanResponses;
 import com.hama.domain.goalai.dto.RealityResult;
+import com.hama.domain.goalai.dto.ReplanRequest;
+import com.hama.domain.goalai.dto.ReplanResponse;
 import com.hama.domain.goalai.dto.SelectResponse;
 import com.hama.domain.goalai.dto.SessionRequests;
 import com.hama.domain.goalai.dto.SessionResponses;
 import com.hama.domain.goalai.dto.UpdateGoalDraftRequest;
 import com.hama.domain.goalai.service.GoalAiDraftService;
 import com.hama.domain.goalai.service.GoalAiPlanService;
+import com.hama.domain.goalai.service.GoalAiReplanService;
 import com.hama.domain.goalai.service.GoalAiSelectService;
 import com.hama.domain.goalai.service.GoalAiSessionService;
 import com.hama.global.auth.AuthUser;
@@ -44,6 +47,7 @@ public class GoalAiController {
     private final GoalAiDraftService draftService;
     private final GoalAiPlanService planService;
     private final GoalAiSelectService selectService;
+    private final GoalAiReplanService replanService;
 
     @Operation(summary = "목표 입력 (세션 시작)",
             description = """
@@ -156,5 +160,19 @@ public class GoalAiController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long planId) {
         return ApiResponse.success(selectService.select(authUser.userId(), planId));
+    }
+
+    @Operation(summary = "AI 투두 재배치",
+            description = """
+                    목표의 미완료 AI 투두(AI_GOAL_TASK)만 옮깁니다. fromDate 이후에 정한 시간이 비어 있는 투두는 그대로 두고,
+                    밀린 투두·시간 없는 투두·일정과 겹친 투두를 fromDate(밀린 투두) 또는 원래 날짜부터 목표 종료일까지 첫 빈 시간에 둡니다.
+                    빈 시간이 끝까지 없으면 시간 없이 날짜만 둡니다(unplacedCount). 미룬 횟수는 늘지 않습니다.
+                    진행 중이 아닌 목표 409(GOAL_NOT_IN_PROGRESS), fromDate 가 오늘 이전이거나 목표 기간 밖이면 400(AI_REPLAN_INVALID_DATE).
+                    """)
+    @PostMapping("/replan")
+    public ApiResponse<ReplanResponse> replan(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @Valid @RequestBody ReplanRequest request) {
+        return ApiResponse.success(replanService.replan(authUser.userId(), request.goalId(), request.fromDate()));
     }
 }
