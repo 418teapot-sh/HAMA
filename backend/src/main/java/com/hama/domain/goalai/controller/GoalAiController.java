@@ -4,11 +4,13 @@ import com.hama.domain.goalai.dto.DraftResponses;
 import com.hama.domain.goalai.dto.PlanRequests;
 import com.hama.domain.goalai.dto.PlanResponses;
 import com.hama.domain.goalai.dto.RealityResult;
+import com.hama.domain.goalai.dto.SelectResponse;
 import com.hama.domain.goalai.dto.SessionRequests;
 import com.hama.domain.goalai.dto.SessionResponses;
 import com.hama.domain.goalai.dto.UpdateGoalDraftRequest;
 import com.hama.domain.goalai.service.GoalAiDraftService;
 import com.hama.domain.goalai.service.GoalAiPlanService;
+import com.hama.domain.goalai.service.GoalAiSelectService;
 import com.hama.domain.goalai.service.GoalAiSessionService;
 import com.hama.global.auth.AuthUser;
 import com.hama.global.response.ApiResponse;
@@ -41,6 +43,7 @@ public class GoalAiController {
     private final GoalAiSessionService sessionService;
     private final GoalAiDraftService draftService;
     private final GoalAiPlanService planService;
+    private final GoalAiSelectService selectService;
 
     @Operation(summary = "목표 입력 (세션 시작)",
             description = """
@@ -138,5 +141,20 @@ public class GoalAiController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @RequestParam Long goalId) {
         return ApiResponse.success(planService.list(authUser.userId(), goalId));
+    }
+
+    @Operation(summary = "플랜 선택",
+            description = """
+                    플랜대로 마일스톤·주간 목표·투두를 만들고 목표를 IN_PROGRESS 로 바꿉니다.
+                    투두는 그날 09:00~22:00 중 고정·개인 일정과 시간이 정해진 기존 투두를 피한 첫 빈 시간(10분 단위)에 둡니다.
+                    빈 시간이 없으면 시간 없이 날짜만 두고 placement.unplacedTodos 에 담습니다.
+                    없는 플랜 404(AI_PLAN_NOT_FOUND), 다른 사람의 플랜 403, 이미 고른 플랜 409(AI_PLAN_ALREADY_SELECTED),
+                    다른 플랜을 이미 골랐으면 409(GOAL_NOT_PLANNING), 목표 기간이 바뀌었거나 플랜 시작일이 지났으면 409(AI_PLAN_OUTDATED).
+                    """)
+    @PostMapping("/plans/{planId}/select")
+    public ApiResponse<SelectResponse> selectPlan(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long planId) {
+        return ApiResponse.success(selectService.select(authUser.userId(), planId));
     }
 }
