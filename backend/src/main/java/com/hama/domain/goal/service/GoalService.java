@@ -87,11 +87,11 @@ public class GoalService {
         return detail(goal);
     }
 
-    /** 지난 목표만 삭제할 수 있고, 연결된 투두도 함께 소프트 삭제합니다. */
+    /** 지난 목표와 PLANNING 목표만 삭제할 수 있고, 연결된 투두도 함께 소프트 삭제합니다. */
     @Transactional
     public void delete(Long userId, Long goalId) {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
-        if (!goal.isPast(today())) {
+        if (!goal.isDeletable(today())) {
             throw new BusinessException(GoalErrorCode.GOAL_NOT_DELETABLE);
         }
         LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.SECONDS);

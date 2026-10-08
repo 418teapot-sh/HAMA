@@ -40,8 +40,8 @@ public class GoalController {
 
     @Operation(summary = "목표 리스트 조회",
             description = """
-                    status: IN_PROGRESS(진행 중, 마감 가까운 순) | PAST(지난 목표, 최근 종료 순), 생략하면 둘 다(최근 생성 순).
-                    플랜 선택 전(PLANNING) 목표는 나오지 않습니다. page 는 0부터, size 는 1~100(기본 20).
+                    status: IN_PROGRESS(진행 중, 마감 가까운 순) | PAST(지난 목표, 최근 종료 순),
+                    생략하면 플랜 선택 전(PLANNING)까지 포함한 전체(최근 생성 순). page 는 0부터, size 는 1~100(기본 20).
                     status 값이 잘못되면 400(BINDING_ERROR), page·size 범위를 벗어나면 400(VALIDATION_FAILED).
                     """)
     @GetMapping
@@ -100,9 +100,10 @@ public class GoalController {
         return ApiResponse.success(goalService.update(authUser.userId(), goalId, request));
     }
 
-    @Operation(summary = "지난 목표 삭제",
+    @Operation(summary = "목표 삭제",
             description = """
-                    지난 목표(PAST)만 삭제할 수 있고, 아니면 409(GOAL_NOT_DELETABLE)입니다. 연결된 투두도 함께 소프트 삭제됩니다.
+                    지난 목표(PAST)와 플랜 선택 전(PLANNING) 목표만 삭제할 수 있고, 진행 중(IN_PROGRESS)이면 409(GOAL_NOT_DELETABLE)입니다.
+                    연결된 투두도 함께 소프트 삭제됩니다.
                     성공 시 HTTP 200, 공통 응답의 data 는 null 입니다. 404 / 403 은 상세와 같습니다.
                     """)
     @DeleteMapping("/{goalId}")

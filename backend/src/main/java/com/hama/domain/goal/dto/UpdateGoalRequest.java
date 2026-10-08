@@ -17,6 +17,7 @@ public record UpdateGoalRequest(
         @Schema(example = "3개월 안에 토익 850점", maxLength = 100)
         String title,
 
+        @Schema(description = "UTF-8 기준 65535바이트 이하. 넘으면 400(GOAL_DESCRIPTION_TOO_LONG).")
         String description,
 
         @Size(max = 50, message = "측정 지표명은 50자 이하입니다.")

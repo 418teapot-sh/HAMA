@@ -41,20 +41,22 @@ final class LinerChatCompletion {
     record Choice(Message message, @JsonProperty("finish_reason") String finishReason) {
     }
 
+    /** Jackson 3 은 primitive 에 null 이 오면 실패하므로, 사용량 필드는 전부 박싱 타입으로 받습니다. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     record Usage(
-            @JsonProperty("prompt_tokens") int promptTokens,
-            @JsonProperty("completion_tokens") int completionTokens,
-            @JsonProperty("total_tokens") int totalTokens,
+            @JsonProperty("prompt_tokens") Integer promptTokens,
+            @JsonProperty("completion_tokens") Integer completionTokens,
+            @JsonProperty("total_tokens") Integer totalTokens,
             @JsonProperty("prompt_tokens_details") PromptTokensDetails promptTokensDetails
     ) {
 
         int cachedTokens() {
-            return promptTokensDetails == null ? 0 : promptTokensDetails.cachedTokens();
+            return promptTokensDetails == null || promptTokensDetails.cachedTokens() == null
+                    ? 0 : promptTokensDetails.cachedTokens();
         }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record PromptTokensDetails(@JsonProperty("cached_tokens") int cachedTokens) {
+    record PromptTokensDetails(@JsonProperty("cached_tokens") Integer cachedTokens) {
     }
 }

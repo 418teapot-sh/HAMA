@@ -13,7 +13,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface GoalRepository extends JpaRepository<Goal, Long> {
 
-    // 리스트에는 플랜이 적용된(저장 status = IN_PROGRESS) 목표만 나옵니다. PAST 는 종료일로 가릅니다.
+    // 진행 중·지난 목표 필터는 플랜이 적용된(저장 status = IN_PROGRESS) 목표만 보고, PAST 는 종료일로 가릅니다.
+    // 전체(필터 생략)는 PLANNING 도 포함해서, AI 흐름을 중간에 그만둔 목표를 찾아 지울 수 있게 합니다.
     // 진행 중은 마감이 가까운 순, 지난 목표는 최근에 끝난 순, 전체는 최근에 만든 순입니다.
 
     @Query(value = """
@@ -45,13 +46,11 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
     @Query(value = """
             select g from Goal g
             where g.userId = :userId and g.deletedAt is null
-              and g.status = com.hama.domain.goal.entity.GoalStatus.IN_PROGRESS
             order by g.id desc
             """,
             countQuery = """
             select count(g) from Goal g
             where g.userId = :userId and g.deletedAt is null
-              and g.status = com.hama.domain.goal.entity.GoalStatus.IN_PROGRESS
             """)
     Page<Goal> findListed(@Param("userId") Long userId, Pageable pageable);
 

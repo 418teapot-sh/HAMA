@@ -106,6 +106,11 @@ class GoalApiIntegrationTest {
                 Date.valueOf(TODAY.minusDays(30)), Date.valueOf(TODAY.minusDays(1)), goalId);
     }
 
+    /** PLANNING 목표는 AI 흐름에서만 만들어지므로 DB 를 직접 바꿉니다. */
+    private void makePlanning(long goalId) {
+        jdbc.update("UPDATE goal SET status = 'PLANNING' WHERE goal_id = ?", goalId);
+    }
+
     /** Todo 엔티티가 아직 goal_id 를 매핑하지 않아 SQL 로 AI_GOAL_TASK 를 넣습니다. */
     private long goalTask(Session user, long goalId, Long periodGoalId, boolean completed) {
         KeyHolder key = new GeneratedKeyHolder();
@@ -195,6 +200,33 @@ class GoalApiIntegrationTest {
 
         // 종료일이 오늘이면 아직 진행 중이므로 만들 수 있습니다.
         createGoal(owner, "오늘까지", TODAY, TODAY);
+    }
+
+    @Test
+    void DB_에_담을_수_없는_설명과_날짜는_500_대신_400() throws Exception {
+        Session owner = signup();
+        long goalId = createGoal(owner);
+        String longDescription = "a".repeat(70 * 1024);
+
+        mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON).content("""
+                        {"title":"목표","description":"%s","startDate":"2026-10-04","endDate":"2026-10-30"}
+                        """.formatted(longDescription)), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_DESCRIPTION_TOO_LONG"));
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"description\":\"%s\"}".formatted(longDescription)), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_DESCRIPTION_TOO_LONG"));
+
+        mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON).content("""
+                        {"title":"목표","startDate":"2026-10-04","endDate":"+10000-01-01"}
+                        """), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_PERIOD"));
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"endDate\":\"+10000-01-01\"}"), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_PERIOD"));
     }
 
     @Test
@@ -319,7 +351,7 @@ class GoalApiIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("BINDING_ERROR"));
         for (String[] params : List.of(new String[]{"page", "-1"}, new String[]{"size", "0"},
-                new String[]{"size", "101"})) {
+                new String[]{"size", "101"}, new String[]{"page", String.valueOf(Integer.MAX_VALUE)})) {
             mvc.perform(auth(get("/api/v1/goals").param(params[0], params[1]), owner))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
@@ -334,6 +366,32 @@ class GoalApiIntegrationTest {
         mvc.perform(auth(delete("/api/v1/goals/" + goalId), owner))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("GOAL_NOT_DELETABLE"));
+    }
+
+    @Test
+    void PLANNING_목표는_전체_리스트에만_나오고_삭제할_수_있다() throws Exception {
+        Session owner = signup();
+        long inProgress = createGoal(owner);
+        long planning = createGoal(owner, "플랜 고르는 중", TODAY, TODAY.plusDays(30));
+        makePlanning(planning);
+        long task = goalTask(owner, planning, null, false);
+
+        mvc.perform(auth(get("/api/v1/goals"), owner))
+                .andExpect(jsonPath("$.data.totalElements").value(2))
+                .andExpect(jsonPath("$.data.content[0].goalId").value(planning))
+                .andExpect(jsonPath("$.data.content[0].status").value("PLANNING"));
+        mvc.perform(auth(get("/api/v1/goals").param("status", "IN_PROGRESS"), owner))
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].goalId").value(inProgress));
+
+        mvc.perform(auth(delete("/api/v1/goals/" + planning), owner))
+                .andExpect(status().isOk());
+        mvc.perform(auth(get("/api/v1/goals/" + planning), owner))
+                .andExpect(status().isNotFound());
+        assertThat(jdbc.queryForObject("SELECT deleted_at IS NOT NULL FROM todo WHERE todo_id = ?",
+                Boolean.class, task)).isTrue();
+        mvc.perform(auth(get("/api/v1/goals"), owner))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 
     @Test

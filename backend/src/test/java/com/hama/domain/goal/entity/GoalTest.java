@@ -8,6 +8,7 @@ import com.hama.domain.goal.repository.GoalTodoCount;
 import com.hama.global.exception.BusinessException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class GoalTest {
@@ -17,6 +18,11 @@ class GoalTest {
     private static GoalContent content(LocalDate start, LocalDate end) {
         return new GoalContent("매일 러닝 30분", null, "체중", "kg",
                 new BigDecimal("80.0"), new BigDecimal("74.0"), new BigDecimal("5.0"), start, end);
+    }
+
+    private static GoalContent withDescription(String description) {
+        return new GoalContent("매일 러닝 30분", description, null, null, null, null, null,
+                TODAY, TODAY.plusDays(30));
     }
 
     @Test
@@ -51,6 +57,36 @@ class GoalTest {
         assertThatThrownBy(() -> Goal.createDirect(1L, content(null, TODAY), TODAY))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_INVALID_INPUT);
+    }
+
+    @Test
+    void 설명은_UTF8_65535바이트까지만_받는다() {
+        Goal goal = Goal.createDirect(1L, withDescription("a".repeat(65535)), TODAY);
+
+        assertThat(goal.getDescription()).hasSize(65535);
+        // 한글은 3바이트라 21846자면 65538바이트입니다.
+        assertThatThrownBy(() -> Goal.createDirect(1L, withDescription("가".repeat(21846)), TODAY))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_DESCRIPTION_TOO_LONG);
+        assertThatThrownBy(() -> goal.revise(withDescription("a".repeat(65536)), TODAY))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_DESCRIPTION_TOO_LONG);
+    }
+
+    @Test
+    void 연도가_1000에서_9999_밖인_날짜는_생성도_수정도_할_수_없다() {
+        Goal goal = Goal.createDirect(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+
+        for (GoalContent invalid : List.of(
+                content(LocalDate.of(999, 1, 1), TODAY.plusDays(30)),
+                content(TODAY, LocalDate.of(10000, 1, 1)))) {
+            assertThatThrownBy(() -> Goal.createDirect(1L, invalid, TODAY))
+                    .extracting(e -> ((BusinessException) e).getErrorCode())
+                    .isEqualTo(GoalErrorCode.GOAL_INVALID_PERIOD);
+            assertThatThrownBy(() -> goal.revise(invalid, TODAY))
+                    .extracting(e -> ((BusinessException) e).getErrorCode())
+                    .isEqualTo(GoalErrorCode.GOAL_INVALID_PERIOD);
+        }
     }
 
     @Test

@@ -138,6 +138,17 @@ class LinerAiClientTest {
     }
 
     @Test
+    void 사용량_필드가_null_이어도_content_를_돌려준다() {
+        AiClient client = clientReturning(HttpStatus.OK, """
+                {"choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],
+                 "usage":{"prompt_tokens":null,"completion_tokens":null,"total_tokens":null,
+                          "prompt_tokens_details":{"cached_tokens":null}}}
+                """);
+
+        assertThat(client.chat(AiRequest.of("test", null, "hi"))).isEqualTo("ok");
+    }
+
+    @Test
     void API_키가_없으면_요청을_보내지_않고_AI_NOT_CONFIGURED() {
         LinerProperties noKey = new LinerProperties("", "http://liner.test", "liner-mark-1.1", 1, 1000, 2, "low");
         AiClient client = client(request -> {
