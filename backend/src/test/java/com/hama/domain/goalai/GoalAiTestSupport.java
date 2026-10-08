@@ -3,6 +3,7 @@ package com.hama.domain.goalai;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.hama.domain.user.repository.UserRepository;
 import com.hama.global.ai.AiClient;
 import java.time.Clock;
 import java.time.Instant;
@@ -50,6 +51,8 @@ public abstract class GoalAiTestSupport {
     protected JsonMapper json;
     @Autowired
     protected JdbcTemplate jdbc;
+    @Autowired
+    protected UserRepository users;
 
     protected record User(long id, String token) {
     }
@@ -63,8 +66,7 @@ public abstract class GoalAiTestSupport {
         String email = "goalai-" + UUID.randomUUID() + "@hama.com";
         JsonNode response = call(post("/api/auth/signup"), null,
                 Map.of("email", email, "password", "password1234", "name", "목표AI"), 200);
-        return new User(jdbc.queryForObject("select user_id from users where email = ?", Long.class, email),
-                response.at("/data/accessToken").asString());
+        return new User(users.findByEmail(email).orElseThrow().getId(), response.at("/data/accessToken").asString());
     }
 
     protected JsonNode call(MockHttpServletRequestBuilder request, User user, Object body, int expected)
