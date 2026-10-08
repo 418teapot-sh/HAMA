@@ -23,7 +23,7 @@ public class ScheduleService {
     private final ScheduleRepository schedules;
     private final Clock clock;
 
-    public ScheduleService(ScheduleRepository schedules, @Qualifier("scheduleClock") Clock clock) {
+    public ScheduleService(ScheduleRepository schedules, @Qualifier("be3Clock") Clock clock) {
         this.schedules = schedules;
         this.clock = clock;
     }

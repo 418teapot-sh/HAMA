@@ -1,9 +1,11 @@
 package com.hama.domain.calendar.service;
 
+import static com.hama.domain.shared.time.Be3Time.KST;
+
+import com.hama.domain.schedule.entity.ScheduleRepeatRule;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -18,14 +20,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class IcsWriter {
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("uuuuMMdd");
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("uuuuMMdd'T'HHmmss");
     private static final DateTimeFormatter UTC = DateTimeFormatter.ofPattern("uuuuMMdd'T'HHmmss'Z'")
             .withZone(ZoneOffset.UTC);
+    private static final String TIME_ZONE = timeZone();
     private final Clock clock;
 
-    public IcsWriter(@Qualifier("calendarClock") Clock clock) {
+    public IcsWriter(@Qualifier("be3Clock") Clock clock) {
         this.clock = clock;
     }
 
@@ -37,7 +39,7 @@ public class IcsWriter {
         line(output, "CALSCALE:GREGORIAN");
         // 빈 기간도 RFC 5545가 요구하는 컴포넌트를 갖도록 시간대만 포함합니다.
         if (events.isEmpty() || events.stream().anyMatch(event -> !event.allDay())) {
-            timeZone(output);
+            output.append(TIME_ZONE);
         }
         String stamp = UTC.format(clock.instant());
         for (CalendarEvent event : events) {
@@ -58,7 +60,8 @@ public class IcsWriter {
                 line(output, "DTEND;TZID=Asia/Seoul:" + DATE_TIME.format(event.endAt()));
             }
             if (event.repeatRule() != null) {
-                line(output, "RRULE:" + event.repeatRule());
+                ScheduleRepeatRule rule = ScheduleRepeatRule.parse(event.repeatRule(), event.startAt(), event.allDay());
+                line(output, "RRULE:" + rule.toIcsRule());
             }
             if (event.memo() != null) {
                 line(output, "DESCRIPTION:" + text(event.memo()));
@@ -69,7 +72,8 @@ public class IcsWriter {
         return output.toString().getBytes(StandardCharsets.UTF_8);
     }
 
-    private static void timeZone(StringBuilder output) {
+    private static String timeZone() {
+        StringBuilder output = new StringBuilder();
         ZoneRules rules = KST.getRules();
         line(output, "BEGIN:VTIMEZONE");
         line(output, "TZID:Asia/Seoul");
@@ -81,6 +85,7 @@ public class IcsWriter {
             observance(output, type, transition.getDateTimeBefore(), transition.getOffsetBefore(), transition.getOffsetAfter());
         }
         line(output, "END:VTIMEZONE");
+        return output.toString();
     }
 
     private static void observance(StringBuilder output, String type, LocalDateTime onset,
@@ -123,13 +128,14 @@ public class IcsWriter {
         int octets = 0;
         for (int index = 0; index < value.length();) {
             int code = value.codePointAt(index);
-            String character = new String(Character.toChars(code));
-            int length = character.getBytes(StandardCharsets.UTF_8).length;
+            // 짝없는 surrogate는 기존 getBytes와 같이 UTF-8의 '?' 한 바이트로 치환됩니다.
+            int length = code <= 0x7f || (code >= 0xd800 && code <= 0xdfff) ? 1
+                    : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4;
             if (octets + length > 75) {
                 output.append("\r\n ");
                 octets = 1;
             }
-            output.append(character);
+            output.appendCodePoint(code);
             octets += length;
             index += Character.charCount(code);
         }

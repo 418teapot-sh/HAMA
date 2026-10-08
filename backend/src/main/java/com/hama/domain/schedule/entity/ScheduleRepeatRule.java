@@ -1,12 +1,13 @@
 package com.hama.domain.schedule.entity;
 
+import static com.hama.domain.shared.time.Be3Time.KST;
+
 import com.hama.domain.schedule.exception.ScheduleErrorCode;
 import com.hama.global.exception.BusinessException;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.ResolverStyle;
@@ -27,7 +28,6 @@ public final class ScheduleRepeatRule {
 
     public enum Frequency { DAILY, WEEKLY }
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("uuuuMMdd")
             .withResolverStyle(ResolverStyle.STRICT);
     private static final DateTimeFormatter UTC_DATE_TIME = DateTimeFormatter.ofPattern("uuuuMMdd'T'HHmmss'Z'")
@@ -130,6 +130,35 @@ public final class ScheduleRepeatRule {
             }
         }
         return new ScheduleRepeatRule(frequency, interval, count, untilDate, untilInstant, byDays);
+    }
+
+    /** 저장 원문을 바꾸지 않고 RFC 5545에 맞게 FREQ부터 대문자로 직렬화합니다. */
+    public String toIcsRule() {
+        StringBuilder result = new StringBuilder("FREQ=").append(frequency);
+        if (interval != 1) {
+            result.append(";INTERVAL=").append(interval);
+        }
+        if (!byDays.isEmpty()) {
+            result.append(";BYDAY=");
+            boolean first = true;
+            for (DayOfWeek day : DayOfWeek.values()) {
+                if (byDays.contains(day)) {
+                    if (!first) {
+                        result.append(',');
+                    }
+                    result.append(day.name(), 0, 2);
+                    first = false;
+                }
+            }
+        }
+        if (count != null) {
+            result.append(";COUNT=").append(count);
+        } else if (untilDate != null) {
+            result.append(";UNTIL=").append(DATE.format(untilDate));
+        } else if (untilInstant != null) {
+            result.append(";UNTIL=").append(UTC_DATE_TIME.format(untilInstant.atOffset(ZoneOffset.UTC)));
+        }
+        return result.toString();
     }
 
     private static int positiveInteger(String value) {

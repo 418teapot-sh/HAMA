@@ -46,7 +46,7 @@ class TodoApiIntegrationTest {
 
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 4);
 
-    @TestBean(name = "todoClock", methodName = "fixedClock")
+    @TestBean(name = "be3Clock", methodName = "fixedClock")
     private Clock clock;
 
     static Clock fixedClock() {

@@ -2,6 +2,7 @@ package com.hama.domain.todo.dto;
 
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
+import com.hama.domain.shared.json.StrictDeserializers;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -13,7 +14,7 @@ public class UpdateTodoRequest extends TodoTimePatch {
     @Pattern(regexp = "(?s).*\\S.*", message = "내용은 공백일 수 없습니다.")
     @Size(max = 255, message = "내용은 255자 이하입니다.")
     @Schema(example = "단어 60개 암기")
-    @JsonDeserialize(using = TodoStringDeserializer.class)
+    @JsonDeserialize(using = StrictDeserializers.Text.class)
     private String content;
 
     @JsonSetter(value = "content", nulls = Nulls.FAIL)

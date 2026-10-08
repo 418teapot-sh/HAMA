@@ -47,7 +47,7 @@ class ScheduleApiIntegrationTest {
              "allDay":false,"repeatRule":"FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR","memo":"회사 출근"}
             """;
 
-    @TestBean(name = "scheduleClock", methodName = "fixedClock")
+    @TestBean(name = "be3Clock", methodName = "fixedClock")
     private Clock clock;
 
     static Clock fixedClock() {

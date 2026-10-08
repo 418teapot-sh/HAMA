@@ -2,6 +2,7 @@ package com.hama.domain.schedule.dto;
 
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
+import com.hama.domain.shared.json.StrictDeserializers;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -14,34 +15,34 @@ import tools.jackson.databind.annotation.JsonDeserialize;
 public class UpdateScheduleRequest {
 
     @Pattern(regexp = "FIXED|PERSONAL", message = "일정 타입은 FIXED 또는 PERSONAL입니다.")
-    @JsonDeserialize(using = ScheduleDeserializers.Text.class)
+    @JsonDeserialize(using = StrictDeserializers.Text.class)
     @Schema(allowableValues = {"FIXED", "PERSONAL"})
     private String type;
 
     @Pattern(regexp = "(?s).*\\S.*", message = "제목은 공백일 수 없습니다.")
     @Size(max = 100, message = "제목은 100자 이하입니다.")
-    @JsonDeserialize(using = ScheduleDeserializers.Text.class)
+    @JsonDeserialize(using = StrictDeserializers.Text.class)
     @Schema(example = "학원", maxLength = 100)
     private String title;
 
-    @JsonDeserialize(using = ScheduleDeserializers.DateTime.class)
+    @JsonDeserialize(using = StrictDeserializers.DateTime.class)
     @Schema(type = "string", example = "2026-10-05T19:00:00")
     private LocalDateTime startAt;
 
-    @JsonDeserialize(using = ScheduleDeserializers.DateTime.class)
+    @JsonDeserialize(using = StrictDeserializers.DateTime.class)
     @Schema(type = "string", example = "2026-10-05T21:00:00")
     private LocalDateTime endAt;
 
-    @JsonDeserialize(using = ScheduleDeserializers.Bool.class)
+    @JsonDeserialize(using = StrictDeserializers.Bool.class)
     @Schema(description = "종일 일정은 양쪽 일시가 00:00, 종료는 마지막 날 다음 날입니다.")
     private Boolean allDay;
 
     @Size(max = 255, message = "반복 규칙은 255자 이하입니다.")
-    @JsonDeserialize(using = ScheduleDeserializers.Text.class)
+    @JsonDeserialize(using = StrictDeserializers.Text.class)
     @Schema(description = "생성 API와 동일한 RRULE 부분집합. 생략 시 유지, null이면 반복 해제.", nullable = true)
     private String repeatRule;
 
-    @JsonDeserialize(using = ScheduleDeserializers.Text.class)
+    @JsonDeserialize(using = StrictDeserializers.Text.class)
     @Schema(description = "생략 시 유지, null이면 지움. UTF-8 기준 최대 65535바이트.", nullable = true)
     private String memo;
 

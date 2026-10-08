@@ -2,6 +2,7 @@ package com.hama.domain.todo.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonSetter;
+import com.hama.domain.shared.json.StrictDeserializers;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalTime;
 import tools.jackson.databind.annotation.JsonDeserialize;
@@ -10,11 +11,11 @@ import tools.jackson.databind.annotation.JsonDeserialize;
 public abstract class TodoTimePatch {
 
     @JsonFormat(pattern = "HH:mm")
-    @JsonDeserialize(using = TodoTimeDeserializer.class)
+    @JsonDeserialize(using = StrictDeserializers.Time.class)
     @Schema(type = "string", example = "19:00", description = "생략 시 유지, null이면 지움")
     private LocalTime startTime;
     @JsonFormat(pattern = "HH:mm")
-    @JsonDeserialize(using = TodoTimeDeserializer.class)
+    @JsonDeserialize(using = StrictDeserializers.Time.class)
     @Schema(type = "string", example = "20:00", description = "생략 시 유지, null이면 지움")
     private LocalTime endTime;
     private boolean startTimePresent;
