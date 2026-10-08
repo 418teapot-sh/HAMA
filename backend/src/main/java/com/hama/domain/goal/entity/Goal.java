@@ -128,6 +128,14 @@ public class Goal extends BaseTimeEntity {
         apply(content);
     }
 
+    /** 플랜을 적용해 진행 중으로 바꿉니다. 호출하는 쪽이 PLANNING 이고 기간이 있는지 먼저 확인합니다. */
+    public void startPlan() {
+        if (status != GoalStatus.PLANNING || startDate == null || endDate == null) {
+            throw new IllegalStateException("PLANNING 이 아니거나 기간이 없는 목표는 플랜을 적용할 수 없습니다.");
+        }
+        this.status = GoalStatus.IN_PROGRESS;
+    }
+
     public void delete(LocalDateTime now) {
         this.deletedAt = now;
     }
