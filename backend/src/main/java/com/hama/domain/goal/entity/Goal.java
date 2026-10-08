@@ -97,6 +97,28 @@ public class Goal extends BaseTimeEntity {
         return goal;
     }
 
+    /** AI 대화로 확정한 목표. 플랜을 고르기 전까지 PLANNING 입니다. */
+    public static Goal createPlanning(Long userId, GoalContent content, String currentLevel,
+            String realityVerdict, String realityComment, LocalDate today) {
+        if (userId == null) {
+            throw new BusinessException(GoalErrorCode.GOAL_INVALID_INPUT);
+        }
+        validate(content, true, today);
+        Goal goal = new Goal();
+        goal.userId = userId;
+        goal.status = GoalStatus.PLANNING;
+        goal.apply(content);
+        goal.currentLevel = currentLevel;
+        goal.realityVerdict = realityVerdict;
+        goal.realityComment = realityComment;
+        return goal;
+    }
+
+    /** 저장하기 전 값(AI 초안 등)을 목표와 같은 규칙으로 검사합니다. 기간은 필수입니다. */
+    public static void validateContent(GoalContent content, LocalDate today) {
+        validate(content, true, today);
+    }
+
     /** 수정 결과(기존 값과 병합한 전체 값)를 받습니다. 지난 목표는 409 입니다. */
     public void revise(GoalContent content, LocalDate today) {
         if (isPast(today)) {
@@ -104,6 +126,14 @@ public class Goal extends BaseTimeEntity {
         }
         validate(content, status == GoalStatus.IN_PROGRESS, today);
         apply(content);
+    }
+
+    /** 플랜을 적용해 진행 중으로 바꿉니다. 호출하는 쪽이 PLANNING 이고 기간이 있는지 먼저 확인합니다. */
+    public void startPlan() {
+        if (status != GoalStatus.PLANNING || startDate == null || endDate == null) {
+            throw new IllegalStateException("PLANNING 이 아니거나 기간이 없는 목표는 플랜을 적용할 수 없습니다.");
+        }
+        this.status = GoalStatus.IN_PROGRESS;
     }
 
     public void delete(LocalDateTime now) {

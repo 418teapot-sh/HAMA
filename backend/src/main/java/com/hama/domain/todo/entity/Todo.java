@@ -131,6 +131,18 @@ public class Todo extends BaseTimeEntity {
         this.postponedCount++;
     }
 
+    /** AI 재배치. 사용자가 미룬 것이 아니라서 미룬 횟수는 그대로이고, 앞당기는 것도 허용합니다. */
+    public void reschedule(LocalDate date, LocalTime startTime, LocalTime endTime) {
+        requirePending();
+        if (!isStorableDate(date)) {
+            throw new BusinessException(TodoErrorCode.TODO_INVALID_INPUT);
+        }
+        validateTimes(startTime, endTime);
+        this.todoDate = date;
+        this.startTime = startTime;
+        this.endTime = endTime;
+    }
+
     public void complete(LocalDateTime now) {
         requirePending();
         this.status = TodoStatus.COMPLETED;
