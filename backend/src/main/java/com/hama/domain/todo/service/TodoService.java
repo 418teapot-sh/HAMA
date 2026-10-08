@@ -26,7 +26,7 @@ public class TodoService {
     private final TodoRepository todoRepository;
     private final Clock clock;
 
-    public TodoService(TodoRepository todoRepository, @Qualifier("todoClock") Clock clock) {
+    public TodoService(TodoRepository todoRepository, @Qualifier("be3Clock") Clock clock) {
         this.todoRepository = todoRepository;
         this.clock = clock;
     }
