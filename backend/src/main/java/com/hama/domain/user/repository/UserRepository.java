@@ -11,10 +11,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByEmail(String email);
 
-    /** 로그인용. 탈퇴와 겹치지 않도록 공유 락(FOR SHARE)으로 읽습니다. */
+    /** 로그인용. 탈퇴와 겹치지 않도록 기본키로 공유 락(FOR SHARE)을 잡습니다. */
     @Lock(LockModeType.PESSIMISTIC_READ)
-    @Query("SELECT u FROM User u WHERE u.email = :email")
-    Optional<User> findByEmailForShare(String email);
+    @Query("SELECT u FROM User u WHERE u.id = :id")
+    Optional<User> findByIdForShare(Long id);
 
     /** 탈퇴용. 같은 사용자의 탈퇴·로그인을 한 줄로 세웁니다. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

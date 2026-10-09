@@ -53,7 +53,8 @@ public class UserService {
      * <p>READ_COMMITTED: 기본값(REPEATABLE READ)이면 user_id 로 잠그고 지울 때 인덱스의 빈 구간(갭)까지 잠가서,
      * 탈퇴가 끝날 때까지 다른 사용자의 로그인·투두 생성이 기다립니다. 투두·체크인 서비스와 같은 수준입니다.
      *
-     * <p>락 순서는 사용자 → AI 세션 → 목표입니다. 사용자 행을 먼저 잠가 같은 사용자의 탈퇴 두 번과 로그인을 한 줄로 세웁니다. 목표 확정(GoalAiDraftService.confirm)이 세션을 잠근 뒤 목표를 넣고,
+     * <p>락 순서는 사용자 → AI 세션 → 목표입니다. 비밀번호(bcrypt)는 락 밖에서 먼저 확인하고, 사용자 행을 기본키로 잠가
+     * 같은 사용자의 탈퇴 두 번과 로그인을 한 줄로 세웁니다. 잠근 뒤 행이 없으면 먼저 온 탈퇴가 끝난 것이라 그대로 성공합니다. 목표 확정(GoalAiDraftService.confirm)이 세션을 잠근 뒤 목표를 넣고,
      * 투두·체크인·플랜·replan 은 목표만 잠그므로, 이 순서면 어느 쪽과도 서로 기다리며 막히지 않습니다(교착 방지).
      * 자식 테이블은 JOIN 대신 미리 잠근 id 로 지웁니다. JOIN DELETE 는 옵티마이저가 자식 테이블을 전체 스캔하면
      * 다른 사용자 행까지 잠그기 때문입니다.
@@ -61,10 +62,11 @@ public class UserService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void withdraw(Long userId, String password) {
         attemptLimiter.check("withdraw:" + userId);
-        User user = userRepository.findByIdForUpdate(userId)
-                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
-        if (!passwordEncoder.matches(password, user.getPassword())) {
+        if (!passwordEncoder.matches(password, findUser(userId).getPassword())) {
             throw new BusinessException(UserErrorCode.PASSWORD_MISMATCH);
+        }
+        if (userRepository.findByIdForUpdate(userId).isEmpty()) {
+            return;   // 같은 사용자의 탈퇴가 동시에 와서 먼저 끝났습니다(버튼 두 번).
         }
 
         Map<String, Long> byUser = Map.of("userId", userId);
