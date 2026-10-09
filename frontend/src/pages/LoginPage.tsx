@@ -49,6 +49,7 @@ export default function LoginPage() {
   return (
     <>
       <NavigationBar
+        variant="close"
         leftLabel="닫기"
         // TODO: ic_close 아이콘 SVG 를 Figma 에서 내보내 받으면 넣습니다(24×24, 벡터 14×14, Black/Black).
         leftIcon={<span className="size-[24px]" />}
