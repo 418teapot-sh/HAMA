@@ -2,7 +2,6 @@ package com.hama.domain.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -134,7 +133,7 @@ class UserWithdrawApiIntegrationTest {
     void 비밀번호를_안_보내면_400() throws Exception {
         Session session = signup();
 
-        mockMvc.perform(delete("/api/users/me")
+        mockMvc.perform(post("/api/users/me/withdraw")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.accessToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
@@ -197,7 +196,7 @@ class UserWithdrawApiIntegrationTest {
     }
 
     private RequestBuilder withdraw(Session session, String password) {
-        return delete("/api/users/me")
+        return post("/api/users/me/withdraw")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.accessToken())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""

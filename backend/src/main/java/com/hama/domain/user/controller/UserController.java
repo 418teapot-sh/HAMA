@@ -13,8 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -45,7 +45,7 @@ public class UserController {
                     비밀번호가 틀리면 400(PASSWORD_MISMATCH)이고, 15분에 5회를 넘게 시도하면 429(TOO_MANY_PASSWORD_ATTEMPTS)입니다.
                     성공하면 리프레시 토큰 쿠키가 지워집니다. 프론트는 메모리의 accessToken 도 버리세요.
                     """)
-    @DeleteMapping("/me")
+    @PostMapping("/me/withdraw")
     public ResponseEntity<ApiResponse<Void>> withdraw(@AuthenticationPrincipal AuthUser authUser,
             @Valid @RequestBody WithdrawRequest request) {
         userService.withdraw(authUser.userId(), request.password());
