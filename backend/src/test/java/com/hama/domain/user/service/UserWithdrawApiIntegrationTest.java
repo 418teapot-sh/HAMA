@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.hama.domain.auth.service.LoginAttemptLimiter;
 import com.hama.domain.user.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +19,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -40,8 +40,6 @@ class UserWithdrawApiIntegrationTest {
 
     private static final Pattern REFRESH_COOKIE = Pattern.compile("refreshToken=([^;]*)");
     private static final String PASSWORD = "password1234";
-    /** {@code DELETE FROM todo ...} 와 {@code DELETE m FROM milestone m JOIN ...} 에서 지우는 테이블 이름입니다. */
-    private static final Pattern DELETE_TARGET = Pattern.compile("^DELETE (?:\\w+ )?FROM (\\w+)");
 
     /** 사용자 데이터를 직접(user_id) 또는 목표·세션을 거쳐(goal_id, session_id) 들고 있는 테이블입니다. */
     private static final String USER_DATA_TABLES = """
@@ -142,12 +140,9 @@ class UserWithdrawApiIntegrationTest {
     /** 사용자 데이터 테이블을 새로 만들고 탈퇴 목록에 안 넣으면 여기서 실패합니다. payment 는 법정 보관이라 일부러 뺍니다. */
     @Test
     void 사용자_데이터_테이블은_모두_탈퇴_때_지운다() {
-        // JOIN 에만 나오는 테이블(goal, goal_ai_session)을 지운 것으로 세지 않도록 DELETE 대상만 모읍니다.
-        Set<String> deleted = UserService.DELETE_USER_DATA.stream()
-                .map(DELETE_TARGET::matcher)
-                .filter(Matcher::find)
-                .map(matcher -> matcher.group(1))
-                .collect(Collectors.toSet());
+        Set<String> deleted = new HashSet<>(UserService.USER_TABLES);
+        deleted.addAll(UserService.GOAL_CHILD_TABLES);
+        deleted.addAll(UserService.SESSION_CHILD_TABLES);
 
         List<String> tables = jdbcTemplate.queryForList(USER_DATA_TABLES, String.class);
         assertThat(tables).contains("todo", "goal_checkin", "goal_ai_message");
