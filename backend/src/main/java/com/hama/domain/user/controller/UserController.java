@@ -1,10 +1,10 @@
 package com.hama.domain.user.controller;
 
-import com.hama.domain.auth.controller.RefreshTokenCookieFactory;
 import com.hama.domain.user.dto.UserResponse;
 import com.hama.domain.user.dto.WithdrawRequest;
 import com.hama.domain.user.service.UserService;
 import com.hama.global.auth.AuthUser;
+import com.hama.global.auth.RefreshTokenCookieFactory;
 import com.hama.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

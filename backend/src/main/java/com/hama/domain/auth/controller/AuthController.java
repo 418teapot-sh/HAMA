@@ -5,6 +5,7 @@ import com.hama.domain.auth.dto.SignupRequest;
 import com.hama.domain.auth.dto.TokenResponse;
 import com.hama.domain.auth.service.AuthService;
 import com.hama.domain.auth.service.AuthTokens;
+import com.hama.global.auth.RefreshTokenCookieFactory;
 import com.hama.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -48,7 +49,7 @@ public class AuthController {
             description = """
                     body 에 accessToken, Set-Cookie 에 refreshToken 이 옵니다.
                     이메일이 없거나 비밀번호가 틀려도 구분하지 않고 401(INVALID_CREDENTIALS)입니다.
-                    이메일 하나당 15분에 5회까지 시도할 수 있고, 넘으면 429(TOO_MANY_LOGIN_ATTEMPTS)입니다.
+                    이메일 하나당 15분에 5회까지 시도할 수 있고, 넘으면 429(TOO_MANY_PASSWORD_ATTEMPTS)입니다.
                     """)
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<TokenResponse>> login(@Valid @RequestBody LoginRequest request) {

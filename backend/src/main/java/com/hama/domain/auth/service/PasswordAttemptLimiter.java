@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
  * 동시에 통과하는 것을 막습니다.
  */
 @Component
-public class LoginAttemptLimiter {
+public class PasswordAttemptLimiter {
 
     public static final int MAX_ATTEMPTS = 5;
     private static final Duration WINDOW = Duration.ofMinutes(15);
@@ -34,14 +34,8 @@ public class LoginAttemptLimiter {
 
     private final ConcurrentHashMap<String, Attempt> attempts = new ConcurrentHashMap<>();
 
-    void checkAllowed(String email) {
-        if (!tryAcquire(email)) {
-            throw new BusinessException(AuthErrorCode.TOO_MANY_LOGIN_ATTEMPTS);
-        }
-    }
-
-    /** 시도 하나를 셉니다. 창(15분) 안에서 이미 {@link #MAX_ATTEMPTS} 번 시도했으면 세지 않고 false 입니다. */
-    public boolean tryAcquire(String key) {
+    /** 시도 하나를 셉니다. 창(15분) 안에서 이미 {@link #MAX_ATTEMPTS} 번 시도했으면 429 를 던집니다. */
+    public void check(String key) {
         AtomicBoolean blocked = new AtomicBoolean(false);
         attempts.compute(key, (ignored, existing) -> {
             Attempt current = (existing == null || existing.isExpired())
@@ -54,14 +48,16 @@ public class LoginAttemptLimiter {
             }
             return current;
         });
-        return !blocked.get();
+        if (blocked.get()) {
+            throw new BusinessException(AuthErrorCode.TOO_MANY_PASSWORD_ATTEMPTS);
+        }
     }
 
-    void onSuccess(String email) {
-        attempts.remove(email);
+    void onSuccess(String key) {
+        attempts.remove(key);
     }
 
-    /** 틀리고 다시 오지 않은 이메일이 맵에 계속 쌓이지 않도록 주기적으로 비웁니다. */
+    /** 틀리고 다시 오지 않은 키가 맵에 계속 쌓이지 않도록 주기적으로 비웁니다. */
     @Scheduled(fixedRate = 15, initialDelay = 15, timeUnit = TimeUnit.MINUTES)
     void evictExpired() {
         attempts.entrySet().removeIf(entry -> entry.getValue().isExpired());

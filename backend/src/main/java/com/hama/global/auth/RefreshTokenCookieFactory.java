@@ -1,7 +1,5 @@
-package com.hama.domain.auth.controller;
+package com.hama.global.auth;
 
-import com.hama.global.auth.CookieProperties;
-import com.hama.global.auth.JwtProperties;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseCookie;
@@ -16,12 +14,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RefreshTokenCookieFactory {
 
-    static final String COOKIE_NAME = "refreshToken";
+    public static final String COOKIE_NAME = "refreshToken";
 
     private final CookieProperties cookieProperties;
     private final JwtProperties jwtProperties;
 
-    ResponseCookie create(String refreshToken) {
+    public ResponseCookie create(String refreshToken) {
         return base(refreshToken)
                 // 쿠키 수명을 토큰 수명과 맞춥니다. 쿠키가 더 길면 만료된 토큰을 계속 보내고, 더 짧으면 멀쩡한 토큰을 잃습니다.
                 .maxAge(Duration.ofMillis(jwtProperties.refreshTokenValidity()))
