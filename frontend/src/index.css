@@ -2,7 +2,7 @@
 @import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 
 /*
- * 디자인 토큰 (Figma > UI 페이지 로그인 화면에서 확인한 값)
+ * 디자인 토큰 (Figma > UI 페이지 로그인·회원가입 화면에서 확인한 값)
  * 이름은 Figma 스타일 이름을 그대로 따릅니다. 예) Black/Gray40 → black-gray40
  * #47(디자인 토큰·공용 UI)이 develop 에 머지되면 그쪽 토큰으로 맞춥니다.
  */
@@ -11,6 +11,8 @@
 
   /* 색상 */
   --color-brand-main: #042558; /* Brand/Main */
+  --color-brand-main-80: #2c629b; /* Brand/Main_80 */
+  --color-brand-eo: #ff3b5b; /* Brand/EO (오류) */
   --color-white-w1: #fcfcfc; /* White/W1 */
   --color-black-black: #171617; /* Black/Black */
   --color-black-gray10: #eeeeee; /* Black/Gray10 */
@@ -29,10 +31,26 @@
   --text-caption-cap1: 14px; /* Caption/Cap1 */
   --text-caption-cap1--line-height: 130%;
   --text-caption-cap1--font-weight: 400;
-  /* 입력창 라벨: Figma 에 스타일 이름 없이 18px / 400 / 140% 로 지정돼 있음 */
-  --text-label: 18px;
-  --text-label--line-height: 140%;
-  --text-label--font-weight: 400;
+  --text-body-b4: 18px; /* Body/B4 (입력창 라벨) */
+  --text-body-b4--line-height: 140%;
+  --text-body-b4--font-weight: 400;
+  --text-body-b7: 14px; /* Body/B7 */
+  --text-body-b7--line-height: 150%;
+  --text-body-b7--font-weight: 400;
+  --text-body-b8: 14px; /* Body/B8 */
+  --text-body-b8--line-height: 150%;
+  --text-body-b8--font-weight: 400;
+  --text-caption-cap3: 12px; /* Caption/Cap3 */
+  --text-caption-cap3--line-height: 130%;
+  --text-caption-cap3--font-weight: 400;
+  --text-heading-h3: 22px; /* Heading/H3 (굵기는 화면마다 400·700 으로 다르게 씀) */
+  --text-heading-h3--line-height: 100%;
+  --text-heading-h6: 18px; /* Heading/H6 */
+  --text-heading-h6--line-height: 100%;
+  --text-heading-h6--font-weight: 400;
+
+  /* 효과: 약관 동의 카드 그림자 (X 0, Y 15, 흐림 40, 스프레드 0, #CECECE 8%) */
+  --shadow-agreement: 0 15px 40px 0 rgb(206 206 206 / 0.08);
 }
 
 body {
