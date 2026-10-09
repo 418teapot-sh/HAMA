@@ -48,7 +48,7 @@ import tools.jackson.databind.json.JsonMapper;
 class UserWithdrawApiIntegrationTest {
 
     private static final Pattern REFRESH_COOKIE = Pattern.compile("refreshToken=([^;]*)");
-    private static final String PASSWORD = "password1234";
+    private static final String PASSWORD = "password1234!";
 
     /** 사용자 데이터를 직접(user_id) 또는 목표·세션을 거쳐(goal_id, session_id) 들고 있는 테이블입니다. */
     private static final String USER_DATA_TABLES = """
@@ -226,7 +226,7 @@ class UserWithdrawApiIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "email": "%s", "password": "%s", "name": "하마" }
+                                { "email": "%s", "password": "%s", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
                                 """.formatted(email, PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn();

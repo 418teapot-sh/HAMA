@@ -55,7 +55,7 @@ class GoalTodoCheckinIntegrationTest {
 
     User user() throws Exception {
         String email = UUID.randomUUID() + "@checkin.test";
-        JsonNode r = call(post("/api/auth/signup"), null, Map.of("email", email, "password", "testPassword123", "name", "검증"), 200);
+        JsonNode r = call(post("/api/auth/signup"), null, Map.of("email", email, "password", "testPassword123!", "name", "검증", "termsAgreed", true, "privacyAgreed", true, "ageConfirmed", true), 200);
         return new User(jdbc.queryForObject("select user_id from users where email = ?", Long.class, email), r.at("/data/accessToken").asString());
     }
     JsonNode call(MockHttpServletRequestBuilder req, User user, Object body, int status) throws Exception {
