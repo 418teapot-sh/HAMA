@@ -21,12 +21,8 @@ const AGREEMENT_ITEMS: AgreementItem[] = [
   { key: 'marketing', label: '마케팅 알림 수신 동의 (선택)', required: false },
 ]
 
-/** Figma 이메일 오류 화면 문구 그대로 */
-const EMAIL_FORMAT_ERROR = '올바른 이메일 형식이 아니에요.'
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
 /**
- * 회원가입 화면 (Figma > UI > 회원가입: 자체 회원가입 / 비밀번호 가리기·보이기 / 회원가입 입력 완료 / 회원가입 완료 / 이메일 오류)
+ * 회원가입 화면 (Figma > UI > 회원가입: 자체 회원가입 / 비밀번호 가리기·보이기 / 회원가입 입력 완료 / 회원가입 완료)
  *
  * 구조 (Figma 레이어 기준)
  * - NavigationBar(default): 뒤로가기(ic_back) + 제목 "회원가입"
@@ -48,15 +44,10 @@ export default function SignupPage() {
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
 
-  const emailValid = EMAIL_PATTERN.test(email.trim())
   const requiredAgreed = AGREEMENT_ITEMS.filter((item) => item.required).every((item) => agreements[item.key])
   // TODO: 버튼 활성 조건(필수 입력 + 필수 약관)과 비밀번호 규칙(디자인 8-20자 vs 백엔드 8~64자) 확인 필요
-  const canSubmit = name.trim().length > 0 && emailValid && password.length > 0 && requiredAgreed && !submitting
-
-  // TODO: 이메일 형식 오류를 언제 보여줄지(입력창을 벗어날 때 / 가입 버튼을 누를 때) 확인 필요. 지금은 입력창을 벗어날 때.
-  function handleEmailBlur() {
-    if (email.length > 0 && !emailValid) setEmailError(EMAIL_FORMAT_ERROR)
-  }
+  // 이메일 형식 오류 표시는 디자인에서 로그인 화면으로 옮겨져, 회원가입은 백엔드 검증(VALIDATION_FAILED) 결과만 보여줍니다.
+  const canSubmit = name.trim().length > 0 && email.trim().length > 0 && password.length > 0 && requiredAgreed && !submitting
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -129,10 +120,9 @@ export default function SignupPage() {
             label="이메일"
             type="email"
             autoComplete="email"
-            placeholder="이메일을 입력해주세요."
+            placeholder="예시: example@hama.com"
             value={email}
             error={emailError}
-            onBlur={handleEmailBlur}
             onChange={(e) => {
               setEmail(e.target.value)
               setEmailError(undefined)

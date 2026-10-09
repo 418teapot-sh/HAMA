@@ -6,6 +6,7 @@ import NavigationBar from '../components/NavigationBar'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { login } from '../features/auth/api'
+import { EMAIL_FORMAT_ERROR, isValidEmail } from '../features/auth/validation'
 import { paths } from '../paths'
 import icClose from '../assets/icons/ic_close.svg'
 
@@ -13,7 +14,7 @@ import icClose from '../assets/icons/ic_close.svg'
 const LOGIN_FAILED_MESSAGE = '로그인에 실패했어요. 다시 시도해 주세요'
 
 /**
- * 로그인 화면 (Figma > UI > 로그인 > 로그인 화면 / 로그인 오류)
+ * 로그인 화면 (Figma > UI > 로그인 > 로그인 화면 / 로그인 오류(토스트) / 로그인 오류(이메일 형식))
  *
  * 구조 (Figma 레이어 기준)
  * - NavigationBar: 왼쪽 닫기(ic_close)
@@ -29,12 +30,18 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [emailError, setEmailError] = useState<string>()
   const [submitting, setSubmitting] = useState(false)
   const toast = useToast()
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (submitting) return
+    // TODO: 이메일 형식 오류를 언제 보여줄지 확인 필요. 지금은 입력창을 벗어날 때와 로그인 버튼을 누를 때(이때는 요청을 보내지 않음).
+    if (!isValidEmail(email)) {
+      setEmailError(EMAIL_FORMAT_ERROR)
+      return
+    }
     setSubmitting(true)
     try {
       await login({ email, password })
@@ -71,7 +78,14 @@ export default function LoginPage() {
             autoComplete="email"
             placeholder="이메일을 입력해주세요."
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            error={emailError}
+            onBlur={() => {
+              if (email.length > 0 && !isValidEmail(email)) setEmailError(EMAIL_FORMAT_ERROR)
+            }}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              setEmailError(undefined)
+            }}
           />
           <InputField
             id="login-password"
