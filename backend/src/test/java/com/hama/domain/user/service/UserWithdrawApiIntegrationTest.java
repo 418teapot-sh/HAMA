@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.hama.domain.auth.service.LoginAttemptLimiter;
 import com.hama.domain.user.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
+import java.sql.PreparedStatement;
+import java.sql.Statement;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,6 +28,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -87,7 +91,7 @@ class UserWithdrawApiIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    /** JOIN 으로 지우는 문장이 조건을 잘못 걸면 다른 사람 데이터까지 지울 수 있어서 확인합니다. */
+    /** 삭제 조건(user_id, goal_id IN, session_id IN)을 잘못 걸면 다른 사람 데이터까지 지울 수 있어서 확인합니다. */
     @Test
     void 다른_사용자의_데이터는_지우지_않는다() throws Exception {
         Session leaving = signup();
@@ -231,9 +235,17 @@ class UserWithdrawApiIntegrationTest {
         return new Seeded(goalId, sessionId);
     }
 
+    /** LAST_INSERT_ID 는 커넥션마다 따로라, 풀에서 다른 커넥션을 받으면 틀린 값이 나와서 INSERT 결과의 키를 씁니다. */
     private Long insert(String sql, Object... args) {
-        jdbcTemplate.update(sql, args);
-        return jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+        KeyHolder key = new GeneratedKeyHolder();
+        jdbcTemplate.update(connection -> {
+            PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            for (int i = 0; i < args.length; i++) {
+                ps.setObject(i + 1, args[i]);
+            }
+            return ps;
+        }, key);
+        return key.getKey().longValue();
     }
 
     /** 목표·세션이 지워진 뒤에도 셀 수 있도록 자식 테이블은 미리 받아 둔 goal_id·session_id 로 셉니다. */
