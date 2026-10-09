@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.hama.domain.auth.entity.RefreshToken;
 import com.hama.domain.auth.repository.RefreshTokenRepository;
 import com.hama.domain.auth.service.AuthService;
+import com.hama.domain.user.entity.User;
 import com.hama.domain.user.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
 import java.time.LocalDateTime;
@@ -64,7 +65,7 @@ class AuthApiIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "email": "%s", "password": "password1234!", "name": "하마" }
+                                { "email": "%s", "password": "password1234!", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
                                 """.formatted(email)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -88,7 +89,7 @@ class AuthApiIntegrationTest {
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "email": "user-%s@hama.com", "password": "password1234!", "name": "하마" }
+                                { "email": "user-%s@hama.com", "password": "password1234!", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
                                 """.formatted(UUID.randomUUID())))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.allOf(
@@ -108,7 +109,7 @@ class AuthApiIntegrationTest {
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "email": "user-%s@hama.com", "password": "%s", "name": "하마" }
+                                { "email": "user-%s@hama.com", "password": "%s", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
                                 """.formatted(UUID.randomUUID(), password)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
@@ -121,9 +122,55 @@ class AuthApiIntegrationTest {
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "email": "user-%s@hama.com", "password": "%s", "name": "하마" }
+                                { "email": "user-%s@hama.com", "password": "%s", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
                                 """.formatted(UUID.randomUUID(), password)))
                 .andExpect(status().isOk());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "\"termsAgreed\": false, \"privacyAgreed\": true, \"ageConfirmed\": true",
+            "\"termsAgreed\": true, \"privacyAgreed\": true"})
+    void 필수_약관에_동의하지_않으면_가입되지_않는다(String agreements) throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@hama.com";
+
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "email": "%s", "password": "password1234!", "name": "하마", %s }
+                                """.formatted(email, agreements)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
+
+        assertThat(userRepository.findByEmail(email)).isEmpty();
+    }
+
+    @Test
+    void 약관_동의_시각과_마케팅_선택_여부가_저장된다() throws Exception {
+        String withMarketing = signupWith("\"marketingAgreed\": true");
+        String withoutMarketing = signupWith("\"marketingAgreed\": null");
+
+        User agreed = userRepository.findByEmail(withMarketing).orElseThrow();
+        assertThat(agreed.getTermsAgreedAt()).isNotNull();
+        assertThat(agreed.isMarketingAgreed()).isTrue();
+        assertThat(agreed.getMarketingAgreedAt()).isEqualTo(agreed.getTermsAgreedAt());
+
+        User declined = userRepository.findByEmail(withoutMarketing).orElseThrow();
+        assertThat(declined.getTermsAgreedAt()).isNotNull();
+        assertThat(declined.isMarketingAgreed()).isFalse();
+        assertThat(declined.getMarketingAgreedAt()).isNull();
+    }
+
+    private String signupWith(String marketing) throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@hama.com";
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "email": "%s", "password": "password1234!", "name": "하마",
+                                  "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true, %s }
+                                """.formatted(email, marketing)))
+                .andExpect(status().isOk());
+        return email;
     }
 
     @Test

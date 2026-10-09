@@ -15,6 +15,7 @@ import com.hama.domain.user.entity.User;
 import com.hama.domain.user.repository.UserRepository;
 import com.hama.global.auth.JwtProperties;
 import com.hama.global.auth.JwtTokenProvider;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -52,7 +53,7 @@ class AuthServiceTest {
     }
 
     private static User savedUser() {
-        User user = User.create(EMAIL, "encoded", "하마");
+        User user = User.create(EMAIL, "encoded", "하마", false, LocalDateTime.now());
         ReflectionTestUtils.setField(user, "id", 1L);
         return user;
     }
@@ -73,7 +74,7 @@ class AuthServiceTest {
                 return user;
             });
 
-            AuthTokens tokens = authService.signup(new SignupRequest(EMAIL, "password1234!", "하마"));
+            AuthTokens tokens = authService.signup(new SignupRequest(EMAIL, "password1234!", "하마", true, true, true, null));
 
             assertThat(jwtTokenProvider.parseAccessUser(tokens.accessToken())).isPresent();
             assertThat(jwtTokenProvider.parseRefreshUserId(tokens.refreshToken())).contains(1L);
@@ -83,13 +84,13 @@ class AuthServiceTest {
         void 이미_가입된_이메일이면_409() {
             given(userRepository.existsByEmail(EMAIL)).willReturn(true);
 
-            assertThatThrownBy(() -> authService.signup(new SignupRequest(EMAIL, "password1234!", "하마")))
+            assertThatThrownBy(() -> authService.signup(new SignupRequest(EMAIL, "password1234!", "하마", true, true, true, null)))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
         @Test
         void 이메일은_소문자로_정규화한다() {
-            assertThat(new SignupRequest(" Test@HAMA.com ", "password1234!", "하마").email()).isEqualTo(EMAIL);
+            assertThat(new SignupRequest(" Test@HAMA.com ", "password1234!", "하마", true, true, true, null).email()).isEqualTo(EMAIL);
         }
     }
 

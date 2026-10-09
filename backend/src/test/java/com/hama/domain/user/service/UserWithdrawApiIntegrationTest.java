@@ -226,7 +226,7 @@ class UserWithdrawApiIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "email": "%s", "password": "%s", "name": "하마" }
+                                { "email": "%s", "password": "%s", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
                                 """.formatted(email, PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn();
