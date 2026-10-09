@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -46,20 +47,36 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false)
     private boolean isPremium;
 
+    /** 필수 약관(서비스 이용약관·개인정보 수집 및 이용·만 14세 이상)에 동의한 시각. 필수라 여부 대신 시각만 남깁니다. */
+    @Column(nullable = false)
+    private LocalDateTime termsAgreedAt;
+
+    /** 마케팅 알림 수신 동의(선택). */
+    @Column(nullable = false)
+    private boolean marketingAgreed;
+
+    /** 마케팅 알림 수신에 동의한 시각. 동의하지 않았으면 null 입니다. */
+    private LocalDateTime marketingAgreedAt;
+
     /**
      * 회원가입으로 생성합니다.
      * 가입 시점의 불변식(무료 시작, 목표 생성 0회)을 여기서 강제해서
      * 호출부가 실수로 다른 값을 넣을 여지를 없앱니다.
      *
      * @param encodedPassword 반드시 인코딩된 비밀번호. 원문을 넘기지 마세요.
+     * @param agreedAt        필수 약관에 동의한 시각(가입 시각). 필수 약관 동의 여부는 SignupRequest 가 검증합니다.
      */
-    public static User create(String email, String encodedPassword, String name) {
+    public static User create(String email, String encodedPassword, String name, boolean marketingAgreed,
+            LocalDateTime agreedAt) {
         return User.builder()
                 .email(email)
                 .password(encodedPassword)
                 .name(name)
                 .goalCreatedCount(0)
                 .isPremium(false)
+                .termsAgreedAt(agreedAt)
+                .marketingAgreed(marketingAgreed)
+                .marketingAgreedAt(marketingAgreed ? agreedAt : null)
                 .build();
     }
 }

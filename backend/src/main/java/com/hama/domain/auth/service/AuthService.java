@@ -40,7 +40,8 @@ public class AuthService {
             throw new BusinessException(AuthErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
-        User user = User.create(request.email(), passwordEncoder.encode(request.password()), request.name());
+        User user = User.create(request.email(), passwordEncoder.encode(request.password()), request.name(),
+                Boolean.TRUE.equals(request.marketingAgreed()), LocalDateTime.now());
         try {
             // 위 검사와 저장 사이에 같은 이메일이 먼저 들어오면 unique 제약에 걸립니다.
             userRepository.saveAndFlush(user);
