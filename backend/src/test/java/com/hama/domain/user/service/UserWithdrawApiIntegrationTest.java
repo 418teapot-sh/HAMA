@@ -8,12 +8,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.hama.domain.auth.service.LoginAttemptLimiter;
 import com.hama.domain.user.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,6 +40,8 @@ class UserWithdrawApiIntegrationTest {
 
     private static final Pattern REFRESH_COOKIE = Pattern.compile("refreshToken=([^;]*)");
     private static final String PASSWORD = "password1234";
+    /** {@code DELETE FROM todo ...} 와 {@code DELETE m FROM milestone m JOIN ...} 에서 지우는 테이블 이름입니다. */
+    private static final Pattern DELETE_TARGET = Pattern.compile("^DELETE (?:\\w+ )?FROM (\\w+)");
 
     /** 사용자 데이터를 직접(user_id) 또는 목표·세션을 거쳐(goal_id, session_id) 들고 있는 테이블입니다. */
     private static final String USER_DATA_TABLES = """
@@ -57,22 +64,21 @@ class UserWithdrawApiIntegrationTest {
     private record Session(Long userId, String email, String accessToken, String refreshToken) {
     }
 
+    private record Seeded(Long goalId, Long sessionId) {
+    }
+
     @Test
     void 탈퇴하면_데이터가_지워지고_쿠키가_삭제되며_로그인과_재발급이_막힌다() throws Exception {
         Session session = signup();
-        createTodo(session);
-        createGoal(session);
-        assertThat(count("todo", session.userId())).isEqualTo(1);
-        assertThat(count("goal", session.userId())).isEqualTo(1);
+        Seeded seeded = seedAll(session);
+        assertThat(remainingRows(session, seeded)).allSatisfy((table, rows) -> assertThat(rows).as(table).isOne());
 
         mockMvc.perform(withdraw(session, PASSWORD))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")));
 
         assertThat(userRepository.existsById(session.userId())).isFalse();
-        for (String table : List.of("todo", "goal", "refresh_token")) {
-            assertThat(count(table, session.userId())).as(table).isZero();
-        }
+        assertThat(remainingRows(session, seeded)).allSatisfy((table, rows) -> assertThat(rows).as(table).isZero());
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -81,6 +87,19 @@ class UserWithdrawApiIntegrationTest {
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(post("/api/auth/refresh").cookie(new Cookie("refreshToken", session.refreshToken())))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /** JOIN 으로 지우는 문장이 조건을 잘못 걸면 다른 사람 데이터까지 지울 수 있어서 확인합니다. */
+    @Test
+    void 다른_사용자의_데이터는_지우지_않는다() throws Exception {
+        Session leaving = signup();
+        seedAll(leaving);
+        Session staying = signup();
+        Seeded stayingRows = seedAll(staying);
+
+        mockMvc.perform(withdraw(leaving, PASSWORD)).andExpect(status().isOk());
+
+        assertThat(remainingRows(staying, stayingRows)).allSatisfy((table, rows) -> assertThat(rows).as(table).isOne());
     }
 
     @Test
@@ -93,7 +112,20 @@ class UserWithdrawApiIntegrationTest {
                 .andExpect(jsonPath("$.error.code").value("PASSWORD_MISMATCH"));
 
         assertThat(userRepository.existsById(session.userId())).isTrue();
-        assertThat(count("todo", session.userId())).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM todo WHERE user_id = ?", session.userId())).isOne();
+    }
+
+    @Test
+    void 비밀번호를_5번_틀리면_맞는_비밀번호도_429() throws Exception {
+        Session session = signup();
+        for (int i = 0; i < LoginAttemptLimiter.MAX_ATTEMPTS; i++) {
+            mockMvc.perform(withdraw(session, "wrong-password")).andExpect(status().isBadRequest());
+        }
+
+        mockMvc.perform(withdraw(session, PASSWORD))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.error.code").value("TOO_MANY_PASSWORD_ATTEMPTS"));
+        assertThat(userRepository.existsById(session.userId())).isTrue();
     }
 
     @Test
@@ -110,14 +142,19 @@ class UserWithdrawApiIntegrationTest {
     /** 사용자 데이터 테이블을 새로 만들고 탈퇴 목록에 안 넣으면 여기서 실패합니다. payment 는 법정 보관이라 일부러 뺍니다. */
     @Test
     void 사용자_데이터_테이블은_모두_탈퇴_때_지운다() {
-        String deletes = String.join("\n", UserService.DELETE_USER_DATA) + "\n";
+        // JOIN 에만 나오는 테이블(goal, goal_ai_session)을 지운 것으로 세지 않도록 DELETE 대상만 모읍니다.
+        Set<String> deleted = UserService.DELETE_USER_DATA.stream()
+                .map(DELETE_TARGET::matcher)
+                .filter(Matcher::find)
+                .map(matcher -> matcher.group(1))
+                .collect(Collectors.toSet());
 
         List<String> tables = jdbcTemplate.queryForList(USER_DATA_TABLES, String.class);
         assertThat(tables).contains("todo", "goal_checkin", "goal_ai_message");
 
         List<String> missing = tables.stream()
                 .filter(table -> !table.equals("payment"))
-                .filter(table -> !deletes.contains(" " + table + " "))
+                .filter(table -> !deleted.contains(table))
                 .toList();
 
         assertThat(missing).isEmpty();
@@ -169,7 +206,56 @@ class UserWithdrawApiIntegrationTest {
                         """.formatted(password));
     }
 
-    private long count(String table, Long userId) {
-        return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE user_id = ?", Long.class, userId);
+    /** 탈퇴 때 지우는 테이블마다 한 행씩 넣습니다. 목표 아래 테이블은 AI 호출 없이 채우려고 직접 넣습니다. */
+    private Seeded seedAll(Session session) throws Exception {
+        createTodo(session);
+        createGoal(session);
+        Long goalId = jdbcTemplate.queryForObject("SELECT goal_id FROM goal WHERE user_id = ?", Long.class,
+                session.userId());
+        Long milestoneId = insert("""
+                INSERT INTO milestone (goal_id, seq, title, start_date, end_date, status, created_at, updated_at)
+                VALUES (?, 1, '1단계', '2026-10-10', '2026-10-31', 'PENDING', NOW(6), NOW(6))""", goalId);
+        insert("""
+                INSERT INTO period_goal (goal_id, milestone_id, period_type, seq, title, start_date, end_date, status,
+                                         created_at, updated_at)
+                VALUES (?, ?, 'WEEKLY', 1, '1주차', '2026-10-10', '2026-10-16', 'PENDING', NOW(6), NOW(6))""",
+                goalId, milestoneId);
+        insert("""
+                INSERT INTO goal_checkin (goal_id, type, checked_at, created_at, updated_at)
+                VALUES (?, 'START', NOW(6), NOW(6), NOW(6))""", goalId);
+        insert("""
+                INSERT INTO goal_plan (goal_id, variant, title, summary, preference, detail_json, total_todos,
+                                       avg_daily_minutes, selected, created_at, updated_at)
+                VALUES (?, 'A', '여유형', '주 3일', 'BALANCED', '{}', 0, 0, 0, NOW(6), NOW(6))""", goalId);
+        Long sessionId = insert("""
+                INSERT INTO goal_ai_session (user_id, raw_goal, status, created_at, updated_at)
+                VALUES (?, '토익 850점', 'COLLECTING', NOW(6), NOW(6))""", session.userId());
+        insert("""
+                INSERT INTO goal_ai_message (session_id, role, content, created_at, updated_at)
+                VALUES (?, 'USER', '토익 850점', NOW(6), NOW(6))""", sessionId);
+        return new Seeded(goalId, sessionId);
+    }
+
+    private Long insert(String sql, Object... args) {
+        jdbcTemplate.update(sql, args);
+        return jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+    }
+
+    /** 목표·세션이 지워진 뒤에도 셀 수 있도록 자식 테이블은 미리 받아 둔 goal_id·session_id 로 셉니다. */
+    private Map<String, Long> remainingRows(Session session, Seeded seeded) {
+        Map<String, Long> rows = new LinkedHashMap<>();
+        for (String table : List.of("todo", "goal", "goal_ai_session", "refresh_token")) {
+            rows.put(table, count("SELECT COUNT(*) FROM " + table + " WHERE user_id = ?", session.userId()));
+        }
+        for (String table : List.of("milestone", "period_goal", "goal_checkin", "goal_plan")) {
+            rows.put(table, count("SELECT COUNT(*) FROM " + table + " WHERE goal_id = ?", seeded.goalId()));
+        }
+        rows.put("goal_ai_message", count("SELECT COUNT(*) FROM goal_ai_message WHERE session_id = ?",
+                seeded.sessionId()));
+        return rows;
+    }
+
+    private long count(String sql, Long id) {
+        return jdbcTemplate.queryForObject(sql, Long.class, id);
     }
 }
