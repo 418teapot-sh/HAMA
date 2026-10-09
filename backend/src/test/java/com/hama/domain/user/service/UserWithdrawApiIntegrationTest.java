@@ -18,6 +18,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -33,6 +38,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.RequestBuilder;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /** 탈퇴 API 를 실제 필터 체인 + MySQL 로 확인합니다. 테스트끼리 섞이지 않도록 매번 새 이메일로 가입합니다. */
@@ -61,6 +67,9 @@ class UserWithdrawApiIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     private record Session(Long userId, String email, String accessToken, String refreshToken) {
     }
@@ -114,6 +123,60 @@ class UserWithdrawApiIntegrationTest {
 
         assertThat(userRepository.existsById(session.userId())).isTrue();
         assertThat(count("SELECT COUNT(*) FROM todo WHERE user_id = ?", session.userId())).isOne();
+    }
+
+    /** 탈퇴가 사용자 행을 잠근 동안 온 로그인은 기다렸다가, 탈퇴가 끝나면 지워진 계정이라 실패해야 합니다. */
+    @Test
+    void 탈퇴가_사용자를_잠근_동안_로그인하면_기다렸다가_실패한다() throws Exception {
+        Session session = signup();
+
+        int status = whileWithdrawing(session, () -> mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "email": "%s", "password": "%s" }
+                                """.formatted(session.email(), PASSWORD)))
+                .andReturn().getResponse().getStatus());
+
+        assertThat(status).isEqualTo(401);
+        assertThat(count("SELECT COUNT(*) FROM refresh_token WHERE user_id = ?", session.userId())).isZero();
+    }
+
+    /** 탈퇴 버튼을 두 번 누르면 두 번째 요청은 먼저 온 탈퇴가 끝나기를 기다렸다가 그대로 성공해야 합니다. */
+    @Test
+    void 탈퇴가_동시에_두_번_오면_두_번째도_성공한다() throws Exception {
+        Session session = signup();
+
+        int status = whileWithdrawing(session,
+                () -> mockMvc.perform(withdraw(session, PASSWORD)).andReturn().getResponse().getStatus());
+
+        assertThat(status).isEqualTo(200);
+    }
+
+    /**
+     * 탈퇴처럼 사용자 행을 FOR UPDATE 로 잠근 채 다른 스레드에서 요청을 보내고, 그 요청이 락에서 기다리는지 확인한 뒤
+     * 사용자를 지우고 커밋합니다. 요청의 HTTP 상태를 돌려줍니다.
+     */
+    private int whileWithdrawing(Session session, Callable<Integer> request) throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<Integer> response = transactionTemplate.execute(tx -> {
+                jdbcTemplate.queryForObject("SELECT user_id FROM users WHERE user_id = ? FOR UPDATE", Long.class,
+                        session.userId());
+                Future<Integer> pending = executor.submit(request);
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    throw new IllegalStateException(e);
+                }
+                assertThat(pending).as("요청이 사용자 행 락에서 기다려야 합니다").isNotDone();
+                jdbcTemplate.update("DELETE FROM refresh_token WHERE user_id = ?", session.userId());
+                jdbcTemplate.update("DELETE FROM users WHERE user_id = ?", session.userId());
+                return pending;
+            });
+            return response.get(10, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test

@@ -98,7 +98,8 @@ class AuthServiceTest {
 
         @Test
         void 비밀번호가_맞으면_토큰을_발급한다() {
-            given(userRepository.findByEmailForShare(EMAIL)).willReturn(Optional.of(savedUser()));
+            given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
+            given(userRepository.findByIdForShare(1L)).willReturn(Optional.of(savedUser()));
             given(passwordEncoder.matches("password1234", "encoded")).willReturn(true);
 
             AuthTokens tokens = authService.login(new LoginRequest(EMAIL, "password1234"));
@@ -107,9 +108,19 @@ class AuthServiceTest {
         }
 
         @Test
+        void 비밀번호가_맞아도_그사이_탈퇴했으면_실패한다() {
+            given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
+            given(userRepository.findByIdForShare(1L)).willReturn(Optional.empty());
+            given(passwordEncoder.matches("password1234", "encoded")).willReturn(true);
+
+            assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "password1234")))
+                    .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
+        }
+
+        @Test
         void 없는_이메일과_틀린_비밀번호는_같은_에러다() {
-            given(userRepository.findByEmailForShare("unknown@hama.com")).willReturn(Optional.empty());
-            given(userRepository.findByEmailForShare(EMAIL)).willReturn(Optional.of(savedUser()));
+            given(userRepository.findByEmail("unknown@hama.com")).willReturn(Optional.empty());
+            given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
             given(passwordEncoder.matches("wrong-password", "encoded")).willReturn(false);
 
             assertThatThrownBy(() -> authService.login(new LoginRequest("unknown@hama.com", "password1234")))
@@ -120,7 +131,7 @@ class AuthServiceTest {
 
         @Test
         void 다섯_번_틀리면_그_다음_시도는_잠긴다() {
-            given(userRepository.findByEmailForShare(EMAIL)).willReturn(Optional.of(savedUser()));
+            given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
             given(passwordEncoder.matches("wrong-password", "encoded")).willReturn(false);
 
             for (int i = 0; i < PasswordAttemptLimiter.MAX_ATTEMPTS; i++) {
