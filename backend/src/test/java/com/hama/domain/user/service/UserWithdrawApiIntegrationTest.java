@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.hama.domain.auth.service.LoginAttemptLimiter;
+import com.hama.domain.auth.service.PasswordAttemptLimiter;
 import com.hama.domain.user.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
 import java.sql.PreparedStatement;
@@ -119,7 +119,7 @@ class UserWithdrawApiIntegrationTest {
     @Test
     void 비밀번호를_5번_틀리면_맞는_비밀번호도_429() throws Exception {
         Session session = signup();
-        for (int i = 0; i < LoginAttemptLimiter.MAX_ATTEMPTS; i++) {
+        for (int i = 0; i < PasswordAttemptLimiter.MAX_ATTEMPTS; i++) {
             mockMvc.perform(withdraw(session, "wrong-password")).andExpect(status().isBadRequest());
         }
 
@@ -225,6 +225,10 @@ class UserWithdrawApiIntegrationTest {
                 INSERT INTO goal_plan (goal_id, variant, title, summary, preference, detail_json, total_todos,
                                        avg_daily_minutes, selected, created_at, updated_at)
                 VALUES (?, 'A', '여유형', '주 3일', 'BALANCED', '{}', 0, 0, 0, NOW(6), NOW(6))""", goalId);
+        insert("""
+                INSERT INTO schedule (user_id, type, title, start_at, end_at, all_day, created_at, updated_at)
+                VALUES (?, 'FIXED', '학원 아르바이트', '2026-10-10 18:00:00', '2026-10-10 21:00:00', 0, NOW(6), NOW(6))""",
+                session.userId());
         Long sessionId = insert("""
                 INSERT INTO goal_ai_session (user_id, raw_goal, status, created_at, updated_at)
                 VALUES (?, '토익 850점', 'COLLECTING', NOW(6), NOW(6))""", session.userId());
@@ -250,7 +254,7 @@ class UserWithdrawApiIntegrationTest {
     /** 목표·세션이 지워진 뒤에도 셀 수 있도록 자식 테이블은 미리 받아 둔 goal_id·session_id 로 셉니다. */
     private Map<String, Long> remainingRows(Session session, Seeded seeded) {
         Map<String, Long> rows = new LinkedHashMap<>();
-        for (String table : List.of("todo", "goal", "goal_ai_session", "refresh_token")) {
+        for (String table : List.of("todo", "schedule", "goal", "goal_ai_session", "refresh_token")) {
             rows.put(table, count("SELECT COUNT(*) FROM " + table + " WHERE user_id = ?", session.userId()));
         }
         for (String table : List.of("milestone", "period_goal", "goal_checkin", "goal_plan")) {
