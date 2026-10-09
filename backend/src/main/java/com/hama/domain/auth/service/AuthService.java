@@ -30,7 +30,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final LoginAttemptLimiter loginAttemptLimiter;
+    private final PasswordAttemptLimiter attemptLimiter;
     private final JwtProperties jwtProperties;
 
     /** 가입과 동시에 로그인 처리합니다. */
@@ -57,13 +57,15 @@ public class AuthService {
      */
     @Transactional
     public AuthTokens login(LoginRequest request) {
-        loginAttemptLimiter.checkAllowed(request.email());
+        attemptLimiter.check(request.email());
 
-        User user = userRepository.findByEmail(request.email())
+        // 공유 락으로 읽어서, 동시에 진행 중인 탈퇴(users 행 FOR UPDATE)와 순서를 맞춥니다.
+        // 탈퇴가 먼저면 지워진 뒤라 실패하고, 로그인이 먼저면 탈퇴가 이 토큰까지 지웁니다.
+        User user = userRepository.findByEmailForShare(request.email())
                 .filter(found -> passwordEncoder.matches(request.password(), found.getPassword()))
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_CREDENTIALS));
 
-        loginAttemptLimiter.onSuccess(request.email());
+        attemptLimiter.onSuccess(request.email());
         return issueTokens(user.getId());
     }
 
