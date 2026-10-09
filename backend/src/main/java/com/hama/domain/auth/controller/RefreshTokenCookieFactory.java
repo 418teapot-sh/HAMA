@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-class RefreshTokenCookieFactory {
+public class RefreshTokenCookieFactory {
 
     static final String COOKIE_NAME = "refreshToken";
 
@@ -28,7 +28,7 @@ class RefreshTokenCookieFactory {
                 .build();
     }
 
-    ResponseCookie delete() {
+    public ResponseCookie delete() {
         return base("")
                 .maxAge(Duration.ZERO)
                 .build();
