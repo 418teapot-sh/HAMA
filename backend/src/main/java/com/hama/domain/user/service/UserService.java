@@ -24,7 +24,8 @@ public class UserService {
     /*
      * 탈퇴 때 지우는 테이블입니다. 테이블 사이에 FK 가 없어서 DB 가 대신 지워주지 않으므로 자식부터 직접 지웁니다.
      * soft delete(deleted_at) 된 행도 개인정보라 전부 지웁니다. payment 는 전자상거래법상 5년 보관이라 남깁니다.
-     * 사용자 데이터를 담는 테이블을 새로 만들면 여기에 추가하세요(UserWithdrawApiIntegrationTest 가 빠진 테이블을 잡습니다).
+     * 사용자 데이터를 담는 테이블을 새로 만들면 여기에 추가하세요. UserWithdrawApiIntegrationTest 는 user_id·goal_id·session_id
+     * 컬럼이 있는 테이블만 검사하므로, 다른 키(todo_id 등)로만 이어지는 테이블은 직접 챙겨야 합니다.
      */
     /** goal_id 로 지우는 목표의 자식 테이블 */
     static final List<String> GOAL_CHILD_TABLES = List.of("goal_checkin", "goal_plan", "period_goal", "milestone");
@@ -48,7 +49,8 @@ public class UserService {
      * 로그인처럼 15분에 5회로 시도를 제한합니다. 리프레시 토큰도 모든 기기에서 지워져 재발급이 막히지만,
      * 이미 나간 액세스 토큰은 만료(30분)까지 필터를 통과합니다. 프론트는 탈퇴 직후 토큰을 버려야 합니다.
      *
-     * <p>락: 다른 서비스(투두·체크인·플랜·replan)처럼 목표 행을 먼저 잠가서 잠그는 순서를 맞춥니다(교착 방지).
+     * <p>락 순서는 AI 세션 → 목표입니다. 목표 확정(GoalAiDraftService.confirm)이 세션을 잠근 뒤 목표를 넣고,
+     * 투두·체크인·플랜·replan 은 목표만 잠그므로, 이 순서면 어느 쪽과도 서로 기다리며 막히지 않습니다(교착 방지).
      * 자식 테이블은 JOIN 대신 미리 잠근 id 로 지웁니다. JOIN DELETE 는 옵티마이저가 자식 테이블을 전체 스캔하면
      * 다른 사용자 행까지 잠그기 때문입니다.
      */
@@ -63,10 +65,10 @@ public class UserService {
         }
 
         Map<String, Long> byUser = Map.of("userId", userId);
-        List<Long> goalIds = jdbc.queryForList(
-                "SELECT goal_id FROM goal WHERE user_id = :userId FOR UPDATE", byUser, Long.class);
         List<Long> sessionIds = jdbc.queryForList(
                 "SELECT session_id FROM goal_ai_session WHERE user_id = :userId FOR UPDATE", byUser, Long.class);
+        List<Long> goalIds = jdbc.queryForList(
+                "SELECT goal_id FROM goal WHERE user_id = :userId FOR UPDATE", byUser, Long.class);
         deleteIn(GOAL_CHILD_TABLES, "goal_id", goalIds);
         deleteIn(SESSION_CHILD_TABLES, "session_id", sessionIds);
         USER_TABLES.forEach(table -> jdbc.update("DELETE FROM " + table + " WHERE user_id = :userId", byUser));
