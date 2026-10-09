@@ -2,7 +2,8 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '../features/auth/store'
 import type { ApiResponse } from './types'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
+/** 비어 있으면 지금 주소로 부릅니다. npm run dev 에서는 Vite 프록시가 백엔드로 넘겨줍니다(vite.config.ts). */
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 /**
  * 모든 API 호출은 이 인스턴스를 씁니다.
