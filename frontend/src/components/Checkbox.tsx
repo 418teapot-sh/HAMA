@@ -1,3 +1,6 @@
+import icCheckBoxOff from '../assets/icons/ic_checkBox_off.svg'
+import icCheckBoxOn from '../assets/icons/ic_checkBox_on.svg'
+
 interface CheckboxProps {
   id: string
   checked: boolean
@@ -5,16 +8,22 @@ interface CheckboxProps {
 }
 
 /**
- * 체크박스 (Figma 컴포넌트: Checkbox, Property off/on, 아이콘 ic_checkBox 24×24)
+ * 체크박스 (Figma 컴포넌트: Checkbox, off = ic_checkBox / on = ic_checkBox_fill, 24×24)
+ * 실제 입력은 화면에서 숨긴 기본 체크박스가 받고(키보드·스크린리더용), 보이는 건 Figma 아이콘입니다.
  *
- * TODO: ic_checkBox(off·on) 아이콘 SVG 를 Figma 에서 받으면 아이콘으로 교체합니다.
- *       지금은 동작 확인용으로 브라우저 기본 체크박스를 24×24 영역 가운데에 둡니다(디자인과 다름).
  * TODO: #47 의 공용 Checkbox 가 develop 에 머지되면 그걸로 교체합니다.
  */
 export default function Checkbox({ id, checked, onChange }: CheckboxProps) {
   return (
-    <span className="flex size-[24px] shrink-0 items-center justify-center">
-      <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <span className="relative flex size-[24px] shrink-0">
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="sr-only"
+      />
+      <img src={checked ? icCheckBoxOn : icCheckBoxOff} alt="" className="size-[24px]" />
     </span>
   )
 }

@@ -7,6 +7,7 @@ import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { login } from '../features/auth/api'
 import { paths } from '../paths'
+import icClose from '../assets/icons/ic_close.svg'
 
 /** Figma 로그인 오류 화면의 토스트 문구 그대로 */
 const LOGIN_FAILED_MESSAGE = '로그인에 실패했어요. 다시 시도해 주세요'
@@ -51,8 +52,7 @@ export default function LoginPage() {
       <NavigationBar
         variant="close"
         leftLabel="닫기"
-        // TODO: ic_close 아이콘 SVG 를 Figma 에서 내보내 받으면 넣습니다(24×24, 벡터 14×14, Black/Black).
-        leftIcon={<span className="size-[24px]" />}
+        leftIcon={<img src={icClose} alt="" className="size-[24px]" />}
         // TODO: 닫기 버튼을 눌렀을 때 이동할 화면 확인 필요(랜딩 페이지 예정)
         onLeftClick={undefined}
       />

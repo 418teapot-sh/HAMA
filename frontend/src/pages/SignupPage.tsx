@@ -9,6 +9,9 @@ import Toast from '../components/Toast'
 import { signup } from '../features/auth/api'
 import { useToast } from '../hooks/useToast'
 import { paths } from '../paths'
+import icBack from '../assets/icons/ic_back.svg'
+import icEyesNoSee from '../assets/icons/ic_eyes_nosee.svg'
+import icEyesSee from '../assets/icons/ic_eyes_see.svg'
 
 /** Figma 약관 동의 항목 문구 그대로 */
 const AGREEMENT_ITEMS: AgreementItem[] = [
@@ -103,8 +106,7 @@ export default function SignupPage() {
       <NavigationBar
         title="회원가입"
         leftLabel="뒤로 가기"
-        // TODO: ic_back 아이콘 SVG 를 Figma 에서 받으면 넣습니다(24×24).
-        leftIcon={<span className="size-[24px]" />}
+        leftIcon={<img src={icBack} alt="" className="size-[24px]" />}
         onLeftClick={() => navigate(-1)}
       />
 
@@ -156,7 +158,8 @@ export default function SignupPage() {
                 onClick={() => setShowPassword((v) => !v)}
                 className="size-[25px] shrink-0"
               >
-                {/* TODO: eyes 아이콘(NoSee·See, 25×25) SVG 를 받으면 넣습니다. */}
+                {/* Figma eyes: 가린 상태 NoSee, 보이는 상태 See (25×25) */}
+                <img src={showPassword ? icEyesSee : icEyesNoSee} alt="" className="size-[25px]" />
               </button>
             }
           />

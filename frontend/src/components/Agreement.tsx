@@ -1,3 +1,4 @@
+import icRight from '../assets/icons/ic_right.svg'
 import Checkbox from './Checkbox'
 
 export interface AgreementItem {
@@ -60,8 +61,8 @@ export default function Agreement({ items, checked, onChange }: AgreementProps) 
                 </span>
                 <span className="text-body-b8 text-black-gray80">{item.label}</span>
               </label>
-              {/* TODO: ic_right 아이콘 SVG 를 받으면 넣고, 눌렀을 때 약관 상세로 이동할지 확인 필요 */}
-              <span className="size-[24px] shrink-0" aria-hidden />
+              {/* TODO: ic_right 를 눌렀을 때 약관 상세로 이동할지 확인 필요 (지금은 아이콘만) */}
+              <img src={icRight} alt="" className="size-[24px] shrink-0" />
             </div>
           )
         })}
