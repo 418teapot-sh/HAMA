@@ -2,7 +2,7 @@
 @import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 
 /*
- * 디자인 토큰 (Figma > UI 페이지 로그인·회원가입 화면에서 확인한 값)
+ * 디자인 토큰 (Figma > UI 페이지 로그인·회원가입 화면, Design system 페이지 TabBar_User·Tap 에서 확인한 값)
  * 이름은 Figma 스타일 이름을 그대로 따릅니다. 예) Black/Gray40 → black-gray40
  * #47(디자인 토큰·공용 UI)이 develop 에 머지되면 그쪽 토큰으로 맞춥니다.
  */
@@ -20,6 +20,9 @@
   --color-black-gray40: #a2a2a2; /* Black/Gray40 */
   --color-black-gray80: #464545; /* Black/Gray80 */
   --color-card-back-2: #c2e8ff; /* Card_Back_2 (토스트에서 40% 불투명도로 사용) */
+  --color-brand-main-20: #c2e8ff; /* Brand/Main_20 (하단 탭바 + 버튼) */
+  --color-card-back: rgb(252 252 252 / 0.75); /* Card_Back (#FCFCFC 75%) */
+  --color-stroke: rgb(238 238 238 / 0.6); /* Stroke (#EEEEEE 60%) */
 
   /* 텍스트 스타일 */
   --text-body-b3: 18px; /* Body/B3 */
@@ -48,9 +51,14 @@
   --text-heading-h6: 18px; /* Heading/H6 */
   --text-heading-h6--line-height: 100%;
   --text-heading-h6--font-weight: 400;
+  --text-body-b10: 12px; /* Body/B10 (하단 탭 이름) */
+  --text-body-b10--line-height: 160%;
+  --text-body-b10--font-weight: 400;
+  --text-body-b10--letter-spacing: -0.015em; /* 자간 -1.5% */
 
-  /* 효과: 약관 동의 카드 그림자 (X 0, Y 15, 흐림 40, 스프레드 0, #CECECE 8%) */
-  --shadow-agreement: 0 15px 40px 0 rgb(206 206 206 / 0.08);
+  /* 효과 (Figma 효과 스타일 이름 그대로) */
+  --shadow-shadow: 0 15px 40px 0 rgb(206 206 206 / 0.08); /* shadow: X 0, Y 15, 흐림 40, 스프레드 0, #CECECE 8% (약관 카드·하단 탭바) */
+  --shadow-card-shadow: 0 15px 48px 0 rgb(84 128 174 / 0.08); /* Card_Shadow: X 0, Y 15, 흐림 48, 스프레드 0, #5480AE 8% (하단 탭바 + 버튼) */
 }
 
 body {

@@ -33,7 +33,7 @@ export default function Agreement({ items, checked, onChange }: AgreementProps) 
 
   return (
     <div className="w-full px-[20px] py-[10px]">
-      <div className="flex w-full flex-col rounded-[8px] bg-white-w1/75 shadow-agreement ring-1 ring-black-gray10 ring-inset">
+      <div className="flex w-full flex-col rounded-[8px] bg-card-back shadow-shadow ring-1 ring-black-gray10 ring-inset">
         <div className="flex w-full items-center rounded-[8px] px-[12px] py-[8px]">
           <label htmlFor="agree-all" className="flex w-full items-center">
             <span className="flex pr-[4px]">
