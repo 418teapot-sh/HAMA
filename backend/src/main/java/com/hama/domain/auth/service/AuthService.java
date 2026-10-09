@@ -41,7 +41,7 @@ public class AuthService {
         }
 
         User user = User.create(request.email(), passwordEncoder.encode(request.password()), request.name(),
-                Boolean.TRUE.equals(request.marketingAgreed()), LocalDateTime.now());
+                Boolean.TRUE.equals(request.marketingAgreed()));
         try {
             // 위 검사와 저장 사이에 같은 이메일이 먼저 들어오면 unique 제약에 걸립니다.
             userRepository.saveAndFlush(user);
