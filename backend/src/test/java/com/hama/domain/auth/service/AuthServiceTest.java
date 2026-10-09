@@ -15,7 +15,6 @@ import com.hama.domain.user.entity.User;
 import com.hama.domain.user.repository.UserRepository;
 import com.hama.global.auth.JwtProperties;
 import com.hama.global.auth.JwtTokenProvider;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -53,7 +52,7 @@ class AuthServiceTest {
     }
 
     private static User savedUser() {
-        User user = User.create(EMAIL, "encoded", "하마", false, LocalDateTime.now());
+        User user = User.create(EMAIL, "encoded", "하마", false);
         ReflectionTestUtils.setField(user, "id", 1L);
         return user;
     }

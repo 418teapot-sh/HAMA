@@ -104,7 +104,7 @@ class AuthApiIntegrationTest {
     /** 디자인 규칙: 영문·숫자·특수문자를 각각 포함한 8~20자. 공백·한글은 받지 않습니다. */
     @ParameterizedTest
     @ValueSource(strings = {"pass12!", "password1234!password", "password1234", "password!!!!", "12345678!",
-            "pass word1!", "비밀번호1234!"})
+            "pass word1!", "abc한글123!", "password12·"})
     void 비밀번호_규칙에_맞지_않으면_400(String password) throws Exception {
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -146,19 +146,12 @@ class AuthApiIntegrationTest {
     }
 
     @Test
-    void 약관_동의_시각과_마케팅_선택_여부가_저장된다() throws Exception {
+    void 마케팅_수신_동의는_선택이고_생략하면_false_로_저장된다() throws Exception {
         String withMarketing = signupWith("\"marketingAgreed\": true");
         String withoutMarketing = signupWith("\"marketingAgreed\": null");
 
-        User agreed = userRepository.findByEmail(withMarketing).orElseThrow();
-        assertThat(agreed.getTermsAgreedAt()).isNotNull();
-        assertThat(agreed.isMarketingAgreed()).isTrue();
-        assertThat(agreed.getMarketingAgreedAt()).isEqualTo(agreed.getTermsAgreedAt());
-
-        User declined = userRepository.findByEmail(withoutMarketing).orElseThrow();
-        assertThat(declined.getTermsAgreedAt()).isNotNull();
-        assertThat(declined.isMarketingAgreed()).isFalse();
-        assertThat(declined.getMarketingAgreedAt()).isNull();
+        assertThat(userRepository.findByEmail(withMarketing).orElseThrow().isMarketingAgreed()).isTrue();
+        assertThat(userRepository.findByEmail(withoutMarketing).orElseThrow().isMarketingAgreed()).isFalse();
     }
 
     private String signupWith(String marketing) throws Exception {
