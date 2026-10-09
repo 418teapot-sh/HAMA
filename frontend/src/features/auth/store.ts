@@ -8,16 +8,29 @@ import { create } from 'zustand'
  */
 export type AuthStatus = 'unknown' | 'authenticated' | 'unauthenticated'
 
+/** GET /api/users/me 응답 (Swagger UserResponse) */
+export interface User {
+  id: number
+  email: string
+  name: string
+  isPremium: boolean
+}
+
 interface AuthState {
   accessToken: string | null
   status: AuthStatus
+  /** 로그인한 사용자 정보. 토큰은 있는데 아직 못 불러왔으면 null */
+  user: User | null
   setAccessToken: (token: string) => void
+  setUser: (user: User) => void
   clear: () => void
 }
 
 export const useAuthStore = create<AuthState>()((set) => ({
   accessToken: null,
   status: 'unknown',
+  user: null,
   setAccessToken: (token) => set({ accessToken: token, status: 'authenticated' }),
-  clear: () => set({ accessToken: null, status: 'unauthenticated' }),
+  setUser: (user) => set({ user }),
+  clear: () => set({ accessToken: null, status: 'unauthenticated', user: null }),
 }))
