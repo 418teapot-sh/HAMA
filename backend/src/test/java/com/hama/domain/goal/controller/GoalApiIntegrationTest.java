@@ -86,7 +86,7 @@ class GoalApiIntegrationTest {
         String email = "goal-" + UUID.randomUUID() + "@hama.com";
         MvcResult result = mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"%s","password":"password1234","name":"목표"}
+                                {"email":"%s","password":"password1234!","name":"목표"}
                                 """.formatted(email)))
                 .andExpect(status().isOk()).andReturn();
         return new Session(users.findByEmail(email).orElseThrow().getId(),

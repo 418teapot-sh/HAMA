@@ -72,7 +72,7 @@ class TodoApiIntegrationTest {
         String email = "todo-" + UUID.randomUUID() + "@hama.com";
         MvcResult result = mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"%s","password":"password1234","name":"투두"}
+                                {"email":"%s","password":"password1234!","name":"투두"}
                                 """.formatted(email)))
                 .andExpect(status().isOk()).andReturn();
         return new Session(users.findByEmail(email).orElseThrow().getId(),

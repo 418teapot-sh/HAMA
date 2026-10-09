@@ -63,7 +63,7 @@ class AuthServiceTest {
         @Test
         void 무료_상태로_가입하고_토큰을_발급한다() {
             given(userRepository.existsByEmail(EMAIL)).willReturn(false);
-            given(passwordEncoder.encode("password1234")).willReturn("encoded");
+            given(passwordEncoder.encode("password1234!")).willReturn("encoded");
             given(userRepository.saveAndFlush(any(User.class))).willAnswer(invocation -> {
                 User user = invocation.getArgument(0);
                 assertThat(user.isPremium()).isFalse();
@@ -73,7 +73,7 @@ class AuthServiceTest {
                 return user;
             });
 
-            AuthTokens tokens = authService.signup(new SignupRequest(EMAIL, "password1234", "하마"));
+            AuthTokens tokens = authService.signup(new SignupRequest(EMAIL, "password1234!", "하마"));
 
             assertThat(jwtTokenProvider.parseAccessUser(tokens.accessToken())).isPresent();
             assertThat(jwtTokenProvider.parseRefreshUserId(tokens.refreshToken())).contains(1L);
@@ -83,13 +83,13 @@ class AuthServiceTest {
         void 이미_가입된_이메일이면_409() {
             given(userRepository.existsByEmail(EMAIL)).willReturn(true);
 
-            assertThatThrownBy(() -> authService.signup(new SignupRequest(EMAIL, "password1234", "하마")))
+            assertThatThrownBy(() -> authService.signup(new SignupRequest(EMAIL, "password1234!", "하마")))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
         @Test
         void 이메일은_소문자로_정규화한다() {
-            assertThat(new SignupRequest(" Test@HAMA.com ", "password1234", "하마").email()).isEqualTo(EMAIL);
+            assertThat(new SignupRequest(" Test@HAMA.com ", "password1234!", "하마").email()).isEqualTo(EMAIL);
         }
     }
 
@@ -100,9 +100,9 @@ class AuthServiceTest {
         void 비밀번호가_맞으면_토큰을_발급한다() {
             given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
             given(userRepository.findByIdForShare(1L)).willReturn(Optional.of(savedUser()));
-            given(passwordEncoder.matches("password1234", "encoded")).willReturn(true);
+            given(passwordEncoder.matches("password1234!", "encoded")).willReturn(true);
 
-            AuthTokens tokens = authService.login(new LoginRequest(EMAIL, "password1234"));
+            AuthTokens tokens = authService.login(new LoginRequest(EMAIL, "password1234!"));
 
             assertThat(tokens.accessToken()).isNotBlank();
         }
@@ -111,9 +111,9 @@ class AuthServiceTest {
         void 비밀번호가_맞아도_그사이_탈퇴했으면_실패한다() {
             given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
             given(userRepository.findByIdForShare(1L)).willReturn(Optional.empty());
-            given(passwordEncoder.matches("password1234", "encoded")).willReturn(true);
+            given(passwordEncoder.matches("password1234!", "encoded")).willReturn(true);
 
-            assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "password1234")))
+            assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "password1234!")))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
         }
 
@@ -123,7 +123,7 @@ class AuthServiceTest {
             given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
             given(passwordEncoder.matches("wrong-password", "encoded")).willReturn(false);
 
-            assertThatThrownBy(() -> authService.login(new LoginRequest("unknown@hama.com", "password1234")))
+            assertThatThrownBy(() -> authService.login(new LoginRequest("unknown@hama.com", "password1234!")))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
             assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "wrong-password")))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
