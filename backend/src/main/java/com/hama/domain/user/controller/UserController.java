@@ -42,7 +42,7 @@ public class UserController {
             description = """
                     비밀번호를 확인한 뒤 계정과 투두·일정·목표 등 모든 데이터를 지우고, 모든 기기의 로그인을 끊습니다.
                     결제 기록은 법정 보관 기간 동안 남습니다. 되돌릴 수 없습니다.
-                    비밀번호가 틀리면 400(PASSWORD_MISMATCH)입니다.
+                    비밀번호가 틀리면 400(PASSWORD_MISMATCH)이고, 15분에 5회를 넘게 시도하면 429(TOO_MANY_PASSWORD_ATTEMPTS)입니다.
                     성공하면 리프레시 토큰 쿠키가 지워집니다. 프론트는 메모리의 accessToken 도 버리세요.
                     """)
     @DeleteMapping("/me")

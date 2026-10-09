@@ -1,5 +1,6 @@
 package com.hama.domain.user.service;
 
+import com.hama.domain.auth.service.LoginAttemptLimiter;
 import com.hama.domain.user.dto.UserResponse;
 import com.hama.domain.user.entity.User;
 import com.hama.domain.user.exception.UserErrorCode;
@@ -7,11 +8,13 @@ import com.hama.domain.user.repository.UserRepository;
 import com.hama.global.exception.BusinessException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -38,22 +41,28 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbcTemplate;
+    private final LoginAttemptLimiter attemptLimiter;
 
     public UserResponse getMe(Long userId) {
         return UserResponse.from(findUser(userId));
     }
 
     /**
-     * 비밀번호를 확인하고 사용자와 그 데이터를 지웁니다. 리프레시 토큰도 모든 기기에서 지워져 재발급이 막히지만,
+     * 비밀번호를 확인하고 사용자와 그 데이터를 지웁니다. 토큰을 훔친 사람이 비밀번호를 대입해 알아내지 못하도록
+     * 로그인처럼 15분에 5회로 시도를 제한합니다. 리프레시 토큰도 모든 기기에서 지워져 재발급이 막히지만,
      * 이미 나간 액세스 토큰은 만료(30분)까지 필터를 통과합니다. 프론트는 탈퇴 직후 토큰을 버려야 합니다.
      */
     @Transactional
     public void withdraw(Long userId, String password) {
+        if (!attemptLimiter.tryAcquire("withdraw:" + userId)) {
+            throw new BusinessException(UserErrorCode.TOO_MANY_PASSWORD_ATTEMPTS);
+        }
         User user = findUser(userId);
         if (!passwordEncoder.matches(password, user.getPassword())) {
             throw new BusinessException(UserErrorCode.PASSWORD_MISMATCH);
         }
         DELETE_USER_DATA.forEach(sql -> jdbcTemplate.update(sql, userId));
+        log.info("[Withdraw] 회원탈퇴 userId={}", userId);
     }
 
     private User findUser(Long userId) {
