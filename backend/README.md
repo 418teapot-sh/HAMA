@@ -7,6 +7,7 @@ Spring Boot 4 · Java 21 · MySQL 8 · Flyway
 - `.env`는 `backend/`에 둡니다(`.env.example` 참고). 없어도 부팅은 됩니다.
 - PC에 MySQL이 이미 3306을 쓰고 있으면 `.env`에 `DB_PORT=3307`을 넣습니다.
 - 테스트(`./gradlew test`)는 MySQL 컨테이너가 떠 있어야 합니다(`hama_test` DB 사용).
+- 테스트가 끝나면 커버리지 리포트(JaCoCo)가 `build/reports/jacoco/test/html/index.html`에 생깁니다. 브라우저로 열면 테스트가 실행하지 않은 줄이 빨갛게 보입니다.
 - AI를 실제로 부르려면 `.env`에 `LINER_API_KEY`를 넣습니다. 없어도 AI 외 기능은 정상입니다.
 
 ## DB 마이그레이션 (Flyway)
