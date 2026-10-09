@@ -48,7 +48,7 @@ class AuthServiceTest {
         JwtProperties properties = new JwtProperties(SECRET, 30 * 60 * 1000L, 14L * 24 * 60 * 60 * 1000);
         jwtTokenProvider = new JwtTokenProvider(properties);
         authService = new AuthService(jwtTokenProvider, refreshTokenRepository, userRepository, passwordEncoder,
-                new LoginAttemptLimiter(), properties);
+                new PasswordAttemptLimiter(), properties);
     }
 
     private static User savedUser() {
@@ -99,11 +99,22 @@ class AuthServiceTest {
         @Test
         void 비밀번호가_맞으면_토큰을_발급한다() {
             given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
+            given(userRepository.findByIdForShare(1L)).willReturn(Optional.of(savedUser()));
             given(passwordEncoder.matches("password1234", "encoded")).willReturn(true);
 
             AuthTokens tokens = authService.login(new LoginRequest(EMAIL, "password1234"));
 
             assertThat(tokens.accessToken()).isNotBlank();
+        }
+
+        @Test
+        void 비밀번호가_맞아도_그사이_탈퇴했으면_실패한다() {
+            given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
+            given(userRepository.findByIdForShare(1L)).willReturn(Optional.empty());
+            given(passwordEncoder.matches("password1234", "encoded")).willReturn(true);
+
+            assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "password1234")))
+                    .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
         }
 
         @Test
@@ -123,13 +134,13 @@ class AuthServiceTest {
             given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
             given(passwordEncoder.matches("wrong-password", "encoded")).willReturn(false);
 
-            for (int i = 0; i < LoginAttemptLimiter.MAX_ATTEMPTS; i++) {
+            for (int i = 0; i < PasswordAttemptLimiter.MAX_ATTEMPTS; i++) {
                 assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "wrong-password")))
                         .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
             }
 
             assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "wrong-password")))
-                    .extracting("errorCode").isEqualTo(AuthErrorCode.TOO_MANY_LOGIN_ATTEMPTS);
+                    .extracting("errorCode").isEqualTo(AuthErrorCode.TOO_MANY_PASSWORD_ATTEMPTS);
         }
     }
 
