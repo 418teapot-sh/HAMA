@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.1.1'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'jacoco'
 }
 
 group = 'com.hama'
@@ -55,6 +56,20 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	finalizedBy 'jacocoTestReport'
+}
+
+// 테스트 커버리지 리포트: build/reports/jacoco/test/html/index.html
+// 리포트만 만들고 최소 기준(빌드 실패)은 걸지 않습니다.
+jacocoTestReport {
+	reports {
+		xml.required = true
+		html.required = true
+	}
+	// 로직이 없어 측정해도 의미 없는 코드는 뺍니다.
+	classDirectories.setFrom(files(classDirectories.files.collect {
+		fileTree(it) { exclude '**/dto/**', '**/HamaApplication*' }
+	}))
 }
 
 // Dockerfile 이 jar 경로를 고정값(build/libs/hama.jar)으로 참조합니다.
