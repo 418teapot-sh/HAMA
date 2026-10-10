@@ -3,6 +3,7 @@ package com.hama.domain.calendar.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.hama.domain.goalai.GoalAiTestSupport;
@@ -38,6 +39,12 @@ class CalendarPlanIntegrationTest extends GoalAiTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         assertThat(file.split("BEGIN:VEVENT", -1)).hasSize(125);
         assertThat(file).contains("UID:hama-AI_GOAL-");
+        long todo = jdbc.queryForObject("select min(todo_id) from todo where goal_id=? and todo_date='2026-10-01'",Long.class,goal);
+        var postponed = call(patch("/api/v1/todos/" + todo + "/postpone"),user,null,200).get("data");
+        assertThat(postponed.get("todoDate").asString()).isEqualTo("2026-10-02");
+        assertThat(postponed.get("postponedCount").asInt()).isOne();
+        assertThat(call(get("/api/v1/calendar").param("from","2026-10-02").param("to","2026-10-02")
+                .param("types","AI_GOAL"),user,null,200).at("/data/items").size()).isEqualTo(5);
         User other = user();
         assertThat(call(get("/api/v1/calendar").param("from", "2026-10-01")
                 .param("to", "2026-10-31"), other, null, 200).at("/data/items").size()).isZero();

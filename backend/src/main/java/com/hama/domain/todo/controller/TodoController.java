@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "투두", description = "일반 TASK 및 목표 투두 관리. AI 미루기는 후속 범위입니다.")
+@Tag(name = "투두", description = "일반 TASK 및 목표 투두 관리.")
 @RestController
 @RequestMapping("/api/v1/todos")
 @RequiredArgsConstructor
@@ -65,8 +65,12 @@ public class TodoController {
         return ApiResponse.success(todoService.update(authUser.userId(), todoId, request));
     }
 
-    @Operation(summary = "일반 투두 미루기",
-            description = "기존 날짜 이후로만 미룰 수 있습니다. 본문/날짜 생략 시 기존 날짜 +1일, 시간 생략 시 유지. AI_GOAL_TASK는 현재 409 TODO_AI_POSTPONE_NOT_SUPPORTED.")
+    @Operation(summary = "투두 미루기",
+            description = "TASK는 날짜 생략 시 다음 날, 시간 생략 시 유지. AI는 빈 요청 시 다음 빈 시간으로 자동 배치합니다. "
+                    + "AI 직접 지정은 targetDate 필수, 시간 생략은 유지·null은 지움이며 충돌 시 409입니다. "
+                    + "자동 배치는 다음 날부터(밀린 투두는 오늘 현재시각 이후) 09~22시·10분 단위이며 기존 소요시간(무시간 30분)을 유지합니다. "
+                    + "최대 366일과 큰 목표 종료일 중 빠른 날까지 찾고, 빈 시간이 없으면 409 TODO_POSTPONE_NO_SLOT. "
+                    + "완료/비진행 목표는 409. 기간 목표 연결은 유지합니다.")
     @PatchMapping("/{todoId}/postpone")
     public ApiResponse<TodoResponses.Postponed> postpone(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,

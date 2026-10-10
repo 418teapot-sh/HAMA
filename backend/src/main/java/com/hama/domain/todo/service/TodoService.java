@@ -38,14 +38,17 @@ public class TodoService {
     private final GoalRepository goals;
     private final PeriodGoalRepository periods;
     private final GoalTodoRepository counts;
+    private final AiTodoPostponeService aiPostpone;
 
     public TodoService(TodoRepository todoRepository, @Qualifier("be3Clock") Clock clock,
-            GoalRepository goals, PeriodGoalRepository periods, GoalTodoRepository counts) {
+            GoalRepository goals, PeriodGoalRepository periods, GoalTodoRepository counts,
+            AiTodoPostponeService aiPostpone) {
         this.todoRepository = todoRepository;
         this.clock = clock;
         this.goals = goals;
         this.periods = periods;
         this.counts = counts;
+        this.aiPostpone = aiPostpone;
     }
 
     public TodoResponses.Daily list(Long userId, LocalDate date, TodoCategory category) {
@@ -113,7 +116,8 @@ public class TodoService {
     public TodoResponses.Postponed postpone(Long userId, Long todoId, PostponeTodoRequest request) {
         Todo todo = ownedForUpdate(userId, todoId);
         if (todo.getCategory() == TodoCategory.AI_GOAL_TASK) {
-            throw new BusinessException(TodoErrorCode.TODO_AI_POSTPONE_NOT_SUPPORTED);
+            aiPostpone.postponeLocked(todo, lockGoal(userId, todo.getGoalId()), request);
+            return TodoResponses.Postponed.from(todo);
         }
         PostponeTodoRequest patch = request == null ? new PostponeTodoRequest() : request;
         LocalDate target = patch.getTargetDate() == null
