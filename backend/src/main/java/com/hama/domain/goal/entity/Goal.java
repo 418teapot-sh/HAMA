@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -27,6 +28,8 @@ import org.hibernate.type.SqlTypes;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Goal extends BaseTimeEntity {
+
+    public static final int MAX_PERIOD_DAYS = 365;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -204,9 +207,13 @@ public class Goal extends BaseTimeEntity {
         }
     }
 
-    /** 목표 기간은 최대 1년(시작일 + 1년 전날까지)입니다. 플랜을 주 단위로 펼치므로 기간이 곧 메모리·저장량입니다. */
+    /**
+     * 목표 기간은 시작일 포함 최대 365일입니다. 플랜을 주 단위로 펼치므로 기간이 곧 메모리·저장량입니다.
+     * 달력 1년(plusYears)은 윤일이 끼면 366일이 되어 시작일마다 상한이 달라지므로 일수로 셉니다.
+     * 상한을 바꾸면 저장된 목표도 같은 기준으로 맞춰야 합니다(V13 마이그레이션 참고).
+     */
     public static boolean withinMaxPeriod(LocalDate start, LocalDate end) {
-        return end.isBefore(start.plusYears(1));
+        return ChronoUnit.DAYS.between(start, end) < MAX_PERIOD_DAYS;
     }
 
     /** MySQL DATE 가 담을 수 있는 연도(1000~9999)만 받습니다. null 은 필수 여부를 따로 검사합니다. */

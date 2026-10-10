@@ -38,7 +38,6 @@ public class GoalAiSessionService {
 
     private static final String SESSION_PROMPT = """
             너는 사용자의 막연한 목표를 측정 가능한 목표로 구체화하는 코치야. 오늘은 %s(KST)야.
-            사용자의 처음 목표: %s
             현재 수준, 목표 기간(시작일·종료일), 주간 가용시간을 알아야 초안을 만들 수 있어. 모르는 것만 한 번에 하나씩 짧게 물어봐.
             반드시 아래 필드를 가진 JSON 객체 하나로만 답해.
             {"reply": 사용자에게 보낼 한국어 문장,
@@ -49,6 +48,9 @@ public class GoalAiSessionService {
                       "weeklyAvailableHours": 주간 가용시간 숫자, "currentLevel": 현재 수준 설명}, 아니면 null}
             시작일을 말하지 않으면 오늘로 하고, 종료일은 오늘 이후여야 해. 기간은 최대 1년이야.
             """;
+
+    static final String PERIOD_TOO_LONG_REPLY =
+            "기간은 최대 1년(365일)까지 정할 수 있어요. 1년 안으로 시작일과 종료일을 다시 알려 주세요.";
 
     private final GoalAiSessionRepository sessions;
     private final GoalAiMessageRepository messages;
@@ -69,19 +71,21 @@ public class GoalAiSessionService {
     }
 
     public SessionResponses.Started start(Long userId, String rawGoal) {
-        Turn turn = ask(rawGoal, List.of(AiMessage.user(rawGoal)));
+        Turn turn = ask(List.of(AiMessage.user(rawGoal)));
         return transaction.execute(status -> {
             GoalAiSession session = sessions.save(GoalAiSession.start(userId, rawGoal));
             messages.save(GoalAiMessage.user(session.getId(), rawGoal));
             GoalAiMessage reply = messages.save(GoalAiMessage.ai(session.getId(), turn.reply(), turn.expects()));
-            session.updateDraft(json.write(turn.draft()));
+            if (!turn.keepDraft()) {
+                session.updateDraft(json.write(turn.draft()));
+            }
             return new SessionResponses.Started(session.getId(), session.getStatus(),
                     SessionResponses.AiMessageView.from(reply));
         });
     }
 
     public SessionResponses.Reply reply(Long userId, Long sessionId, String content) {
-        Conversation conversation = transaction.execute(status -> {
+        List<AiMessage> history = transaction.execute(status -> {
             GoalAiSession session = owned(sessions.findById(sessionId), userId);
             requireOpen(session);
             if (messages.countBySessionIdAndRole(sessionId, MessageRole.USER) >= MAX_USER_MESSAGES) {
@@ -93,17 +97,19 @@ public class GoalAiSessionService {
                         ? AiMessage.user(message.getContent()) : AiMessage.assistant(message.getContent()));
             }
             previous.add(AiMessage.user(content));
-            return new Conversation(session.getRawGoal(), previous);
+            return previous;
         });
-        Turn turn = ask(conversation.rawGoal(), conversation.history());
+        Turn turn = ask(history);
         return transaction.execute(status -> {
             GoalAiSession session = owned(sessions.findForUpdate(sessionId), userId);
             requireOpen(session);
             messages.save(GoalAiMessage.user(sessionId, content));
             GoalAiMessage reply = messages.save(GoalAiMessage.ai(sessionId, turn.reply(), turn.expects()));
-            session.updateDraft(json.write(turn.draft()));
+            if (!turn.keepDraft()) {
+                session.updateDraft(json.write(turn.draft()));
+            }
             return new SessionResponses.Reply(session.getStatus(), SessionResponses.AiMessageView.from(reply),
-                    turn.draft());
+                    json.read(session.getDraftJson(), GoalDraft.class));
         });
     }
 
@@ -119,27 +125,28 @@ public class GoalAiSessionService {
         });
     }
 
-    /** AI 클라이언트는 최근 이력만 보내므로, 처음 목표는 대화가 길어져도 빠지지 않게 시스템 프롬프트에 넣습니다. */
-    private Turn ask(String rawGoal, List<AiMessage> history) {
+    private Turn ask(List<AiMessage> history) {
         LocalDate today = LocalDate.now(clock);
         SessionTurn answer = aiClient.chatForJson(
-                AiRequest.of("goal-session", SESSION_PROMPT.formatted(today, rawGoal), history), SessionTurn.class);
+                AiRequest.of("goal-session", SESSION_PROMPT.formatted(today), history), SessionTurn.class);
         if (answer == null || answer.reply() == null || answer.reply().isBlank()) {
             throw new BusinessException(AiErrorCode.AI_UPSTREAM_ERROR,
                     new IllegalStateException("[goal-session] AI 응답에 reply 가 없습니다."));
         }
-        GoalDraft draft = Boolean.TRUE.equals(answer.ready()) && answer.draft() != null
-                ? answer.draft().normalized(today) : null;
-        return new Turn(answer.reply().strip(), draft == null ? Expects.parse(answer.expects()) : null, draft);
+        boolean ready = Boolean.TRUE.equals(answer.ready()) && answer.draft() != null;
+        // AI 답("초안을 만들었어요")을 그대로 보내면 초안 없이 완료된 것처럼 보이므로 서버가 기간을 다시 묻습니다.
+        if (ready && answer.draft().exceedsMaxPeriod()) {
+            return new Turn(PERIOD_TOO_LONG_REPLY, Expects.PERIOD, null, true);
+        }
+        GoalDraft draft = ready ? answer.draft().normalized(today) : null;
+        return new Turn(answer.reply().strip(), draft == null ? Expects.parse(answer.expects()) : null, draft, false);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record SessionTurn(String reply, String expects, Boolean ready, GoalDraft draft) {
     }
 
-    private record Turn(String reply, Expects expects, GoalDraft draft) {
-    }
-
-    private record Conversation(String rawGoal, List<AiMessage> history) {
+    /** keepDraft 면 이번 턴의 초안을 받지 않고 이전 초안·상태를 그대로 둡니다. */
+    private record Turn(String reply, Expects expects, GoalDraft draft, boolean keepDraft) {
     }
 }

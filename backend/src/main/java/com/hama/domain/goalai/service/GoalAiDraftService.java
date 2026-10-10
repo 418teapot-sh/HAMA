@@ -54,6 +54,7 @@ public class GoalAiDraftService {
                 "label": 한 줄 한국어 설명,
                 "patch": EXTEND_PERIOD 는 {"endDate":"yyyy-MM-dd"}, LOWER_TARGET 는 {"targetValue":숫자},
                          MORE_TIME 는 {"weeklyAvailableHours":숫자}}]}
+            EXTEND_PERIOD 의 종료일은 시작일부터 최대 1년(365일) 안이어야 해.
             """;
 
     private final GoalAiSessionRepository sessions;

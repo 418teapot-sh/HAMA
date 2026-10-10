@@ -52,7 +52,7 @@ class LinerAiClientTest {
     }
 
     @Test
-    void 대화_이력은_최근_N개만_보내고_시스템_프롬프트는_항상_보낸다() {
+    void 대화_이력은_첫_메시지와_최근_메시지만_보내고_시스템_프롬프트는_항상_보낸다() {
         AiClient client = clientReturning(HttpStatus.OK, completion("ok"));
         List<AiMessage> history = new ArrayList<>(List.of(
                 AiMessage.user("1"), AiMessage.assistant("2"), AiMessage.user("3"), AiMessage.assistant("4")));
@@ -62,8 +62,21 @@ class LinerAiClientTest {
         JsonNode messages = sentBody().get("messages");
         assertThat(messages).hasSize(3);
         assertThat(messages.get(0).get("role").asString()).isEqualTo("system");
-        assertThat(messages.get(1).get("content").asString()).isEqualTo("3");
+        assertThat(messages.get(1).get("content").asString()).isEqualTo("1");
+        assertThat(messages.get(2).get("content").asString()).isEqualTo("4");
         assertThat(messages.get(2).get("role").asString()).isEqualTo("assistant");
+    }
+
+    @Test
+    void 대화_이력이_상한_안이면_그대로_보내고_첫_메시지를_겹쳐_넣지_않는다() {
+        AiClient client = clientReturning(HttpStatus.OK, completion("ok"));
+
+        client.chat(AiRequest.of("test", "system", List.of(AiMessage.user("1"), AiMessage.assistant("2"))));
+
+        JsonNode messages = sentBody().get("messages");
+        assertThat(messages).hasSize(3);
+        assertThat(messages.get(1).get("content").asString()).isEqualTo("1");
+        assertThat(messages.get(2).get("content").asString()).isEqualTo("2");
     }
 
     @Test

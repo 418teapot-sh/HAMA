@@ -105,9 +105,7 @@ public class LinerAiClient implements AiClient {
             messages.add(new Message("system", systemPrompt));
         }
 
-        List<AiMessage> history = request.messages();
-        int from = Math.max(0, history.size() - properties.maxHistoryMessages());
-        for (AiMessage message : history.subList(from, history.size())) {
+        for (AiMessage message : recentHistory(request.messages())) {
             messages.add(new Message(message.role().name().toLowerCase(), message.content()));
         }
 
@@ -120,6 +118,21 @@ public class LinerAiClient implements AiClient {
 
         return new Request(properties.model(), messages, maxTokens, reasoningEffort,
                 json ? ResponseFormat.JSON_OBJECT : null);
+    }
+
+    /** 최근 N개만 보내되, 잘릴 때도 대화의 출발점인 첫 메시지는 남깁니다. */
+    private List<AiMessage> recentHistory(List<AiMessage> history) {
+        int max = properties.maxHistoryMessages();
+        if (history.size() <= max) {
+            return history;
+        }
+        if (max <= 1) {
+            return history.subList(history.size() - Math.max(0, max), history.size());
+        }
+        List<AiMessage> kept = new ArrayList<>(max);
+        kept.add(history.getFirst());
+        kept.addAll(history.subList(history.size() - (max - 1), history.size()));
+        return kept;
     }
 
     private String extractContent(AiRequest request, String responseBody) {

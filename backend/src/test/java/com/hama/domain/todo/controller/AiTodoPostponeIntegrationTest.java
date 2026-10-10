@@ -37,15 +37,11 @@ class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
     @MockitoSpyBean TodoRepository todos;
 
     long goal(User u, String end) throws Exception {
-        LocalDate start = LocalDate.parse("2026-09-20");
-        if (Goal.withinMaxPeriod(start, LocalDate.parse(end))) {
-            return call(post("/api/v1/goals"), u, Map.of("title", "미루기 검증", "startDate", start.toString(), "endDate", end), 201)
-                    .at("/data/goalId").asLong();
-        }
-        // 기간 상한(1년) 전에 저장된 긴 목표를 재현합니다.
-        long id = goal(u, "2026-10-31");
-        jdbc.update("update goal set end_date = ? where goal_id = ?", end, id);
-        return id;
+        return goal(u, "2026-09-20", end);
+    }
+    long goal(User u, String start, String end) throws Exception {
+        return call(post("/api/v1/goals"), u, Map.of("title", "미루기 검증", "startDate", start, "endDate", end), 201)
+                .at("/data/goalId").asLong();
     }
     long todo(User u, long goal, String date, String start, String end) throws Exception {
         var body = new HashMap<String,Object>(Map.of("category", "AI_GOAL_TASK", "content", "할 일", "goalId", goal, "todoDate", date));
@@ -208,20 +204,11 @@ class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
         assertThat(doc.toString()).contains("fromDate","TODO_POSTPONE_NO_SLOT").doesNotContain("TODO_AI_POSTPONE_NOT_SUPPORTED");
     }
 
-    @Test void 탐색은_366번째날까지_허용하고_367번째날은_허용하지않는다() throws Exception {
-        User u=user();long g=goal(u,"2028-10-31"),t=todo(u,g,"2026-10-01",null,null);
-        schedule(u,"FIXED","2026-10-02T00:00:00","2027-10-02T00:00:00",true,null);
-        move(u,t,null,200);assertSlot(t,"2027-10-02","09:00","09:30",1);
-        User v=user();long h=goal(v,"2028-10-31"),s=todo(v,h,"2026-10-01",null,null);
-        schedule(v,"FIXED","2026-10-02T00:00:00","2027-10-03T00:00:00",true,null);
-        var before=row(s);move(v,s,null,409);assertThat(row(s)).isEqualTo(before);
-    }
-
     @Test void 최대날짜와_작업시간보다긴투두는_무한탐색없이_실패한다() throws Exception {
-        User u=user();long g=goal(u,"9999-12-31"),t=todo(u,g,"9999-12-30",null,null);
+        User u=user();long g=goal(u,"9999-01-01","9999-12-31"),t=todo(u,g,"9999-12-30",null,null);
         move(u,t,null,200);assertSlot(t,"9999-12-31","09:00","09:30",1);
         var before=row(t);move(u,t,null,409);assertThat(row(t)).isEqualTo(before);
-        long longTask=todo(u,g,"2026-10-01","00:00","23:00");before=row(longTask);move(u,longTask,null,409);assertThat(row(longTask)).isEqualTo(before);
+        long longTask=todo(u,g,"9999-01-01","00:00","23:00");before=row(longTask);move(u,longTask,null,409);assertThat(row(longTask)).isEqualTo(before);
     }
 
     List<TodoRepository.PostponeCandidate> candidates(long userId) {
