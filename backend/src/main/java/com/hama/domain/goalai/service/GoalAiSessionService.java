@@ -38,7 +38,6 @@ public class GoalAiSessionService {
 
     private static final String SESSION_PROMPT = """
             너는 사용자의 막연한 목표를 측정 가능한 목표로 구체화하는 코치야. 오늘은 %s(KST)야.
-            사용자의 처음 목표: %s
             현재 수준, 목표 기간(시작일·종료일), 주간 가용시간을 알아야 초안을 만들 수 있어. 모르는 것만 한 번에 하나씩 짧게 물어봐.
             반드시 아래 필드를 가진 JSON 객체 하나로만 답해.
             {"reply": 사용자에게 보낼 한국어 문장,
@@ -69,7 +68,7 @@ public class GoalAiSessionService {
     }
 
     public SessionResponses.Started start(Long userId, String rawGoal) {
-        Turn turn = ask(rawGoal, List.of(AiMessage.user(rawGoal)));
+        Turn turn = ask(List.of(AiMessage.user(rawGoal)));
         return transaction.execute(status -> {
             GoalAiSession session = sessions.save(GoalAiSession.start(userId, rawGoal));
             messages.save(GoalAiMessage.user(session.getId(), rawGoal));
@@ -81,7 +80,7 @@ public class GoalAiSessionService {
     }
 
     public SessionResponses.Reply reply(Long userId, Long sessionId, String content) {
-        Conversation conversation = transaction.execute(status -> {
+        List<AiMessage> history = transaction.execute(status -> {
             GoalAiSession session = owned(sessions.findById(sessionId), userId);
             requireOpen(session);
             if (messages.countBySessionIdAndRole(sessionId, MessageRole.USER) >= MAX_USER_MESSAGES) {
@@ -93,9 +92,9 @@ public class GoalAiSessionService {
                         ? AiMessage.user(message.getContent()) : AiMessage.assistant(message.getContent()));
             }
             previous.add(AiMessage.user(content));
-            return new Conversation(session.getRawGoal(), previous);
+            return previous;
         });
-        Turn turn = ask(conversation.rawGoal(), conversation.history());
+        Turn turn = ask(history);
         return transaction.execute(status -> {
             GoalAiSession session = owned(sessions.findForUpdate(sessionId), userId);
             requireOpen(session);
@@ -119,11 +118,10 @@ public class GoalAiSessionService {
         });
     }
 
-    /** AI 클라이언트는 최근 이력만 보내므로, 처음 목표는 대화가 길어져도 빠지지 않게 시스템 프롬프트에 넣습니다. */
-    private Turn ask(String rawGoal, List<AiMessage> history) {
+    private Turn ask(List<AiMessage> history) {
         LocalDate today = LocalDate.now(clock);
         SessionTurn answer = aiClient.chatForJson(
-                AiRequest.of("goal-session", SESSION_PROMPT.formatted(today, rawGoal), history), SessionTurn.class);
+                AiRequest.of("goal-session", SESSION_PROMPT.formatted(today), history), SessionTurn.class);
         if (answer == null || answer.reply() == null || answer.reply().isBlank()) {
             throw new BusinessException(AiErrorCode.AI_UPSTREAM_ERROR,
                     new IllegalStateException("[goal-session] AI 응답에 reply 가 없습니다."));
@@ -138,8 +136,5 @@ public class GoalAiSessionService {
     }
 
     private record Turn(String reply, Expects expects, GoalDraft draft) {
-    }
-
-    private record Conversation(String rawGoal, List<AiMessage> history) {
     }
 }
