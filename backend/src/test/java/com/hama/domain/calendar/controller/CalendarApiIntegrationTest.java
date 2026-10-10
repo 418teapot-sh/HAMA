@@ -204,14 +204,12 @@ class CalendarApiIntegrationTest {
     }
 
     @Test
-    void 결과상한_초과는_부분응답없이_400이며_ICS는_원본을_센다() throws Exception {
+    void 백개를_넘는_날짜별_항목도_조회하고_ICS는_원본을_센다() throws Exception {
         String token = signup();
         long id = schedule(token, "FIXED", "상한", "2026-01-01T00:00:00", "2026-01-02T00:00:00", true,
                 "count=101;freq=daily");
         assertThat(query(token, "2026-01-01", "2026-04-10", null).size()).isEqualTo(100);
-        mvc.perform(auth(get("/api/v1/calendar").param("from", "2026-01-01").param("to", "2026-04-11"), token))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.data").isEmpty())
-                .andExpect(jsonPath("$.error.code").value("CALENDAR_RESULT_LIMIT_EXCEEDED"));
+        assertThat(query(token, "2026-01-01", "2026-04-11", null).size()).isEqualTo(101);
         assertThat(export(token, "2026-01-01", "2026-04-11", null)).contains("RRULE:FREQ=DAILY;COUNT=101");
         assertThat(body(mvc.perform(auth(get("/api/v1/calendar/schedules/" + id), token))
                 .andExpect(status().isOk()).andReturn()).at("/data/repeatRule").asString()).isEqualTo("count=101;freq=daily");

@@ -243,9 +243,12 @@ class GoalTodoCheckinIntegrationTest {
 
     @Test void 목표투두도_일반투두와_같은_캘린더_예산을_공유한다() throws Exception {
         User u=user(); long g=goal(u);
-        for(int i=0;i<100;i++) todos.create(u.id(), new CreateTodoRequest("AI_GOAL_TASK", "할 일", LocalDate.parse("2026-10-08"), null, null, g, null));
+        jdbc.batchUpdate("""
+                INSERT INTO todo(user_id,goal_id,category,content,todo_date,status,postponed_count,created_at,updated_at)
+                VALUES (?, ?, 'AI_GOAL_TASK', '할 일', '2026-10-08', 'PENDING', 0, NOW(), NOW())
+                """, java.util.stream.IntStream.range(0,10000).mapToObj(i -> new Object[]{u.id(),g}).toList());
         var range=get("/api/v1/calendar").param("from","2026-10-08").param("to","2026-10-08").param("types","AI_GOAL");
-        assertThat(call(range,u,null,200).at("/data/items").size()).isEqualTo(100);
+        assertThat(call(range,u,null,200).at("/data/items").size()).isEqualTo(10000);
         call(post("/api/v1/todos"),u,Map.of("category","TASK","content","일반","todoDate","2026-10-08"),201);
         for(String path:List.of("/api/v1/calendar","/api/v1/calendar/export")) {
             assertThat(call(get(path).param("from","2026-10-08").param("to","2026-10-08"),u,null,400)

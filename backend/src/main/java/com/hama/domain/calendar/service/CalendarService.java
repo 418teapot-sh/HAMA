@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CalendarService {
 
-    public static final int RESULT_LIMIT = 100;
+    public static final int RESULT_LIMIT = 10_000;
     private final CalendarReadRepository reader;
     private final ScheduleOccurrences occurrences;
     private final IcsWriter icsWriter;
