@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router'
+import RequireAuth from './features/auth/RequireAuth'
 import MobileLayout from './layouts/MobileLayout'
 import TabLayout from './layouts/TabLayout'
 import HomePage from './pages/HomePage'
@@ -14,12 +15,17 @@ export const router = createBrowserRouter([
     element: <MobileLayout />,
     children: [
       {
-        element: <TabLayout />,
+        element: <RequireAuth />,
         children: [
-          { path: paths.home, element: <HomePage /> },
-          { path: paths.todos, element: <TodoPage /> },
-          { path: paths.report, element: <ReportPage /> },
-          { path: paths.mypage, element: <MyPage /> },
+          {
+            element: <TabLayout />,
+            children: [
+              { path: paths.home, element: <HomePage /> },
+              { path: paths.todos, element: <TodoPage /> },
+              { path: paths.report, element: <ReportPage /> },
+              { path: paths.mypage, element: <MyPage /> },
+            ],
+          },
         ],
       },
       { path: paths.login, element: <LoginPage /> },

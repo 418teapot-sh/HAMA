@@ -2,7 +2,15 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '../features/auth/store'
 import type { ApiResponse } from './types'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
+/** 배포 백엔드 주소. 공개 주소라 코드에 둬도 됩니다. */
+const PRODUCTION_API_URL = 'https://api.todohama.site'
+
+/**
+ * - npm run dev: 비워 둡니다. 지금 주소(localhost:5173)로 부르면 Vite 프록시가 백엔드로 넘겨줍니다(vite.config.ts).
+ * - 빌드(배포·미리보기): 배포 백엔드를 바로 부릅니다.
+ * - VITE_API_URL 을 넣으면 그 값이 우선합니다.
+ */
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? PRODUCTION_API_URL : '')
 
 /**
  * 모든 API 호출은 이 인스턴스를 씁니다.
