@@ -47,7 +47,7 @@ class ScheduleApiIntegrationTest {
              "allDay":false,"repeatRule":"FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR","memo":"회사 출근"}
             """;
 
-    @TestBean(name = "scheduleClock", methodName = "fixedClock")
+    @TestBean(name = "be3Clock", methodName = "fixedClock")
     private Clock clock;
 
     static Clock fixedClock() {
@@ -327,7 +327,7 @@ class ScheduleApiIntegrationTest {
     private String signup() throws Exception {
         MvcResult result = mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"schedule-%s@hama.com","password":"password1234","name":"일정"}
+                                {"email":"schedule-%s@hama.com","password":"password1234!","name":"일정","termsAgreed":true,"privacyAgreed":true,"ageConfirmed":true}
                                 """.formatted(UUID.randomUUID())))
                 .andExpect(status().isOk()).andReturn();
         return body(result).at("/data/accessToken").asString();

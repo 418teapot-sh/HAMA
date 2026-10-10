@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 
 public final class TodoResponses {
 
@@ -19,10 +20,10 @@ public final class TodoResponses {
     }
 
     public record Daily(LocalDate date, List<Pending> pending, List<Completed> completed) {
-        public static Daily from(LocalDate date, List<Todo> todos) {
+        public static Daily from(LocalDate date, List<Todo> todos, Map<Long, String> goalTitles) {
             return new Daily(date,
                     todos.stream().filter(t -> t.getStatus() == TodoStatus.PENDING)
-                            .map(Pending::from).toList(),
+                            .map(t -> Pending.from(t, goalTitles)).toList(),
                     todos.stream().filter(t -> t.getStatus() == TodoStatus.COMPLETED)
                             .map(Completed::from).toList());
         }
@@ -32,8 +33,8 @@ public final class TodoResponses {
             Long goalId, String goalTitle,
             @JsonFormat(pattern = "HH:mm") LocalTime startTime,
             @JsonFormat(pattern = "HH:mm") LocalTime endTime, int postponedCount) {
-        static Pending from(Todo todo) {
-            return new Pending(todo.getId(), todo.getCategory(), todo.getContent(), null, null,
+        static Pending from(Todo todo, Map<Long, String> goalTitles) {
+            return new Pending(todo.getId(), todo.getCategory(), todo.getContent(), todo.getGoalId(), goalTitles.get(todo.getGoalId()),
                     todo.getStartTime(), todo.getEndTime(), todo.getPostponedCount());
         }
     }
@@ -67,8 +68,8 @@ public final class TodoResponses {
     public record Completion(Long todoId, TodoStatus status,
             @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime completedAt,
             BigDecimal goalProgressRate) {
-        public static Completion from(Todo todo) {
-            return new Completion(todo.getId(), todo.getStatus(), todo.getCompletedAt(), null);
+        public static Completion from(Todo todo, BigDecimal progress) {
+            return new Completion(todo.getId(), todo.getStatus(), todo.getCompletedAt(), progress);
         }
     }
 

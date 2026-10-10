@@ -46,7 +46,7 @@ class TodoApiIntegrationTest {
 
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 4);
 
-    @TestBean(name = "todoClock", methodName = "fixedClock")
+    @TestBean(name = "be3Clock", methodName = "fixedClock")
     private Clock clock;
 
     static Clock fixedClock() {
@@ -72,7 +72,7 @@ class TodoApiIntegrationTest {
         String email = "todo-" + UUID.randomUUID() + "@hama.com";
         MvcResult result = mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"%s","password":"password1234","name":"투두"}
+                                {"email":"%s","password":"password1234!","name":"투두","termsAgreed":true,"privacyAgreed":true,"ageConfirmed":true}
                                 """.formatted(email)))
                 .andExpect(status().isOk()).andReturn();
         return new Session(users.findByEmail(email).orElseThrow().getId(),
@@ -120,7 +120,7 @@ class TodoApiIntegrationTest {
                         {"category":"AI_GOAL_TASK","content":"책","todoDate":"2026-10-04"}
                         """), owner))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.fields.category").exists());
+                .andExpect(jsonPath("$.error.fields.goalId").exists());
         MvcResult result = mvc.perform(auth(post("/api/v1/todos").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"category\":\"TASK\",\"content\":\"책\",\"todoDate\":\"2026-10-04\"}"), owner))
                 .andExpect(status().isCreated()).andReturn();

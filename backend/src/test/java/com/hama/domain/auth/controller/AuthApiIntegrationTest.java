@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.hama.domain.auth.entity.RefreshToken;
 import com.hama.domain.auth.repository.RefreshTokenRepository;
 import com.hama.domain.auth.service.AuthService;
+import com.hama.domain.user.entity.User;
 import com.hama.domain.user.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
 import java.time.LocalDateTime;
@@ -18,6 +19,8 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -62,7 +65,7 @@ class AuthApiIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "email": "%s", "password": "password1234", "name": "하마" }
+                                { "email": "%s", "password": "password1234!", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
                                 """.formatted(email)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -86,7 +89,7 @@ class AuthApiIntegrationTest {
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "email": "user-%s@hama.com", "password": "password1234", "name": "하마" }
+                                { "email": "user-%s@hama.com", "password": "password1234!", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
                                 """.formatted(UUID.randomUUID())))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.allOf(
@@ -98,6 +101,71 @@ class AuthApiIntegrationTest {
                 .andExpect(jsonPath("$.data.accessToken").isNotEmpty());
     }
 
+    /** 디자인 규칙: 영문·숫자·특수문자를 각각 포함한 8~20자. 공백·한글은 받지 않습니다. */
+    @ParameterizedTest
+    @ValueSource(strings = {"pass12!", "password1234!password", "password1234", "password!!!!", "12345678!",
+            "pass word1!", "abc한글123!", "password12·"})
+    void 비밀번호_규칙에_맞지_않으면_400(String password) throws Exception {
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "email": "user-%s@hama.com", "password": "%s", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
+                                """.formatted(UUID.randomUUID(), password)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.fields.password").exists());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abcd123!", "Abcdefghij1234567@#~"})
+    void 비밀번호_규칙의_경계값은_가입된다(String password) throws Exception {
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "email": "user-%s@hama.com", "password": "%s", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
+                                """.formatted(UUID.randomUUID(), password)))
+                .andExpect(status().isOk());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "\"termsAgreed\": false, \"privacyAgreed\": true, \"ageConfirmed\": true",
+            "\"termsAgreed\": true, \"privacyAgreed\": true"})
+    void 필수_약관에_동의하지_않으면_가입되지_않는다(String agreements) throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@hama.com";
+
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "email": "%s", "password": "password1234!", "name": "하마", %s }
+                                """.formatted(email, agreements)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
+
+        assertThat(userRepository.findByEmail(email)).isEmpty();
+    }
+
+    @Test
+    void 마케팅_수신_동의는_선택이고_생략하면_false_로_저장된다() throws Exception {
+        String withMarketing = signupWith("\"marketingAgreed\": true");
+        String withoutMarketing = signupWith("\"marketingAgreed\": null");
+
+        assertThat(userRepository.findByEmail(withMarketing).orElseThrow().isMarketingAgreed()).isTrue();
+        assertThat(userRepository.findByEmail(withoutMarketing).orElseThrow().isMarketingAgreed()).isFalse();
+    }
+
+    private String signupWith(String marketing) throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@hama.com";
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "email": "%s", "password": "password1234!", "name": "하마",
+                                  "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true, %s }
+                                """.formatted(email, marketing)))
+                .andExpect(status().isOk());
+        return email;
+    }
+
     @Test
     void 로그인_응답_body_에는_accessToken_만_있다() throws Exception {
         Session session = signup();
@@ -105,7 +173,7 @@ class AuthApiIntegrationTest {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "email": "%s", "password": "password1234" }
+                                { "email": "%s", "password": "password1234!" }
                                 """.formatted(session.email())))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("HttpOnly")))
@@ -192,7 +260,7 @@ class AuthApiIntegrationTest {
         MvcResult phoneLogin = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "email": "%s", "password": "password1234" }
+                                { "email": "%s", "password": "password1234!" }
                                 """.formatted(pc.email())))
                 .andExpect(status().isOk())
                 .andReturn();

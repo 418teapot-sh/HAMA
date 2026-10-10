@@ -37,6 +37,12 @@ public class Todo extends BaseTimeEntity {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Column(name = "goal_id")
+    private Long goalId;
+
+    @Column(name = "period_goal_id")
+    private Long periodGoalId;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(nullable = false, length = 20)
@@ -46,6 +52,7 @@ public class Todo extends BaseTimeEntity {
     private String content;
 
     @Column(name = "todo_date", nullable = false)
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE)
     private LocalDate todoDate;
 
     @Column(name = "start_time")
@@ -91,6 +98,18 @@ public class Todo extends BaseTimeEntity {
         return todo;
     }
 
+    public static Todo createGoalTask(Long userId, Long goalId, Long periodGoalId, String content,
+            LocalDate date, LocalTime start, LocalTime end) {
+        if (goalId == null || goalId <= 0 || (periodGoalId != null && periodGoalId <= 0)) {
+            throw new BusinessException(TodoErrorCode.TODO_INVALID_INPUT);
+        }
+        Todo todo = createTask(userId, content, date, start, end);
+        todo.category = TodoCategory.AI_GOAL_TASK;
+        todo.goalId = goalId;
+        todo.periodGoalId = periodGoalId;
+        return todo;
+    }
+
     public void revise(String content, LocalTime startTime, LocalTime endTime) {
         requirePending();
         validateContent(content);
@@ -110,6 +129,18 @@ public class Todo extends BaseTimeEntity {
         this.startTime = startTime;
         this.endTime = endTime;
         this.postponedCount++;
+    }
+
+    /** AI 재배치. 사용자가 미룬 것이 아니라서 미룬 횟수는 그대로이고, 앞당기는 것도 허용합니다. */
+    public void reschedule(LocalDate date, LocalTime startTime, LocalTime endTime) {
+        requirePending();
+        if (!isStorableDate(date)) {
+            throw new BusinessException(TodoErrorCode.TODO_INVALID_INPUT);
+        }
+        validateTimes(startTime, endTime);
+        this.todoDate = date;
+        this.startTime = startTime;
+        this.endTime = endTime;
     }
 
     public void complete(LocalDateTime now) {

@@ -1,6 +1,7 @@
 package com.hama.domain.todo.dto;
 
 import com.fasterxml.jackson.annotation.JsonSetter;
+import com.hama.domain.shared.json.StrictDeserializers;
 import io.swagger.v3.oas.annotations.media.Schema;
 import tools.jackson.databind.annotation.JsonDeserialize;
 
@@ -8,7 +9,7 @@ import tools.jackson.databind.annotation.JsonDeserialize;
 public class UpdateTodoNoteRequest {
 
     @Schema(example = "오늘은 집중이 잘 됐어요.")
-    @JsonDeserialize(using = TodoStringDeserializer.class)
+    @JsonDeserialize(using = StrictDeserializers.Text.class)
     private String statusNote;
     private boolean statusNotePresent;
 

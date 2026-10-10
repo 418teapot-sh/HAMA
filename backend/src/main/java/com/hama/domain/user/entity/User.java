@@ -47,19 +47,27 @@ public class User extends BaseTimeEntity {
     private boolean isPremium;
 
     /**
+     * 마케팅 알림 수신 동의(선택). 필수 약관은 동의해야만 가입되므로(SignupRequest) 따로 저장하지 않고,
+     * 동의 시각은 가입 시각(createdAt)입니다.
+     */
+    @Column(nullable = false)
+    private boolean marketingAgreed;
+
+    /**
      * 회원가입으로 생성합니다.
      * 가입 시점의 불변식(무료 시작, 목표 생성 0회)을 여기서 강제해서
      * 호출부가 실수로 다른 값을 넣을 여지를 없앱니다.
      *
      * @param encodedPassword 반드시 인코딩된 비밀번호. 원문을 넘기지 마세요.
      */
-    public static User create(String email, String encodedPassword, String name) {
+    public static User create(String email, String encodedPassword, String name, boolean marketingAgreed) {
         return User.builder()
                 .email(email)
                 .password(encodedPassword)
                 .name(name)
                 .goalCreatedCount(0)
                 .isPremium(false)
+                .marketingAgreed(marketingAgreed)
                 .build();
     }
 }

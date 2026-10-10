@@ -30,7 +30,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final LoginAttemptLimiter loginAttemptLimiter;
+    private final PasswordAttemptLimiter attemptLimiter;
     private final JwtProperties jwtProperties;
 
     /** 가입과 동시에 로그인 처리합니다. */
@@ -40,7 +40,8 @@ public class AuthService {
             throw new BusinessException(AuthErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
-        User user = User.create(request.email(), passwordEncoder.encode(request.password()), request.name());
+        User user = User.create(request.email(), passwordEncoder.encode(request.password()), request.name(),
+                Boolean.TRUE.equals(request.marketingAgreed()));
         try {
             // 위 검사와 저장 사이에 같은 이메일이 먼저 들어오면 unique 제약에 걸립니다.
             userRepository.saveAndFlush(user);
@@ -57,13 +58,18 @@ public class AuthService {
      */
     @Transactional
     public AuthTokens login(LoginRequest request) {
-        loginAttemptLimiter.checkAllowed(request.email());
+        attemptLimiter.check(request.email());
 
         User user = userRepository.findByEmail(request.email())
                 .filter(found -> passwordEncoder.matches(request.password(), found.getPassword()))
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_CREDENTIALS));
+        // 비밀번호 확인(bcrypt) 뒤에 사용자 행만 공유 락으로 다시 읽어 동시에 진행 중인 탈퇴와 순서를 맞춥니다.
+        // 탈퇴가 먼저면 행이 없어 실패하고, 로그인이 먼저면 탈퇴가 이 토큰까지 지웁니다.
+        // 이메일 인덱스로 잠그면 탈퇴(기본키 → 이메일 인덱스)와 순서가 엇갈려 교착이 나므로 기본키로만 잠급니다.
+        userRepository.findByIdForShare(user.getId())
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_CREDENTIALS));
 
-        loginAttemptLimiter.onSuccess(request.email());
+        attemptLimiter.onSuccess(request.email());
         return issueTokens(user.getId());
     }
 
