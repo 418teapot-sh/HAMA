@@ -270,7 +270,7 @@ class CalendarApiIntegrationTest {
     }
 
     private String signup() throws Exception {
-        return body(mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
+        return body(mvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON)
                 .content(mapper.writeValueAsString(Map.of("email", UUID.randomUUID() + "@calendar.test",
                         "password", "password1234!", "name", "캘린더", "termsAgreed", true, "privacyAgreed", true, "ageConfirmed", true))))
                 .andExpect(status().isOk()).andReturn()).at("/data/accessToken").asString();

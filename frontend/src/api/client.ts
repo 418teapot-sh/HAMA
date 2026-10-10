@@ -16,7 +16,7 @@ const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? PRODUCTI
  * 모든 API 호출은 이 인스턴스를 씁니다.
  * - withCredentials: refreshToken 쿠키(HttpOnly)가 오가려면 꼭 켜야 합니다.
  * - 요청마다 메모리의 accessToken 을 Authorization 헤더에 붙입니다.
- * - 401 이 오면 /api/auth/refresh 로 재발급받고 원래 요청을 한 번 다시 보냅니다.
+ * - 401 이 오면 /api/v1/auth/refresh 로 재발급받고 원래 요청을 한 번 다시 보냅니다.
  */
 export const api = axios.create({
   baseURL: API_URL,
@@ -41,7 +41,7 @@ let refreshPromise: Promise<string> | null = null
 export function refreshAccessToken(): Promise<string> {
   if (!refreshPromise) {
     refreshPromise = refreshClient
-      .post<ApiResponse<{ accessToken: string }>>('/api/auth/refresh')
+      .post<ApiResponse<{ accessToken: string }>>('/api/v1/auth/refresh')
       .then((res) => {
         const token = res.data.data.accessToken
         useAuthStore.getState().setAccessToken(token)
@@ -66,7 +66,7 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const original = error.config as RetryableConfig | undefined
-    const isAuthEndpoint = original?.url?.startsWith('/api/auth/')
+    const isAuthEndpoint = original?.url?.startsWith('/api/v1/auth/')
 
     if (error.response?.status === 401 && original && !original._retried && !isAuthEndpoint) {
       original._retried = true

@@ -325,7 +325,7 @@ class ScheduleApiIntegrationTest {
     }
 
     private String signup() throws Exception {
-        MvcResult result = mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
+        MvcResult result = mvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"schedule-%s@hama.com","password":"password1234!","name":"일정","termsAgreed":true,"privacyAgreed":true,"ageConfirmed":true}
                                 """.formatted(UUID.randomUUID())))

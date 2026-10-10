@@ -33,7 +33,7 @@ interface TokenResponse {
  * 실패: 409 EMAIL_ALREADY_EXISTS, 400 VALIDATION_FAILED
  */
 export async function signup(body: SignupRequest) {
-  const res = await api.post<ApiResponse<TokenResponse>>('/api/auth/signup', body)
+  const res = await api.post<ApiResponse<TokenResponse>>('/api/v1/auth/signup', body)
   useAuthStore.getState().setAccessToken(res.data.data.accessToken)
   await loadMe()
 }
@@ -43,15 +43,15 @@ export async function signup(body: SignupRequest) {
  * 실패: 401 INVALID_CREDENTIALS, 15분에 5회 초과 시 429 TOO_MANY_PASSWORD_ATTEMPTS
  */
 export async function login(body: LoginRequest) {
-  const res = await api.post<ApiResponse<TokenResponse>>('/api/auth/login', body)
+  const res = await api.post<ApiResponse<TokenResponse>>('/api/v1/auth/login', body)
   useAuthStore.getState().setAccessToken(res.data.data.accessToken)
   await loadMe()
 }
 
-/** 내 정보(GET /api/users/me)를 불러와 저장합니다. 실패해도 로그인 상태는 그대로 둡니다. */
+/** 내 정보(GET /api/v1/users/me)를 불러와 저장합니다. 실패해도 로그인 상태는 그대로 둡니다. */
 export async function loadMe() {
   try {
-    const res = await api.get<ApiResponse<User>>('/api/users/me')
+    const res = await api.get<ApiResponse<User>>('/api/v1/users/me')
     useAuthStore.getState().setUser(res.data.data)
   } catch {
     // 토큰이 만료돼 refresh 까지 실패하면 인터셉터가 로그아웃 상태로 바꿉니다.
@@ -61,7 +61,7 @@ export async function loadMe() {
 /** 로그아웃. 서버가 refreshToken 쿠키를 지우고, 메모리의 토큰도 비웁니다. */
 export async function logout() {
   try {
-    await api.post('/api/auth/logout')
+    await api.post('/api/v1/auth/logout')
   } finally {
     useAuthStore.getState().clear()
   }

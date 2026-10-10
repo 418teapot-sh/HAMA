@@ -11,7 +11,7 @@ jwt:
 
 app:
   cookie:
-    path: /api/auth
+    path: /api/v1/auth
     secure: false
     same-site: Lax
 
