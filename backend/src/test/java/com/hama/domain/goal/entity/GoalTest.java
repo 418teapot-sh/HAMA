@@ -26,12 +26,12 @@ class GoalTest {
     }
 
     @Test
-    void 목표_기간은_최대_1년이다() {
-        LocalDate lastAllowed = TODAY.plusYears(1).minusDays(1);
+    void 목표_기간은_시작일_포함_최대_365일이다() {
+        LocalDate lastAllowed = TODAY.plusDays(364);
         Goal goal = Goal.createDirect(1L, content(TODAY, lastAllowed), TODAY);
 
         assertThat(goal.getEndDate()).isEqualTo(lastAllowed);
-        assertThatThrownBy(() -> Goal.createDirect(1L, content(TODAY, TODAY.plusYears(1)), TODAY))
+        assertThatThrownBy(() -> Goal.createDirect(1L, content(TODAY, TODAY.plusDays(365)), TODAY))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_PERIOD_TOO_LONG);
         assertThatThrownBy(() -> goal.revise(content(TODAY, LocalDate.of(9999, 12, 31)), TODAY))
@@ -40,6 +40,14 @@ class GoalTest {
         assertThatThrownBy(() -> Goal.createPlanning(1L, content(TODAY, TODAY.plusYears(2)), null, null, null, TODAY))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_PERIOD_TOO_LONG);
+    }
+
+    @Test
+    void 윤일이_끼어도_상한은_365일이다() {
+        assertThat(Goal.withinMaxPeriod(LocalDate.of(2027, 3, 1), LocalDate.of(2028, 2, 28))).isTrue();
+        assertThat(Goal.withinMaxPeriod(LocalDate.of(2027, 3, 1), LocalDate.of(2028, 2, 29))).isFalse();
+        assertThat(Goal.withinMaxPeriod(LocalDate.of(2028, 2, 29), LocalDate.of(2029, 2, 27))).isTrue();
+        assertThat(Goal.withinMaxPeriod(LocalDate.of(2028, 2, 29), LocalDate.of(2029, 2, 28))).isFalse();
     }
 
     @Test

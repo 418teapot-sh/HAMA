@@ -216,7 +216,7 @@ class GoalApiIntegrationTest {
                         """), owner))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("GOAL_PERIOD_TOO_LONG"));
-        createGoal(owner, "1년", TODAY, TODAY.plusYears(1).minusDays(1));
+        createGoal(owner, "365일", TODAY, TODAY.plusDays(364));
     }
 
     @Test

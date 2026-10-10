@@ -31,8 +31,8 @@ class GoalDraftTest {
         assertThat(draft("토익", TODAY.plusDays(5), TODAY.plusDays(1)).normalized(TODAY)).isNull();
         assertThat(draft("토익", TODAY.minusDays(30), TODAY.minusDays(1)).normalized(TODAY)).isNull();
         assertThat(draft("토익", TODAY, LocalDate.of(10000, 1, 1)).normalized(TODAY)).isNull();
-        assertThat(draft("토익", TODAY, TODAY.plusYears(1)).normalized(TODAY)).isNull();
-        assertThat(draft("토익", TODAY, TODAY.plusYears(1).minusDays(1)).normalized(TODAY)).isNotNull();
+        assertThat(draft("토익", TODAY, TODAY.plusDays(365)).normalized(TODAY)).isNull();
+        assertThat(draft("토익", TODAY, TODAY.plusDays(364)).normalized(TODAY)).isNotNull();
     }
 
     @Test
