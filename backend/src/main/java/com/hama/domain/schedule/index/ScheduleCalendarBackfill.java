@@ -17,14 +17,24 @@ public class ScheduleCalendarBackfill implements ApplicationRunner {
     public void run(ApplicationArguments arguments) {
         long cursor = 0;
         long processed = 0;
+        long succeeded = 0;
+        long failed = 0;
         while (true) {
-            ScheduleCalendarIndex.Batch batch = index.backfillBatch(cursor);
-            if (batch.count() == 0) {
-                break;
+            ScheduleCalendarIndex.Batch batch;
+            try {
+                batch = index.backfillBatch(cursor);
+            } catch (RuntimeException exception) {
+                log.error("Schedule calendar index backfill stopped: cursor={}, processed={}, succeeded={}, failed={}, errorType={}",
+                        cursor, processed, succeeded, failed, exception.getClass().getSimpleName());
+                return;
             }
+            if (batch.count() == 0) break;
             cursor = batch.lastId();
             processed += batch.count();
+            succeeded += batch.succeeded();
+            failed += batch.failed();
         }
-        log.info("Schedule calendar index backfill completed: count={}", processed);
+        log.info("Schedule calendar index backfill completed: processed={}, succeeded={}, failed={}, skipped={}",
+                processed, succeeded, failed, processed - succeeded - failed);
     }
 }

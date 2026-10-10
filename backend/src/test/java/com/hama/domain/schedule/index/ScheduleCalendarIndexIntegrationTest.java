@@ -3,6 +3,8 @@ package com.hama.domain.schedule.index;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertTimeout;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 import com.hama.domain.calendar.dto.CalendarQuery;
 import com.hama.domain.calendar.service.CalendarReadRepository;
@@ -108,24 +110,40 @@ class ScheduleCalendarIndexIntegrationTest {
     }
 
     @Test
-    void 조회의_분할결과와_ICS원본은_각각_100개경계를_적용한다() {
+    void 조회분할과_ICS원본은_각각_10000개까지이며_종류가_예산을_공유한다() {
         legacy("2026-01-01T00:00:00", "2026-01-02T00:00:00", true, "FREQ=DAILY;COUNT=101");
-        assertThat(calendar.get(user, CalendarQuery.parse("2026-01-01", "2026-04-10", null)).items()).hasSize(100);
-        assertLimit(() -> calendar.get(user, CalendarQuery.parse("2026-01-01", "2026-04-11", null)));
-        assertThat(new String(calendar.export(user, CalendarQuery.parse("2026-01-01", "2026-04-11", null)), StandardCharsets.UTF_8))
+        var annual = CalendarQuery.parse("2026-01-01", "2026-04-11", null);
+        assertThat(calendar.get(user, annual).items()).hasSize(101);
+        assertThat(new String(calendar.export(user, annual), StandardCharsets.UTF_8))
                 .contains("RRULE:FREQ=DAILY;COUNT=101");
         jdbc.update("DELETE FROM schedule WHERE user_id = ?", user);
-        for (int i = 0; i < 100; i++) task("2026-10-05");
+        jdbc.batchUpdate("""
+                INSERT INTO todo(user_id,category,content,todo_date,status,postponed_count,created_at,updated_at)
+                VALUES (?, 'TASK', '테스트', '2026-10-05', 'PENDING', 0, NOW(), NOW())
+                """, java.util.stream.IntStream.range(0, 10000).mapToObj(i -> new Object[]{user}).toList());
         var query = CalendarQuery.parse("2026-10-05", "2026-10-05", null);
-        assertThat(calendar.get(user, query).items()).hasSize(100);
-        assertThat(new String(calendar.export(user, query), StandardCharsets.UTF_8).split("BEGIN:VEVENT", -1)).hasSize(101);
+        assertThat(calendar.get(user, query).items()).hasSize(10000);
+        assertThat(new String(calendar.export(user, query), StandardCharsets.UTF_8).split("BEGIN:VEVENT", -1)).hasSize(10001);
         legacy("2026-10-05T09:00:00", "2026-10-05T10:00:00", false, null);
         assertLimit(() -> calendar.get(user, query));
         assertLimit(() -> calendar.export(user, query));
+        assertThat(calendar.get(user, CalendarQuery.parse("2026-10-05", "2026-10-05", "FIXED")).items()).hasSize(1);
     }
 
     @Test
-    void 수천년짜리_매일반복도_100개에서_중단한다() {
+    void 여러날_분할결과도_10000개에서_중단하며_ICS는_원본만_센다() {
+        for (int i = 0; i < 100; i++) {
+            legacy("2026-01-01T00:00:00", "2026-04-11T00:00:00", true, null);
+        }
+        var query = CalendarQuery.parse("2026-01-01", "2026-04-10", null);
+        assertThat(calendar.get(user, query).items()).hasSize(10000);
+        legacy("2026-04-10T09:00:00", "2026-04-10T10:00:00", false, null);
+        assertLimit(() -> calendar.get(user, query));
+        assertThat(new String(calendar.export(user, query), StandardCharsets.UTF_8).split("BEGIN:VEVENT", -1)).hasSize(102);
+    }
+
+    @Test
+    void 수천년짜리_매일반복도_10000개에서_중단한다() {
         legacy("1000-01-01T09:00:00", "9999-01-01T10:00:00", false, "FREQ=DAILY");
         assertTimeout(Duration.ofSeconds(3), () -> assertLimit(() -> calendar.get(user,
                 CalendarQuery.parse("9000-01-01", "9000-12-31", "FIXED"))));
@@ -144,13 +162,99 @@ class ScheduleCalendarIndexIntegrationTest {
     }
 
     @Test
-    void 실패배치는_파생값도_롤백하고_원본은_그대로둔다() {
+    void 실패행만_건너뛰고_앞뒤_정상행과_원본을_보존하며_다음기동에_재시도한다() {
         long good = legacy("2026-10-01T09:00:00", "2026-10-01T10:00:00", false, "FREQ=DAILY;COUNT=1");
         long bad = legacy("2026-10-01T09:00:00", "2026-10-01T10:00:00", false, "FREQ=YEARLY");
+        long after = legacy("2026-10-01T09:00:00", "2026-10-01T10:00:00", false, null);
         Map<String, Object> original = original(bad);
-        assertThatThrownBy(() -> index.backfillBatch(good - 1)).isInstanceOf(IllegalStateException.class);
-        assertThat(jdbc.queryForObject("SELECT calendar_source_start_at FROM schedule WHERE schedule_id = ?", LocalDateTime.class, good)).isNull();
+        var batch = index.backfillBatch(good - 1);
+        assertThat(batch).isEqualTo(new ScheduleCalendarIndex.Batch(after, 3, 2, 1));
+        for (long id : List.of(good, after)) {
+            assertThat(jdbc.queryForObject("SELECT calendar_source_start_at FROM schedule WHERE schedule_id = ?", LocalDateTime.class, id)).isNotNull();
+        }
         assertThat(original(bad)).isEqualTo(original);
+        assertThat(jdbc.queryForObject("SELECT calendar_source_start_at FROM schedule WHERE schedule_id = ?", LocalDateTime.class, bad)).isNull();
+        assertThat(index.backfillBatch(after).count()).isZero();
+        assertThat(index.backfillBatch(good - 1).failed()).isEqualTo(1);
+        jdbc.update("UPDATE schedule SET repeat_rule = 'FREQ=DAILY' WHERE schedule_id = ?", bad);
+        assertThat(index.backfillBatch(good - 1).succeeded()).isEqualTo(1);
+        assertThat(index.backfillBatch(good - 1).count()).isZero();
+    }
+
+    @Test
+    void 외부트랜잭션이_롤백되어도_성공행은_독립커밋된다() {
+        long good = legacy("2026-10-01T09:00:00", "2026-10-01T10:00:00", false, null);
+        long bad = legacy("2026-10-01T09:00:00", "2026-10-01T10:00:00", false, "FREQ=YEARLY");
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            assertThat(index.backfillBatch(good - 1).succeeded()).isEqualTo(1);
+            status.setRollbackOnly();
+        });
+        assertThat(jdbc.queryForObject("SELECT calendar_source_start_at FROM schedule WHERE schedule_id = ?", LocalDateTime.class, good)).isNotNull();
+        assertThat(index.backfillBatch(good - 1)).isEqualTo(new ScheduleCalendarIndex.Batch(bad, 1, 0, 1));
+    }
+
+    @Test
+    void UPDATE이후_실패해도_그행만_롤백하고_다음행을_커밋한다() {
+        long bad = legacy("2026-10-01T09:00:00", "2026-10-01T10:00:00", false, null);
+        long good = legacy("2026-10-01T09:00:00", "2026-10-01T10:00:00", false, null);
+        JdbcTemplate failing = spy(jdbc);
+        doAnswer(invocation -> {
+            Object result = invocation.callRealMethod();
+            Object[] arguments = invocation.getArguments();
+            if (arguments[arguments.length - 1].equals(bad)) {
+                throw new org.springframework.dao.DataIntegrityViolationException("private-value");
+            }
+            return result;
+        }).when(failing).update(startsWith("UPDATE schedule SET calendar_last_end_epoch_second"), any(Object[].class));
+        var isolated = new ScheduleCalendarIndex(failing, transactions);
+        assertThat(isolated.backfillBatch(bad - 1)).isEqualTo(new ScheduleCalendarIndex.Batch(good, 2, 1, 1));
+        assertThat(jdbc.queryForObject("SELECT calendar_source_start_at FROM schedule WHERE schedule_id = ?", LocalDateTime.class, bad)).isNull();
+        assertThat(jdbc.queryForObject("SELECT calendar_source_start_at FROM schedule WHERE schedule_id = ?", LocalDateTime.class, good)).isNotNull();
+    }
+
+    @Test
+    void 전체실패_배치도_커서가_전진하고_후속배치를_처리한다() {
+        long first = legacy("2026-10-01T09:00:00", "2026-10-01T10:00:00", false, "FREQ=YEARLY");
+        for (int i = 1; i < 100; i++) legacy("2026-10-01T09:00:00", "2026-10-01T10:00:00", false, "FREQ=YEARLY");
+        long good = legacy("2026-10-01T09:00:00", "2026-10-01T10:00:00", false, null);
+        var failed = index.backfillBatch(first - 1);
+        assertThat(failed.count()).isEqualTo(100);
+        assertThat(failed.failed()).isEqualTo(100);
+        assertThat(index.backfillBatch(failed.lastId())).isEqualTo(new ScheduleCalendarIndex.Batch(good, 1, 1, 0));
+        assertTimeout(Duration.ofSeconds(5), () -> new ScheduleCalendarBackfill(index).run(null));
+    }
+
+    @Test
+    void 후보선정후_동시에_삭제된_행은_다시_보정하지않는다() throws Exception {
+        long id = legacy("2026-10-01T09:00:00", "2026-10-01T10:00:00", false, null);
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch selected = new CountDownLatch(1);
+        JdbcTemplate observed = spy(jdbc);
+        doAnswer(invocation -> {
+            Object ids = invocation.callRealMethod();
+            selected.countDown();
+            return ids;
+        }).when(observed).queryForList(anyString(), eq(Long.class), any(Object[].class));
+        var isolated = new ScheduleCalendarIndex(observed, transactions);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var deletion = executor.submit(() -> new TransactionTemplate(transactions).execute(status -> {
+                jdbc.queryForObject("SELECT schedule_id FROM schedule WHERE schedule_id = ? FOR UPDATE", Long.class, id);
+                locked.countDown();
+                try {
+                    if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("test lock timeout");
+                } catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException(e); }
+                jdbc.update("UPDATE schedule SET deleted_at = NOW() WHERE schedule_id = ?", id);
+                return null;
+            }));
+            assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+            var backfill = executor.submit(() -> isolated.backfillBatch(id - 1));
+            assertThat(selected.await(5, TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            deletion.get(10, TimeUnit.SECONDS);
+            assertThat(backfill.get(10, TimeUnit.SECONDS).succeeded()).isZero();
+        } finally { release.countDown(); }
+        assertThat(jdbc.queryForObject("SELECT calendar_source_start_at FROM schedule WHERE schedule_id = ?", LocalDateTime.class, id)).isNull();
     }
 
     @Test
