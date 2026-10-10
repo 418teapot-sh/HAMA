@@ -40,6 +40,12 @@ public record GoalDraft(
                 weeklyHours(weeklyAvailableHours), cut(currentLevel, 1000));
     }
 
+    /** 날짜 순서는 맞는데 기간만 상한(1년)을 넘는지. 이때는 사용자에게 기간을 다시 물어야 합니다. */
+    public boolean exceedsMaxPeriod() {
+        return startDate != null && endDate != null && !startDate.isAfter(endDate)
+                && !Goal.withinMaxPeriod(startDate, endDate);
+    }
+
     public GoalContent toContent() {
         return new GoalContent(title, null, metricName, unit, startValue, targetValue,
                 weeklyAvailableHours, startDate, endDate);

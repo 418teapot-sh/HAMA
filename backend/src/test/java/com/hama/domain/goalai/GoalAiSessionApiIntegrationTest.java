@@ -66,6 +66,23 @@ class GoalAiSessionApiIntegrationTest extends GoalAiTestSupport {
     }
 
     @Test
+    void 기간이_1년을_넘는_초안은_기간을_다시_묻고_이전_초안을_유지한다() throws Exception {
+        User user = user();
+        long sessionId = readySession(user);
+
+        AI.answer(READY_ANSWER.replace("2026-12-31", "2028-09-30"));
+        JsonNode data = call(post("/api/v1/goals/ai/sessions/" + sessionId + "/messages"), user,
+                Map.of("content", "2년 동안 할게요"), 200).get("data");
+
+        assertThat(data.get("status").asString()).isEqualTo("READY");
+        assertThat(data.at("/aiMessage/content").asString()).contains("최대 1년");
+        assertThat(data.at("/aiMessage/expects").asString()).isEqualTo("PERIOD");
+        assertThat(data.at("/goalDraft/endDate").asString()).isEqualTo("2026-12-31");
+        JsonNode session = call(get("/api/v1/goals/ai/sessions/" + sessionId), user, null, 200).get("data");
+        assertThat(session.at("/goalDraft/endDate").asString()).isEqualTo("2026-12-31");
+    }
+
+    @Test
     void 세션_조회는_대화와_초안을_보여주고_남의_세션은_403_없는_세션은_404() throws Exception {
         User owner = user();
         long sessionId = readySession(owner);

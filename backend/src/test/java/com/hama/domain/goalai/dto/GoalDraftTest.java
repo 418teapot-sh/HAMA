@@ -36,6 +36,14 @@ class GoalDraftTest {
     }
 
     @Test
+    void 날짜_순서가_맞고_기간만_1년을_넘을_때만_기간_초과로_본다() {
+        assertThat(draft("토익", TODAY, TODAY.plusYears(2)).exceedsMaxPeriod()).isTrue();
+        assertThat(draft("토익", TODAY, TODAY.plusDays(90)).exceedsMaxPeriod()).isFalse();
+        assertThat(draft("토익", TODAY.plusYears(2), TODAY).exceedsMaxPeriod()).isFalse();
+        assertThat(draft("토익", null, TODAY.plusYears(2)).exceedsMaxPeriod()).isFalse();
+    }
+
+    @Test
     void 범위를_벗어난_주간_가용시간은_비운다() {
         GoalDraft tooMany = new GoalDraft("토익", null, null, null, null, TODAY, TODAY.plusDays(1),
                 new BigDecimal("200"), null);
