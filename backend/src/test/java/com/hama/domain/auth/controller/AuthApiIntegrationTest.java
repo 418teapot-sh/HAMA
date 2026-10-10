@@ -62,7 +62,7 @@ class AuthApiIntegrationTest {
 
     private Session signup() throws Exception {
         String email = "user-" + UUID.randomUUID() + "@hama.com";
-        MvcResult result = mockMvc.perform(post("/api/auth/signup")
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "email": "%s", "password": "password1234!", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
@@ -86,7 +86,7 @@ class AuthApiIntegrationTest {
 
     @Test
     void 회원가입하면_리프레시_토큰이_HttpOnly_쿠키로_온다() throws Exception {
-        mockMvc.perform(post("/api/auth/signup")
+        mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "email": "user-%s@hama.com", "password": "password1234!", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
@@ -95,7 +95,7 @@ class AuthApiIntegrationTest {
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.allOf(
                         org.hamcrest.Matchers.startsWith("refreshToken="),
                         org.hamcrest.Matchers.containsString("HttpOnly"),
-                        org.hamcrest.Matchers.containsString("Path=/api/auth"),
+                        org.hamcrest.Matchers.containsString("Path=/api/v1/auth"),
                         org.hamcrest.Matchers.containsString("SameSite=Lax"),
                         org.hamcrest.Matchers.containsString("Max-Age=1209600"))))
                 .andExpect(jsonPath("$.data.accessToken").isNotEmpty());
@@ -106,7 +106,7 @@ class AuthApiIntegrationTest {
     @ValueSource(strings = {"pass12!", "password1234!password", "password1234", "password!!!!", "12345678!",
             "pass word1!", "abc한글123!", "password12·"})
     void 비밀번호_규칙에_맞지_않으면_400(String password) throws Exception {
-        mockMvc.perform(post("/api/auth/signup")
+        mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "email": "user-%s@hama.com", "password": "%s", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
@@ -119,7 +119,7 @@ class AuthApiIntegrationTest {
     @ParameterizedTest
     @ValueSource(strings = {"abcd123!", "Abcdefghij1234567@#~"})
     void 비밀번호_규칙의_경계값은_가입된다(String password) throws Exception {
-        mockMvc.perform(post("/api/auth/signup")
+        mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "email": "user-%s@hama.com", "password": "%s", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
@@ -134,7 +134,7 @@ class AuthApiIntegrationTest {
     void 필수_약관에_동의하지_않으면_가입되지_않는다(String agreements) throws Exception {
         String email = "user-" + UUID.randomUUID() + "@hama.com";
 
-        mockMvc.perform(post("/api/auth/signup")
+        mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "email": "%s", "password": "password1234!", "name": "하마", %s }
@@ -156,7 +156,7 @@ class AuthApiIntegrationTest {
 
     private String signupWith(String marketing) throws Exception {
         String email = "user-" + UUID.randomUUID() + "@hama.com";
-        mockMvc.perform(post("/api/auth/signup")
+        mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "email": "%s", "password": "password1234!", "name": "하마",
@@ -170,7 +170,7 @@ class AuthApiIntegrationTest {
     void 로그인_응답_body_에는_accessToken_만_있다() throws Exception {
         Session session = signup();
 
-        mockMvc.perform(post("/api/auth/login")
+        mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "email": "%s", "password": "password1234!" }
@@ -183,7 +183,7 @@ class AuthApiIntegrationTest {
 
     @Test
     void Bearer_없이_보호된_API_를_부르면_401_ApiResponse() throws Exception {
-        mockMvc.perform(get("/api/users/me"))
+        mockMvc.perform(get("/api/v1/users/me"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.data").isEmpty())
@@ -195,7 +195,7 @@ class AuthApiIntegrationTest {
     void Bearer_를_붙이면_200() throws Exception {
         Session session = signup();
 
-        mockMvc.perform(get("/api/users/me")
+        mockMvc.perform(get("/api/v1/users/me")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.accessToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.email").value(session.email()))
@@ -206,7 +206,7 @@ class AuthApiIntegrationTest {
     void 쿠키만으로_재발급하면_새_토큰과_새_쿠키가_오고_이전_쿠키는_무효가_된다() throws Exception {
         Session session = signup();
 
-        MvcResult result = mockMvc.perform(post("/api/auth/refresh")
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/refresh")
                         .cookie(new Cookie("refreshToken", session.refreshToken())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
@@ -214,7 +214,7 @@ class AuthApiIntegrationTest {
         String rotated = refreshCookieOf(result);
         assertThat(rotated).isNotEqualTo(session.refreshToken());
 
-        mockMvc.perform(post("/api/auth/refresh")
+        mockMvc.perform(post("/api/v1/auth/refresh")
                         .cookie(new Cookie("refreshToken", session.refreshToken())))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("INVALID_REFRESH_TOKEN"));
@@ -222,7 +222,7 @@ class AuthApiIntegrationTest {
 
     @Test
     void 쿠키_없이_재발급하면_401() throws Exception {
-        mockMvc.perform(post("/api/auth/refresh"))
+        mockMvc.perform(post("/api/v1/auth/refresh"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("INVALID_REFRESH_TOKEN"));
     }
@@ -231,7 +231,7 @@ class AuthApiIntegrationTest {
     void 리프레시_토큰으로_Bearer_인증하면_401() throws Exception {
         Session session = signup();
 
-        mockMvc.perform(get("/api/users/me")
+        mockMvc.perform(get("/api/v1/users/me")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.refreshToken()))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
@@ -243,13 +243,13 @@ class AuthApiIntegrationTest {
         Long userId = userRepository.findByEmail(session.email()).orElseThrow().getId();
         assertThat(refreshTokenCount(userId)).isEqualTo(1);
 
-        mockMvc.perform(post("/api/auth/logout")
+        mockMvc.perform(post("/api/v1/auth/logout")
                         .cookie(new Cookie("refreshToken", session.refreshToken())))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.allOf(
                         org.hamcrest.Matchers.startsWith("refreshToken=;"),
                         org.hamcrest.Matchers.containsString("Max-Age=0"),
-                        org.hamcrest.Matchers.containsString("Path=/api/auth"))));
+                        org.hamcrest.Matchers.containsString("Path=/api/v1/auth"))));
 
         assertThat(refreshTokenCount(userId)).isZero();
     }
@@ -257,7 +257,7 @@ class AuthApiIntegrationTest {
     @Test
     void 여러_기기에서_로그인해도_각자_재발급된다() throws Exception {
         Session pc = signup();
-        MvcResult phoneLogin = mockMvc.perform(post("/api/auth/login")
+        MvcResult phoneLogin = mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "email": "%s", "password": "password1234!" }
@@ -266,9 +266,9 @@ class AuthApiIntegrationTest {
                 .andReturn();
         String phoneRefresh = refreshCookieOf(phoneLogin);
 
-        mockMvc.perform(post("/api/auth/refresh").cookie(new Cookie("refreshToken", pc.refreshToken())))
+        mockMvc.perform(post("/api/v1/auth/refresh").cookie(new Cookie("refreshToken", pc.refreshToken())))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/api/auth/refresh").cookie(new Cookie("refreshToken", phoneRefresh)))
+        mockMvc.perform(post("/api/v1/auth/refresh").cookie(new Cookie("refreshToken", phoneRefresh)))
                 .andExpect(status().isOk());
     }
 
@@ -302,7 +302,7 @@ class AuthApiIntegrationTest {
 
     @Test
     void 허용된_Origin_이면_credentials_를_허용한다() throws Exception {
-        mockMvc.perform(options("/api/auth/refresh")
+        mockMvc.perform(options("/api/v1/auth/refresh")
                         .header(HttpHeaders.ORIGIN, "http://localhost:3000")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"))
                 .andExpect(status().isOk())

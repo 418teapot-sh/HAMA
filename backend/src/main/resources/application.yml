@@ -28,7 +28,7 @@ app:
   cookie:
     # 리프레시 토큰 쿠키가 재발급·로그아웃 요청에만 붙도록 경로를 좁힙니다.
     # 모든 API 에 딸려가면 노출 면적만 넓어집니다.
-    path: /api/auth
+    path: /api/v1/auth
     # secure / same-site 는 환경마다 달라서 프로필별 파일에서 정합니다.
     # (로컬은 http 라서 Secure 쿠키가 브라우저에 저장되지 않습니다)
 

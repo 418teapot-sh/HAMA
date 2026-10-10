@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
         """)
 @SecurityRequirements   // 전부 공개 API 라 Swagger 의 기본 Bearer 요구를 풉니다.
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
