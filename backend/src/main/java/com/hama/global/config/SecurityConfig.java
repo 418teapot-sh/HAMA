@@ -28,7 +28,7 @@ public class SecurityConfig {
      * 라이너 키가 무인증으로 보입니다. 필요한 엔드포인트가 생기면 그때 하나씩 추가하세요.
      */
     private static final String[] PUBLIC_ENDPOINTS = {
-            "/api/auth/**",
+            "/api/v1/auth/**",
             "/swagger-ui.html",
             "/swagger-ui/**",
             "/v3/api-docs/**",
@@ -44,7 +44,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 // REST API + 토큰 인증이라 세션·폼 기반 CSRF 보호가 필요 없습니다.
-                // (리프레시 쿠키는 SameSite 와 좁은 path(/api/auth) 로 보호합니다)
+                // (리프레시 쿠키는 SameSite 와 좁은 path(/api/v1/auth) 로 보호합니다)
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // CorsConfig 의 corsConfigurationSource 빈을 그대로 씁니다.

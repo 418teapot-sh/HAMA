@@ -89,13 +89,13 @@ class UserWithdrawApiIntegrationTest {
 
         assertThat(userRepository.existsById(session.userId())).isFalse();
         assertThat(remainingRows(session, seeded)).allSatisfy((table, rows) -> assertThat(rows).as(table).isZero());
-        mockMvc.perform(post("/api/auth/login")
+        mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "email": "%s", "password": "%s" }
                                 """.formatted(session.email(), PASSWORD)))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(post("/api/auth/refresh").cookie(new Cookie("refreshToken", session.refreshToken())))
+        mockMvc.perform(post("/api/v1/auth/refresh").cookie(new Cookie("refreshToken", session.refreshToken())))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -130,7 +130,7 @@ class UserWithdrawApiIntegrationTest {
     void 탈퇴가_사용자를_잠근_동안_로그인하면_기다렸다가_실패한다() throws Exception {
         Session session = signup();
 
-        int status = whileWithdrawing(session, () -> mockMvc.perform(post("/api/auth/login")
+        int status = whileWithdrawing(session, () -> mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "email": "%s", "password": "%s" }
@@ -196,7 +196,7 @@ class UserWithdrawApiIntegrationTest {
     void 비밀번호를_안_보내면_400() throws Exception {
         Session session = signup();
 
-        mockMvc.perform(post("/api/users/me/withdraw")
+        mockMvc.perform(post("/api/v1/users/me/withdraw")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.accessToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
@@ -223,7 +223,7 @@ class UserWithdrawApiIntegrationTest {
 
     private Session signup() throws Exception {
         String email = "user-" + UUID.randomUUID() + "@hama.com";
-        MvcResult result = mockMvc.perform(post("/api/auth/signup")
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "email": "%s", "password": "%s", "name": "하마", "termsAgreed": true, "privacyAgreed": true, "ageConfirmed": true }
@@ -259,7 +259,7 @@ class UserWithdrawApiIntegrationTest {
     }
 
     private RequestBuilder withdraw(Session session, String password) {
-        return post("/api/users/me/withdraw")
+        return post("/api/v1/users/me/withdraw")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.accessToken())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
