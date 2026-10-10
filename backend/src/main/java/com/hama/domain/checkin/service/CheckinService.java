@@ -2,6 +2,7 @@ package com.hama.domain.checkin.service;
 
 import com.hama.domain.checkin.dto.CheckinResponses;
 import com.hama.domain.checkin.dto.CreateCheckinRequest;
+import com.hama.domain.checkin.dto.UpdateCheckinAchievementRequest;
 import com.hama.domain.checkin.entity.CheckinType;
 import com.hama.domain.checkin.entity.GoalCheckin;
 import com.hama.domain.checkin.exception.CheckinErrorCode;
@@ -10,6 +11,7 @@ import com.hama.domain.goal.entity.Goal;
 import com.hama.domain.goal.entity.GoalStatus;
 import com.hama.domain.goal.exception.GoalErrorCode;
 import com.hama.domain.goal.repository.GoalRepository;
+import com.hama.global.exception.BaseErrorCode;
 import com.hama.global.exception.BusinessException;
 import com.hama.global.exception.GlobalErrorCode;
 import com.hama.global.response.PageResponse;
@@ -39,10 +41,7 @@ public class CheckinService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public CheckinResponses.Created create(Long userId, CreateCheckinRequest request) {
         // 목표 삭제 및 같은 목표의 START/END 생성과 동일한 부모 행에서 직렬화합니다.
-        Goal goal = owned(goals.findActiveForUpdate(request.goalId()), userId);
-        if (goal.getStatus() == GoalStatus.PLANNING) {
-            throw new BusinessException(CheckinErrorCode.CHECKIN_GOAL_NOT_STARTED);
-        }
+        Goal goal = lockOwnedStartedGoal(request.goalId(), userId, GoalErrorCode.GOAL_NOT_FOUND);
         GoalCheckin checkin = GoalCheckin.create(goal.getId(), request.type(), request.value(), request.note(),
                 request.achieved(), request.checkedAt(), LocalDateTime.now(clock).truncatedTo(ChronoUnit.SECONDS));
         if (request.type() != CheckinType.MID && checkins.existsByGoalIdAndType(goal.getId(), request.type())) {
@@ -51,14 +50,35 @@ public class CheckinService {
         return new CheckinResponses.Created(checkins.saveAndFlush(checkin).getId());
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public CheckinResponses.Item updateAchievement(Long userId, Long checkinId,
+            UpdateCheckinAchievementRequest request) {
+        Long goalId = checkins.findGoalId(checkinId)
+                .orElseThrow(() -> new BusinessException(CheckinErrorCode.CHECKIN_NOT_FOUND));
+        // 목표 삭제·탈퇴·체크인 생성과 같은 순서로 잠그고 최신 행을 읽습니다.
+        lockOwnedStartedGoal(goalId, userId, CheckinErrorCode.CHECKIN_NOT_FOUND);
+        GoalCheckin checkin = checkins.findForUpdate(checkinId, goalId)
+                .orElseThrow(() -> new BusinessException(CheckinErrorCode.CHECKIN_NOT_FOUND));
+        checkin.updateAchievement(request.achieved());
+        return CheckinResponses.Item.from(checkin);
+    }
+
     public CheckinResponses.History list(Long userId, Long goalId, Pageable pageable) {
-        Goal goal = owned(goals.findActive(goalId), userId);
+        Goal goal = owned(goals.findActive(goalId), userId, GoalErrorCode.GOAL_NOT_FOUND);
         return new CheckinResponses.History(goal.getUnit(), PageResponse.from(
                 checkins.findByGoalIdOrderByCheckedAtDescIdDesc(goalId, pageable), CheckinResponses.Item::from));
     }
 
-    private Goal owned(Optional<Goal> found, Long userId) {
-        Goal goal = found.orElseThrow(() -> new BusinessException(GoalErrorCode.GOAL_NOT_FOUND));
+    private Goal lockOwnedStartedGoal(Long goalId, Long userId, BaseErrorCode notFound) {
+        Goal goal = owned(goals.findActiveForUpdate(goalId), userId, notFound);
+        if (goal.getStatus() == GoalStatus.PLANNING) {
+            throw new BusinessException(CheckinErrorCode.CHECKIN_GOAL_NOT_STARTED);
+        }
+        return goal;
+    }
+
+    private Goal owned(Optional<Goal> found, Long userId, BaseErrorCode notFound) {
+        Goal goal = found.orElseThrow(() -> new BusinessException(notFound));
         if (!goal.isOwnedBy(userId)) throw new BusinessException(GlobalErrorCode.FORBIDDEN);
         return goal;
     }
