@@ -24,11 +24,18 @@
   --color-brand-main-20: #c2e8ff; /* Brand/Main_20 (하단 탭바 + 버튼) */
   --color-card-back: rgb(252 252 252 / 0.75); /* Card_Back (#FCFCFC 75%) */
   --color-stroke: rgb(238 238 238 / 0.6); /* Stroke (#EEEEEE 60%) */
+  --color-category-task: #ff3b45; /* 할일 */
+  --color-category-schedule: #f8b629; /* 일정 */
+  --color-category-etc: #29d454; /* 기타 */
 
   /* 텍스트 스타일 */
   --text-body-b3: 18px; /* Body/B3 */
   --text-body-b3--line-height: 140%;
   --text-body-b3--font-weight: 600;
+  --text-body-b5: 16px; /* Body/B5 (캘린더 년·월) */
+  --text-body-b5--line-height: 130%;
+  --text-body-b5--font-weight: 600;
+  --text-body-b5--letter-spacing: -0.005em; /* 자간 -0.5% */
   --text-body-b6: 16px; /* Body/B6 */
   --text-body-b6--line-height: 150%;
   --text-body-b6--font-weight: 400;
