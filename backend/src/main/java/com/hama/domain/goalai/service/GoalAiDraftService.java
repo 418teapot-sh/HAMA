@@ -183,7 +183,8 @@ public class GoalAiDraftService {
     private static Map<String, Object> extendPeriod(Object value, GoalDraft draft) {
         try {
             LocalDate end = LocalDate.parse(String.valueOf(value));
-            return end.isAfter(draft.endDate()) && end.getYear() <= 9999 ? Map.of("endDate", end.toString()) : null;
+            return end.isAfter(draft.endDate()) && end.getYear() <= 9999
+                    && Goal.withinMaxPeriod(draft.startDate(), end) ? Map.of("endDate", end.toString()) : null;
         } catch (RuntimeException e) {
             return null;
         }

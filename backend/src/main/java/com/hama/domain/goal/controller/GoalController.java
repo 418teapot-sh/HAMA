@@ -57,6 +57,7 @@ public class GoalController {
             description = """
                     AI 없이 직접 입력한 목표를 IN_PROGRESS 로 생성합니다.
                     시작일 > 종료일이거나 종료일이 오늘 이전이면 400(GOAL_INVALID_PERIOD), 필드 검증 실패는 400(VALIDATION_FAILED).
+                    기간은 최대 1년(시작일 + 1년 전날까지)이고, 넘으면 400(GOAL_PERIOD_TOO_LONG).
                     """)
     @PostMapping
     public ResponseEntity<ApiResponse<GoalResponses.Created>> create(
@@ -93,6 +94,7 @@ public class GoalController {
                     변경할 필드만 보냅니다. 생략한 필드는 기존 값을 유지하고, null 을 보내면 지웁니다(title 은 null 이어도 유지).
                     진행 중인 목표의 startDate·endDate 를 null 로 보내면 400(GOAL_INVALID_INPUT). 응답은 상세 조회와 같습니다.
                     지난 목표(PAST)는 409(GOAL_NOT_EDITABLE), 기간이 잘못되면 400(GOAL_INVALID_PERIOD), 404 / 403 은 상세와 같습니다.
+                    기간이 1년을 넘으면 400(GOAL_PERIOD_TOO_LONG).
                     """)
     @PatchMapping("/{goalId}")
     public ApiResponse<GoalResponses.Detail> update(

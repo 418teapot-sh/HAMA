@@ -26,6 +26,23 @@ class GoalTest {
     }
 
     @Test
+    void 목표_기간은_최대_1년이다() {
+        LocalDate lastAllowed = TODAY.plusYears(1).minusDays(1);
+        Goal goal = Goal.createDirect(1L, content(TODAY, lastAllowed), TODAY);
+
+        assertThat(goal.getEndDate()).isEqualTo(lastAllowed);
+        assertThatThrownBy(() -> Goal.createDirect(1L, content(TODAY, TODAY.plusYears(1)), TODAY))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_PERIOD_TOO_LONG);
+        assertThatThrownBy(() -> goal.revise(content(TODAY, LocalDate.of(9999, 12, 31)), TODAY))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_PERIOD_TOO_LONG);
+        assertThatThrownBy(() -> Goal.createPlanning(1L, content(TODAY, TODAY.plusYears(2)), null, null, null, TODAY))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_PERIOD_TOO_LONG);
+    }
+
+    @Test
     void 직접_생성한_목표는_진행_중이다() {
         Goal goal = Goal.createDirect(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
 

@@ -199,6 +199,14 @@ public class Goal extends BaseTimeEntity {
         if (start.isAfter(end) || end.isBefore(today)) {
             throw new BusinessException(GoalErrorCode.GOAL_INVALID_PERIOD);
         }
+        if (!withinMaxPeriod(start, end)) {
+            throw new BusinessException(GoalErrorCode.GOAL_PERIOD_TOO_LONG);
+        }
+    }
+
+    /** 목표 기간은 최대 1년(시작일 + 1년 전날까지)입니다. 플랜을 주 단위로 펼치므로 기간이 곧 메모리·저장량입니다. */
+    public static boolean withinMaxPeriod(LocalDate start, LocalDate end) {
+        return end.isBefore(start.plusYears(1));
     }
 
     /** MySQL DATE 가 담을 수 있는 연도(1000~9999)만 받습니다. null 은 필수 여부를 따로 검사합니다. */

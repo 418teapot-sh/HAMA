@@ -92,12 +92,14 @@ class GoalAiSessionApiIntegrationTest extends GoalAiTestSupport {
         call(post("/api/v1/goals/ai/sessions"), user, Map.of("rawGoal", "가".repeat(501)), 400);
 
         AI.answer(question("현재 수준은?", "CURRENT_LEVEL"));
-        long sessionId = call(post("/api/v1/goals/ai/sessions"), user, Map.of("rawGoal", "토익"), 201)
+        long sessionId = call(post("/api/v1/goals/ai/sessions"), user, Map.of("rawGoal", "토익 850점 받기"), 201)
                 .at("/data/sessionId").asLong();
         for (int i = 1; i < 10; i++) {
             AI.answer(question("조금 더 알려주세요.", "OTHER"));
             call(post("/api/v1/goals/ai/sessions/" + sessionId + "/messages"), user, Map.of("content", "답 " + i), 200);
         }
+        // 이력이 길어 AI 클라이언트가 앞부분을 잘라도 처음 목표는 시스템 프롬프트로 전달됩니다.
+        assertThat(AI.requests().getLast().systemPrompt()).contains("사용자의 처음 목표: 토익 850점 받기");
         JsonNode error = call(post("/api/v1/goals/ai/sessions/" + sessionId + "/messages"), user,
                 Map.of("content", "한 번 더"), 409);
         assertThat(error.at("/error/code").asString()).isEqualTo("AI_SESSION_TURN_LIMIT");

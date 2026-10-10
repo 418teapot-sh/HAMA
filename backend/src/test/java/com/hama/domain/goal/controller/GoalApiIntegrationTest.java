@@ -210,6 +210,13 @@ class GoalApiIntegrationTest {
 
         // 종료일이 오늘이면 아직 진행 중이므로 만들 수 있습니다.
         createGoal(owner, "오늘까지", TODAY, TODAY);
+
+        mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON).content("""
+                        {"title":"목표","startDate":"2026-10-04","endDate":"9999-12-31"}
+                        """), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_PERIOD_TOO_LONG"));
+        createGoal(owner, "1년", TODAY, TODAY.plusYears(1).minusDays(1));
     }
 
     @Test

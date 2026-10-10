@@ -73,6 +73,10 @@ public class GoalAiPlanService {
         if (goal.getStartDate() == null || goal.getEndDate() == null) {
             throw new BusinessException(GoalErrorCode.GOAL_INVALID_PERIOD);
         }
+        // 기간 상한이 생기기 전에 저장된 목표는 1년을 넘을 수 있어서, 펼치기 전에 막습니다.
+        if (!Goal.withinMaxPeriod(goal.getStartDate(), goal.getEndDate())) {
+            throw new BusinessException(GoalErrorCode.GOAL_PERIOD_TOO_LONG);
+        }
         LocalDate planStart = goal.getStartDate().isBefore(today) ? today : goal.getStartDate();
         if (planStart.isAfter(goal.getEndDate())) {
             throw new BusinessException(GoalErrorCode.GOAL_INVALID_PERIOD);
