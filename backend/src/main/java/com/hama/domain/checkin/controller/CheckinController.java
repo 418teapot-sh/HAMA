@@ -41,7 +41,7 @@ public class CheckinController {
     }
 
     @Operation(summary = "END 체크인 달성 여부 수정", description = "본인 진행 중·지난 목표의 END만 수정합니다. achieved는 true/false 필수(생략·null·다른 타입 400). "
-            + "START/MID·계획 중 목표 409, 타인 403, 없음·삭제 목표 404. 측정값·메모·기록 시각·목표 상태는 변경하지 않습니다. "
+            + "START/MID·계획 중 목표 409, 타인 403, 체크인 또는 부모 목표 없음·삭제는 404(CHECKIN_NOT_FOUND). 측정값·메모·기록 시각·목표 상태는 변경하지 않습니다. "
             + "성공 200으로 수정한 체크인을 반환하며 같은 값 재요청도 허용합니다.")
     @PatchMapping("/{checkinId}")
     public ApiResponse<CheckinResponses.Item> updateAchievement(

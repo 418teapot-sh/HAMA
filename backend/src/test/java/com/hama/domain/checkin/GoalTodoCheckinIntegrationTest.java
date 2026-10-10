@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.hama.domain.checkin.dto.UpdateCheckinAchievementRequest;
 import com.hama.domain.checkin.repository.CheckinRepository;
+import com.hama.domain.checkin.exception.CheckinErrorCode;
 import com.hama.domain.checkin.service.CheckinService;
 import com.hama.domain.user.service.UserService;
 import com.hama.domain.goal.entity.*;
@@ -179,14 +180,17 @@ class GoalTodoCheckinIntegrationTest {
         User u=user(),other=user();long g=goal(u),t=todo(u,g);
         checkin(other,g,"MID",403);
         call(get("/api/v1/todos/state/checkins").param("goalId",""+g),other,null,403);
-        checkin(u,Long.MAX_VALUE,"MID",404);
+        assertThat(checkin(u,Long.MAX_VALUE,"MID",404).at("/error/code").asString()).isEqualTo("GOAL_NOT_FOUND");
+        assertThat(call(get("/api/v1/todos/state/checkins").param("goalId", "" + Long.MAX_VALUE), u, null, 404)
+                .at("/error/code").asString()).isEqualTo("GOAL_NOT_FOUND");
         checkin(u,g,"MID",201);
         jdbc.update("update goal set status='PLANNING' where goal_id=?",g);checkin(u,g,"MID",409);
         jdbc.update("update goal set status='IN_PROGRESS',end_date='2026-10-07' where goal_id=?",g);
         checkin(u,g,"END",201);
         call(delete("/api/v1/goals/"+g),u,null,200);
-        checkin(u,g,"MID",404);
-        call(get("/api/v1/todos/state/checkins").param("goalId",""+g),u,null,404);
+        assertThat(checkin(u,g,"MID",404).at("/error/code").asString()).isEqualTo("GOAL_NOT_FOUND");
+        assertThat(call(get("/api/v1/todos/state/checkins").param("goalId",""+g),u,null,404)
+                .at("/error/code").asString()).isEqualTo("GOAL_NOT_FOUND");
         call(patch("/api/v1/todos/"+t+"/complete"),u,null,404);
         assertThat(jdbc.queryForObject("select count(*) from goal_checkin where goal_id=?",Integer.class,g)).isEqualTo(2);
         assertThat(call(get("/api/v1/calendar").param("from","2026-10-08").param("to","2026-10-08"),u,null,200).at("/data/items").isEmpty()).isTrue();
@@ -257,7 +261,7 @@ class GoalTodoCheckinIntegrationTest {
                 .at("/error/code").asString()).isEqualTo("CHECKIN_NOT_FOUND");
         jdbc.update("update goal set end_date='2026-10-07' where goal_id=?", g);
         call(delete("/api/v1/goals/" + g), u, null, 200);
-        assertThat(call(patch(path), u, Map.of("achieved", true), 404).at("/error/code").asString()).isEqualTo("GOAL_NOT_FOUND");
+        assertThat(call(patch(path), u, Map.of("achieved", true), 404).at("/error/code").asString()).isEqualTo("CHECKIN_NOT_FOUND");
         assertThat(jdbc.queryForObject("select achieved from goal_checkin where checkin_id=?", Boolean.class, id)).isNull();
     }
 
@@ -310,7 +314,7 @@ class GoalTodoCheckinIntegrationTest {
                 goalService.delete(u.id(), g);
             });
             assertThatThrownBy(() -> pending[0].get(5, TimeUnit.SECONDS)).hasCauseInstanceOf(BusinessException.class)
-                    .satisfies(e -> assertThat(((BusinessException) e.getCause()).getErrorCode()).isEqualTo(com.hama.domain.goal.exception.GoalErrorCode.GOAL_NOT_FOUND));
+                    .satisfies(e -> assertThat(((BusinessException) e.getCause()).getErrorCode()).isEqualTo(CheckinErrorCode.CHECKIN_NOT_FOUND));
             assertThat(jdbc.queryForObject("select achieved from goal_checkin where checkin_id=?", Boolean.class, id)).isNull();
         } finally { reset(checkinRepository); }
     }
@@ -328,7 +332,8 @@ class GoalTodoCheckinIntegrationTest {
                 awaitProjection(projected);
                 userService.withdraw(u.id(), "testPassword123!");
             });
-            assertThatThrownBy(() -> pending[0].get(5, TimeUnit.SECONDS)).hasCauseInstanceOf(BusinessException.class);
+            assertThatThrownBy(() -> pending[0].get(5, TimeUnit.SECONDS)).hasCauseInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e.getCause()).getErrorCode()).isEqualTo(CheckinErrorCode.CHECKIN_NOT_FOUND));
             assertThat(jdbc.queryForObject("select count(*) from goal_checkin where checkin_id=?", Integer.class, id)).isZero();
             assertThat(jdbc.queryForObject("select count(*) from goal where goal_id=?", Integer.class, g)).isZero();
         } finally { reset(checkinRepository); }
@@ -338,6 +343,7 @@ class GoalTodoCheckinIntegrationTest {
         var doc = call(get("/v3/api-docs"), null, null, 200);
         var operation = doc.get("paths").get("/api/v1/todos/state/checkins/{checkinId}").get("patch");
         assertThat(operation.get("responses").has("200")).isTrue();
+        assertThat(operation.get("description").asString()).contains("CHECKIN_NOT_FOUND");
         var schema = doc.get("components").get("schemas").get("UpdateCheckinAchievementRequest");
         assertThat(schema.get("required").valueStream().map(JsonNode::asString)).contains("achieved");
         assertThat(schema.at("/properties/achieved/type").asString()).isEqualTo("boolean");
