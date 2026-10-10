@@ -317,4 +317,30 @@ class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
         } finally {reset(todos);}
     }
 
+    @Test void 초단위_반복일정은_자동_일괄_직접미루기에서_겹치지않는다() throws Exception {
+        User u=user();long g=goal(u,"2026-10-31");
+        long automatic=todo(u,g,"2026-10-01",null,null);
+        long manual=todo(u,g,"2026-10-01",null,null);
+        long batch=todo(u,g,"2026-10-01",null,null);
+        schedule(u,"FIXED","2026-10-01T09:00:00","2026-10-01T10:00:01",false,"FREQ=DAILY");
+        move(u,automatic,null,200);
+        assertSlot(automatic,"2026-10-02","10:10","10:40",1);
+        var before=row(manual);
+        assertThat(move(u,manual,Map.of("targetDate","2026-10-02","startTime","10:00","endTime","10:10"),409)
+                .at("/error/code").asString()).isEqualTo("TODO_POSTPONE_TIME_CONFLICT");
+        assertThat(row(manual)).isEqualTo(before);
+        move(u,manual,Map.of("targetDate","2026-10-02","startTime","10:01","endTime","10:10"),200);
+        assertThat(day(u,"2026-10-01",Map.of("strategy","NEXT_DAY")).get("movedCount").asInt()).isOne();
+        assertSlot(batch,"2026-10-02","10:40","11:10",1);
+    }
+
+    @Test void 공용_점유보정은_BE2재배치에도_적용되며_일정원본은_유지한다() throws Exception {
+        User u=user();long g=goal(u,"2026-10-31"),t=todo(u,g,"2026-10-02","10:00","10:30");
+        long s=schedule(u,"PERSONAL","2026-10-02T09:00:00","2026-10-02T10:00:01",false,null);
+        var before=jdbc.queryForMap("select * from schedule where schedule_id=?",s);
+        replan.replan(u.id(),g,LocalDate.parse("2026-10-02"));
+        assertSlot(t,"2026-10-02","10:10","10:40",0);
+        assertThat(jdbc.queryForMap("select * from schedule where schedule_id=?",s)).isEqualTo(before);
+    }
+
 }

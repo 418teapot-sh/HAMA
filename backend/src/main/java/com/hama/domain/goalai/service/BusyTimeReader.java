@@ -65,7 +65,10 @@ public class BusyTimeReader {
         for (; !day.isAfter(to) && day.atStartOfDay().isBefore(end); day = day.plusDays(1)) {
             LocalDateTime dayStart = day.atStartOfDay();
             int s = start.isAfter(dayStart) ? (int) Duration.between(dayStart, start).toMinutes() : 0;
-            int e = end.isBefore(dayStart.plusDays(1)) ? (int) Duration.between(dayStart, end).toMinutes() : MINUTES_PER_DAY;
+            // 종료 시각의 초를 버리면 다음 투두와 겹칠 수 있어 종료 분은 올림합니다.
+            int e = end.isBefore(dayStart.plusDays(1))
+                    ? (int) Math.ceilDiv(Duration.between(dayStart, end).toNanos(), Duration.ofMinutes(1).toNanos())
+                    : MINUTES_PER_DAY;
             if (s < e) {
                 busy.computeIfAbsent(day, d -> new ArrayList<>()).add(new Interval(s, e));
             }
