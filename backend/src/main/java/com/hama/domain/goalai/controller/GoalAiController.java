@@ -169,6 +169,7 @@ public class GoalAiController {
                     목표의 미완료 AI 투두(AI_GOAL_TASK)만 옮깁니다. fromDate 이후에 정한 시간이 비어 있는 투두는 그대로 두고,
                     밀린 투두·시간 없는 투두·일정과 겹친 투두를 fromDate(밀린 투두) 또는 원래 날짜부터 목표 종료일까지 첫 빈 시간에 둡니다.
                     빈 시간이 끝까지 없으면 시간 없이 날짜만 둡니다(unplacedCount). 미룬 횟수는 늘지 않습니다.
+                    fromDate 를 생략하면 오늘(KST)과 목표 시작일 중 늦은 날입니다.
                     진행 중이 아닌 목표 409(GOAL_NOT_IN_PROGRESS), fromDate 가 오늘 이전이거나 목표 기간 밖이면 400(AI_REPLAN_INVALID_DATE).
                     """)
     @PostMapping("/replan")

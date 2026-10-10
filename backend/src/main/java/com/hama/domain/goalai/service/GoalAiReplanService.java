@@ -47,7 +47,9 @@ public class GoalAiReplanService {
         if (goal.effectiveStatus(today) != GoalStatus.IN_PROGRESS) {
             throw new BusinessException(GoalAiErrorCode.GOAL_NOT_IN_PROGRESS);
         }
-        LocalDate from = requestedFrom == null ? today : requestedFrom;
+        // 시작 전인 목표는 오늘이 아니라 시작일부터 둡니다.
+        LocalDate from = requestedFrom != null ? requestedFrom
+                : today.isBefore(goal.getStartDate()) ? goal.getStartDate() : today;
         if (from.isBefore(today) || from.isBefore(goal.getStartDate()) || from.isAfter(goal.getEndDate())) {
             throw new BusinessException(GoalAiErrorCode.AI_REPLAN_INVALID_DATE);
         }

@@ -38,6 +38,28 @@ class GoalAiReplanApiIntegrationTest extends GoalAiTestSupport {
     }
 
     @Test
+    void fromDate_를_생략하면_시작_전인_목표는_시작일부터_둔다() throws Exception {
+        User user = user();
+        long goalId = planningGoal(user);
+        long planA = generatePlans(user, goalId).at("/plans/0/planId").asLong();
+        call(post("/api/v1/goals/ai/plans/" + planA + "/select"), user, null, 200);
+        // 10/1·10/3·10/5 09:00 에 놓인 투두가 있는 상태에서 목표 시작일만 10/5 로 늦춥니다.
+        jdbc.update("update goal set start_date = '2026-10-05' where goal_id = ?", goalId);
+
+        JsonNode data = call(post("/api/v1/goals/ai/replan"), user, Map.of("goalId", goalId), 200).get("data");
+
+        assertThat(data.get("movedCount").asInt()).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                select count(*) from todo where goal_id = ? and status = 'PENDING' and todo_date < '2026-10-05'
+                """, Integer.class, goalId)).isZero();
+        assertThat(jdbc.queryForList("""
+                select start_time from todo where goal_id = ? and todo_date = '2026-10-05' order by start_time
+                """, Object.class, goalId)).extracting(String::valueOf)
+                .satisfiesExactly(t -> assertThat(t).startsWith("09:00"), t -> assertThat(t).startsWith("10:00"),
+                        t -> assertThat(t).startsWith("11:00"));
+    }
+
+    @Test
     void 진행_중이_아닌_목표는_409_기간_밖_fromDate_는_400_남의_목표는_403() throws Exception {
         User user = user();
         long planning = planningGoal(user);
