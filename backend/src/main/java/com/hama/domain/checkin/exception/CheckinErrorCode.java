@@ -8,6 +8,8 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum CheckinErrorCode implements BaseErrorCode {
+    CHECKIN_NOT_FOUND(HttpStatus.NOT_FOUND, "체크인을 찾을 수 없습니다."),
+    CHECKIN_NOT_END(HttpStatus.CONFLICT, "종료 체크인의 달성 여부만 수정할 수 있습니다."),
     CHECKIN_INVALID_INPUT(HttpStatus.BAD_REQUEST, "체크인 입력이 올바르지 않습니다."),
     CHECKIN_INVALID_TIME(HttpStatus.BAD_REQUEST, "기록 시각은 유효한 과거 또는 현재 KST 시각이어야 합니다."),
     CHECKIN_ALREADY_EXISTS(HttpStatus.CONFLICT, "시작·종료 체크인은 목표마다 한 번만 기록할 수 있습니다."),

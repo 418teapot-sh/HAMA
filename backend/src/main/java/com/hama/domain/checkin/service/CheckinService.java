@@ -2,6 +2,7 @@ package com.hama.domain.checkin.service;
 
 import com.hama.domain.checkin.dto.CheckinResponses;
 import com.hama.domain.checkin.dto.CreateCheckinRequest;
+import com.hama.domain.checkin.dto.UpdateCheckinAchievementRequest;
 import com.hama.domain.checkin.entity.CheckinType;
 import com.hama.domain.checkin.entity.GoalCheckin;
 import com.hama.domain.checkin.exception.CheckinErrorCode;
@@ -49,6 +50,22 @@ public class CheckinService {
             throw new BusinessException(CheckinErrorCode.CHECKIN_ALREADY_EXISTS);
         }
         return new CheckinResponses.Created(checkins.saveAndFlush(checkin).getId());
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public CheckinResponses.Item updateAchievement(Long userId, Long checkinId,
+            UpdateCheckinAchievementRequest request) {
+        Long goalId = checkins.findGoalId(checkinId)
+                .orElseThrow(() -> new BusinessException(CheckinErrorCode.CHECKIN_NOT_FOUND));
+        // 목표 삭제·탈퇴·체크인 생성과 같은 순서로 잠그고 최신 행을 읽습니다.
+        Goal goal = owned(goals.findActiveForUpdate(goalId), userId);
+        if (goal.getStatus() == GoalStatus.PLANNING) {
+            throw new BusinessException(CheckinErrorCode.CHECKIN_GOAL_NOT_STARTED);
+        }
+        GoalCheckin checkin = checkins.findForUpdate(checkinId, goalId)
+                .orElseThrow(() -> new BusinessException(CheckinErrorCode.CHECKIN_NOT_FOUND));
+        checkin.updateAchievement(request.achieved());
+        return CheckinResponses.Item.from(checkin);
     }
 
     public CheckinResponses.History list(Long userId, Long goalId, Pageable pageable) {
