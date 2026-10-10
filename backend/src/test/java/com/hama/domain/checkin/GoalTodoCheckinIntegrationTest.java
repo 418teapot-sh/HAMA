@@ -115,11 +115,11 @@ class GoalTodoCheckinIntegrationTest {
         jdbc.update("update goal set status='IN_PROGRESS', end_date='2026-10-07' where goal_id=?",g);call(post("/api/v1/todos"),u,input(g,"2026-10-07"),409);
     }
 
-    @Test void 종료후_기존투두_완료_메모_삭제는_허용하고_AI미루기는_명시적으로_거절한다() throws Exception {
+    @Test void 종료후_기존투두_완료_메모_삭제는_허용하고_미루기는_거절한다() throws Exception {
         User u=user();long g=goal(u),t=todo(u,g);
-        assertThat(call(patch("/api/v1/todos/"+t+"/postpone"),u,null,409).at("/error/code").asString()).isEqualTo("TODO_AI_POSTPONE_NOT_SUPPORTED");
         call(patch("/api/v1/todos/"+t),u,Map.of("content","수정","startTime","09:00","endTime","10:00"),200);
         jdbc.update("update goal set end_date='2026-10-07' where goal_id=?",g);
+        assertThat(call(patch("/api/v1/todos/"+t+"/postpone"),u,null,409).at("/error/code").asString()).isEqualTo("TODO_GOAL_NOT_IN_PROGRESS");
         call(patch("/api/v1/todos/"+t+"/complete"),u,null,200);
         call(patch("/api/v1/todos/"+t+"/complete"),u,null,409);
         call(patch("/api/v1/todos/"+t),u,Map.of("content","불가"),409);

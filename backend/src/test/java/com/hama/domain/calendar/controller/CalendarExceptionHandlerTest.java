@@ -145,7 +145,7 @@ class CalendarExceptionHandlerTest {
     void 조회응답을_파일로_요청하면_406_JSON으로_응답한다() throws Exception {
         CalendarService service = mock(CalendarService.class);
         when(service.get(eq(1L), any())).thenReturn(new CalendarResponse(List.of()));
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(new CalendarController(service))
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new CalendarController(service, mock(com.hama.domain.todo.service.AiTodoPostponeService.class)))
                 .setControllerAdvice(handler)
                 .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                     @Override

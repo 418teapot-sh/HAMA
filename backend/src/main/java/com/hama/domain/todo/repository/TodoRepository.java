@@ -24,6 +24,23 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     List<Todo> findActiveByDate(@Param("userId") Long userId, @Param("date") LocalDate date,
             @Param("category") TodoCategory category);
 
+    interface PostponeCandidate {
+        Long getId();
+        Long getGoalId();
+    }
+
+    // 잠금 전에 엔티티를 읽지 않아 대기 중 완료/삭제/이동된 상태를 캐시하지 않습니다.
+    @Query("""
+            select t.id as id, t.goalId as goalId from Todo t
+            where t.userId = :userId and t.todoDate = :date and t.deletedAt is null
+              and t.category = com.hama.domain.todo.entity.TodoCategory.AI_GOAL_TASK
+              and t.status = com.hama.domain.todo.entity.TodoStatus.PENDING
+              and exists (select g.id from Goal g where g.id = t.goalId
+                          and g.userId = :userId and g.deletedAt is null)
+            order by t.id
+            """)
+    List<PostponeCandidate> findPostponeCandidates(@Param("userId") Long userId, @Param("date") LocalDate date);
+
     interface Link {
         Long getUserId();
         Long getGoalId();

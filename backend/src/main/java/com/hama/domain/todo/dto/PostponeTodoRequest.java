@@ -9,7 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import tools.jackson.databind.annotation.JsonDeserialize;
 
-@Schema(description = "TASK 미루기. 본문/날짜 생략 시 기존 투두 날짜 +1일, 시간 생략 시 유지.")
+@Schema(description = "TASK는 날짜 생략 시 다음 날. AI는 빈 요청 시 자동 배치, 직접 지정 시 targetDate 필수. 시간 생략은 유지, null은 지움.")
 public class PostponeTodoRequest extends TodoTimePatch {
 
     @JsonFormat(pattern = "uuuu-MM-dd", lenient = OptBoolean.FALSE)

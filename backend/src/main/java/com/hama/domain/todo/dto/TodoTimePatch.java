@@ -41,6 +41,10 @@ public abstract class TodoTimePatch {
         return endTime;
     }
 
+    public boolean hasTimePatch() {
+        return startTimePresent || endTimePresent;
+    }
+
     public LocalTime startOr(LocalTime original) {
         return startTimePresent ? startTime : original;
     }
