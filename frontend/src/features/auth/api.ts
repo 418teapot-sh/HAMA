@@ -5,10 +5,18 @@ import { useAuthStore, type User } from './store'
 /** 요청·응답 형식은 Swagger(https://api.todohama.site/swagger-ui/index.html) 기준입니다. */
 export interface SignupRequest {
   email: string
-  /** 8~64자 */
+  /** 영문·숫자·특수문자를 각각 1개 이상 포함한 8~20자 (공백·한글 불가) */
   password: string
   /** 50자 이하 */
   name: string
+  /** 서비스 이용약관 동의 (필수, true 여야 가입) */
+  termsAgreed: boolean
+  /** 개인정보 수집 및 이용 동의 (필수, true 여야 가입) */
+  privacyAgreed: boolean
+  /** 만 14세 이상 확인 (필수, true 여야 가입) */
+  ageConfirmed: boolean
+  /** 마케팅 알림 수신 동의 (선택) */
+  marketingAgreed: boolean
 }
 
 export interface LoginRequest {
@@ -32,7 +40,7 @@ export async function signup(body: SignupRequest) {
 
 /**
  * 로그인. 성공하면 accessToken 을 메모리에 저장합니다(refreshToken 은 HttpOnly 쿠키로 옴).
- * 실패: 401 INVALID_CREDENTIALS, 15분에 5회 초과 시 429 TOO_MANY_LOGIN_ATTEMPTS
+ * 실패: 401 INVALID_CREDENTIALS, 15분에 5회 초과 시 429 TOO_MANY_PASSWORD_ATTEMPTS
  */
 export async function login(body: LoginRequest) {
   const res = await api.post<ApiResponse<TokenResponse>>('/api/auth/login', body)
