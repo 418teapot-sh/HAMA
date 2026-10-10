@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import Button from '../components/Button'
 import InputField from '../components/InputField'
 import NavigationBar from '../components/NavigationBar'
@@ -28,6 +28,8 @@ const LOGIN_FAILED_MESSAGE = '로그인에 실패했어요. 다시 시도해 주
  */
 export default function LoginPage() {
   const navigate = useNavigate()
+  /** 로그인이 필요한 화면에서 넘어왔으면 그 화면으로 돌려보냅니다(RequireAuth). */
+  const from = (useLocation().state as { from?: string } | null)?.from ?? paths.home
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [emailError, setEmailError] = useState<string>()
@@ -45,7 +47,7 @@ export default function LoginPage() {
     setSubmitting(true)
     try {
       await login({ email, password })
-      navigate(paths.home, { replace: true })
+      navigate(from, { replace: true })
     } catch {
       // TODO: 401(정보 불일치)·429(시도 횟수 초과)·400(입력 누락)을 모두 같은 문구로 보여줄지 확인 필요
       toast.show(LOGIN_FAILED_MESSAGE)

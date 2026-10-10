@@ -84,7 +84,7 @@ class GoalApiIntegrationTest {
 
     private Session signup() throws Exception {
         String email = "goal-" + UUID.randomUUID() + "@hama.com";
-        MvcResult result = mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
+        MvcResult result = mvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"%s","password":"password1234!","name":"목표","termsAgreed":true,"privacyAgreed":true,"ageConfirmed":true}
                                 """.formatted(email)))
@@ -210,6 +210,13 @@ class GoalApiIntegrationTest {
 
         // 종료일이 오늘이면 아직 진행 중이므로 만들 수 있습니다.
         createGoal(owner, "오늘까지", TODAY, TODAY);
+
+        mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON).content("""
+                        {"title":"목표","startDate":"2026-10-04","endDate":"9999-12-31"}
+                        """), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_PERIOD_TOO_LONG"));
+        createGoal(owner, "365일", TODAY, TODAY.plusDays(364));
     }
 
     @Test

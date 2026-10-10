@@ -7,7 +7,7 @@ import java.util.List;
  *
  * @param purpose         로그·비용 추적용 태그 (예: "goal-session", "reality-check", "weekly-review")
  * @param systemPrompt    역할·출력 형식 지시. null 이면 생략합니다
- * @param messages        대화 이력(오래된 것부터). 최근 {@code liner.max-history-messages} 개만 전송됩니다
+ * @param messages        대화 이력(오래된 것부터). 최근 {@code liner.max-history-messages} 개만 전송되고, 잘릴 때도 첫 메시지는 유지합니다
  * @param maxTokens       이 호출의 생성 토큰 상한. null 이면 {@code liner.max-completion-tokens}, 그보다 크면 그 값으로 잘립니다
  * @param reasoningEffort null 이면 {@code liner.reasoning-effort}
  */

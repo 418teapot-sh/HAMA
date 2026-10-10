@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param model               예: liner-mark-1.1
  * @param timeoutSeconds      응답 대기 상한. 넘으면 {@code AI_UPSTREAM_ERROR}
  * @param maxCompletionTokens 호출 한 번에 생성할 수 있는 토큰 상한. 요청별 값도 이걸 넘을 수 없습니다
- * @param maxHistoryMessages  대화 이력 중 최근 몇 개만 보낼지. 시스템 프롬프트는 항상 포함되고 개수에서 빠집니다
+ * @param maxHistoryMessages  대화 이력 중 최근 몇 개만 보낼지. 잘릴 때도 첫 메시지는 이 개수 안에서 유지합니다. 시스템 프롬프트는 항상 포함되고 개수에서 빠집니다
  * @param reasoningEffort     none | low | medium | high | max. 추론 토큰도 과금되므로 기본은 낮게 둡니다
  */
 @ConfigurationProperties(prefix = "liner")

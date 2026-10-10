@@ -1,6 +1,7 @@
 package com.hama.domain.goalai.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.hama.domain.goal.entity.Goal;
 import com.hama.domain.goal.entity.GoalContent;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -30,12 +31,19 @@ public record GoalDraft(
     public GoalDraft normalized(LocalDate today) {
         if (title == null || title.isBlank() || startDate == null || endDate == null
                 || !storable(startDate) || !storable(endDate)
-                || startDate.isAfter(endDate) || endDate.isBefore(today)) {
+                || startDate.isAfter(endDate) || endDate.isBefore(today)
+                || !Goal.withinMaxPeriod(startDate, endDate)) {
             return null;
         }
         return new GoalDraft(cut(title.strip(), 100), cut(metricName, 50), cut(unit, 20),
                 value(startValue), value(targetValue), startDate, endDate,
                 weeklyHours(weeklyAvailableHours), cut(currentLevel, 1000));
+    }
+
+    /** 날짜 순서는 맞는데 기간만 상한(1년)을 넘는지. 이때는 사용자에게 기간을 다시 물어야 합니다. */
+    public boolean exceedsMaxPeriod() {
+        return startDate != null && endDate != null && !startDate.isAfter(endDate)
+                && !Goal.withinMaxPeriod(startDate, endDate);
     }
 
     public GoalContent toContent() {

@@ -6,19 +6,21 @@ import Button from '../components/Button'
 import InputField from '../components/InputField'
 import NavigationBar from '../components/NavigationBar'
 import Toast from '../components/Toast'
-import { signup } from '../features/auth/api'
+import { signup, type SignupRequest } from '../features/auth/api'
 import { useToast } from '../hooks/useToast'
 import { paths } from '../paths'
 import icBack from '../assets/icons/ic_back.svg'
 import icEyesNoSee from '../assets/icons/ic_eyes_nosee.svg'
 import icEyesSee from '../assets/icons/ic_eyes_see.svg'
 
-/** Figma 약관 동의 항목 문구 그대로 */
-const AGREEMENT_ITEMS: AgreementItem[] = [
-  { key: 'service', label: '서비스 이용 약관 동의 (필수)', required: true },
-  { key: 'privacy', label: '개인정보 수집 및 이용 동의 (필수)', required: true },
-  { key: 'age', label: '만 14세 이상 확인 (필수)', required: true },
-  { key: 'marketing', label: '마케팅 알림 수신 동의 (선택)', required: false },
+type AgreementKey = 'termsAgreed' | 'privacyAgreed' | 'ageConfirmed' | 'marketingAgreed'
+
+/** Figma 약관 동의 항목 문구 그대로. key 는 회원가입 API 의 필드 이름입니다. */
+const AGREEMENT_ITEMS: (AgreementItem & { key: AgreementKey })[] = [
+  { key: 'termsAgreed', label: '서비스 이용 약관 동의 (필수)', required: true },
+  { key: 'privacyAgreed', label: '개인정보 수집 및 이용 동의 (필수)', required: true },
+  { key: 'ageConfirmed', label: '만 14세 이상 확인 (필수)', required: true },
+  { key: 'marketingAgreed', label: '마케팅 알림 수신 동의 (선택)', required: false },
 ]
 
 /**
@@ -45,7 +47,7 @@ export default function SignupPage() {
   const [done, setDone] = useState(false)
 
   const requiredAgreed = AGREEMENT_ITEMS.filter((item) => item.required).every((item) => agreements[item.key])
-  // TODO: 버튼 활성 조건(필수 입력 + 필수 약관)과 비밀번호 규칙(디자인 8-20자 vs 백엔드 8~64자) 확인 필요
+  // TODO: 버튼 활성 조건(필수 입력 + 필수 약관) 확인 필요. 비밀번호 규칙(8~20자)은 백엔드(#76)가 디자인에 맞춰 검사합니다.
   // 이메일 형식 오류 표시는 디자인에서 로그인 화면으로 옮겨져, 회원가입은 백엔드 검증(VALIDATION_FAILED) 결과만 보여줍니다.
   const canSubmit = name.trim().length > 0 && email.trim().length > 0 && password.length > 0 && requiredAgreed && !submitting
 
@@ -54,7 +56,16 @@ export default function SignupPage() {
     if (!canSubmit) return
     setSubmitting(true)
     try {
-      await signup({ name: name.trim(), email: email.trim(), password })
+      const request: SignupRequest = {
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        termsAgreed: !!agreements.termsAgreed,
+        privacyAgreed: !!agreements.privacyAgreed,
+        ageConfirmed: !!agreements.ageConfirmed,
+        marketingAgreed: !!agreements.marketingAgreed,
+      }
+      await signup(request)
       setDone(true)
     } catch (error) {
       const apiError = getApiError(error)
@@ -62,9 +73,13 @@ export default function SignupPage() {
         // TODO: 중복 이메일 오류 디자인이 없어 이메일 오류와 같은 자리에 백엔드 문구를 보여줌. 확인 필요
         setEmailError(apiError.message)
       } else if (apiError?.code === 'VALIDATION_FAILED' && apiError.fields) {
-        setNameError(apiError.fields.name)
-        setEmailError(apiError.fields.email)
-        setPasswordError(apiError.fields.password)
+        const { name: nameMessage, email: emailMessage, password: passwordMessage, ...rest } = apiError.fields
+        setNameError(nameMessage)
+        setEmailError(emailMessage)
+        setPasswordError(passwordMessage)
+        // 약관 동의 오류는 입력칸이 없어 토스트로 보여줍니다(필수 약관을 안 고르면 버튼이 꺼져 있어 보통은 오지 않음).
+        const otherMessage = Object.values(rest)[0]
+        if (otherMessage) toast.show(otherMessage)
       } else {
         // TODO: 그 밖의 실패 안내 디자인이 없어 토스트에 백엔드 문구를 보여줌. 확인 필요
         toast.show(apiError?.message ?? '잠시 후 다시 시도해 주세요')

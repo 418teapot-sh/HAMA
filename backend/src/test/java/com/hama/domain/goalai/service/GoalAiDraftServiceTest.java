@@ -71,6 +71,7 @@ class GoalAiDraftServiceTest {
     void 종료일을_당기거나_형식이_틀린_기간_연장은_버린다() {
         assertThat(GoalAiDraftService.suggestions(List.of(
                 new SuggestionAnswer("EXTEND_PERIOD", "당기기", Map.of("endDate", "2026-12-01")),
-                new SuggestionAnswer("EXTEND_PERIOD", "형식", Map.of("endDate", "내년"))), DRAFT)).isEmpty();
+                new SuggestionAnswer("EXTEND_PERIOD", "형식", Map.of("endDate", "내년")),
+                new SuggestionAnswer("EXTEND_PERIOD", "1년 넘김", Map.of("endDate", "2027-10-01"))), DRAFT)).isEmpty();
     }
 }

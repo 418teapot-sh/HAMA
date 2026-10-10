@@ -64,7 +64,7 @@ public abstract class GoalAiTestSupport {
 
     protected User user() throws Exception {
         String email = "goalai-" + UUID.randomUUID() + "@hama.com";
-        JsonNode response = call(post("/api/auth/signup"), null,
+        JsonNode response = call(post("/api/v1/auth/signup"), null,
                 Map.of("email", email, "password", "password1234!", "name", "목표AI", "termsAgreed", true, "privacyAgreed", true, "ageConfirmed", true), 200);
         return new User(users.findByEmail(email).orElseThrow().getId(), response.at("/data/accessToken").asString());
     }

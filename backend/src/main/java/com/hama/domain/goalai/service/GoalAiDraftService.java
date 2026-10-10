@@ -54,6 +54,7 @@ public class GoalAiDraftService {
                 "label": 한 줄 한국어 설명,
                 "patch": EXTEND_PERIOD 는 {"endDate":"yyyy-MM-dd"}, LOWER_TARGET 는 {"targetValue":숫자},
                          MORE_TIME 는 {"weeklyAvailableHours":숫자}}]}
+            EXTEND_PERIOD 의 종료일은 시작일부터 최대 1년(365일) 안이어야 해.
             """;
 
     private final GoalAiSessionRepository sessions;
@@ -183,7 +184,8 @@ public class GoalAiDraftService {
     private static Map<String, Object> extendPeriod(Object value, GoalDraft draft) {
         try {
             LocalDate end = LocalDate.parse(String.valueOf(value));
-            return end.isAfter(draft.endDate()) && end.getYear() <= 9999 ? Map.of("endDate", end.toString()) : null;
+            return end.isAfter(draft.endDate()) && end.getYear() <= 9999
+                    && Goal.withinMaxPeriod(draft.startDate(), end) ? Map.of("endDate", end.toString()) : null;
         } catch (RuntimeException e) {
             return null;
         }
