@@ -7,6 +7,10 @@ import static org.mockito.Mockito.reset;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.hama.domain.checkin.dto.UpdateCheckinAchievementRequest;
+import com.hama.domain.checkin.repository.CheckinRepository;
+import com.hama.domain.checkin.service.CheckinService;
+import com.hama.domain.user.service.UserService;
 import com.hama.domain.goal.entity.*;
 import com.hama.domain.goal.repository.*;
 import com.hama.domain.goal.service.GoalService;
@@ -48,6 +52,9 @@ class GoalTodoCheckinIntegrationTest {
     @Autowired GoalService goalService;
     @Autowired PlatformTransactionManager transactions;
     @MockitoSpyBean TodoRepository todoRepository;
+    @MockitoSpyBean CheckinRepository checkinRepository;
+    @Autowired CheckinService checkinService;
+    @Autowired UserService userService;
     @TestBean(name = "be3Clock", methodName = "clock") Clock be3;
 
     static Clock clock() { return Clock.fixed(Instant.parse("2026-10-08T03:00:00Z"), ZoneId.of("Asia/Seoul")); }
@@ -183,6 +190,157 @@ class GoalTodoCheckinIntegrationTest {
         call(patch("/api/v1/todos/"+t+"/complete"),u,null,404);
         assertThat(jdbc.queryForObject("select count(*) from goal_checkin where goal_id=?",Integer.class,g)).isEqualTo(2);
         assertThat(call(get("/api/v1/calendar").param("from","2026-10-08").param("to","2026-10-08"),u,null,200).at("/data/items").isEmpty()).isTrue();
+    }
+
+    @Test void END_달성여부만_보완하고_재수정해도_다른_기록과_목표는_보존한다() throws Exception {
+        User u = user(); long g = goal(u);
+        long id = call(post("/api/v1/todos/state/checkins"), u,
+                Map.of("goalId", g, "type", "END", "value", 78.5, "note", "기존 메모",
+                        "checkedAt", "2026-10-01T10:00:00"), 201).at("/data/checkinId").asLong();
+        var original = jdbc.queryForMap("select * from goal_checkin where checkin_id=?", id);
+        var originalGoal = jdbc.queryForMap("select * from goal where goal_id=?", g);
+        for (boolean achieved : List.of(true, false, false, true)) {
+            var result = call(patch("/api/v1/todos/state/checkins/" + id), u, Map.of("achieved", achieved), 200);
+            assertThat(result.at("/data/checkinId").asLong()).isEqualTo(id);
+            assertThat(result.at("/data/achieved").asBoolean()).isEqualTo(achieved);
+            assertThat(result.at("/data/value").asDouble()).isEqualTo(78.5);
+            assertThat(result.at("/data/note").asString()).isEqualTo("기존 메모");
+            assertThat(result.at("/data/checkedAt").asString()).isEqualTo("2026-10-01T10:00:00");
+            assertThat(history(u, g).at("/checkins/content/0/achieved").asBoolean()).isEqualTo(achieved);
+            var current = jdbc.queryForMap("select * from goal_checkin where checkin_id=?", id);
+            original.forEach((key, value) -> {
+                if (!Set.of("achieved", "updated_at").contains(key)) assertThat(current.get(key)).isEqualTo(value);
+            });
+            assertThat(jdbc.queryForMap("select * from goal where goal_id=?", g)).isEqualTo(originalGoal);
+        }
+        checkin(u, g, "END", 409);
+    }
+
+    @Test void END_수정은_boolean만_허용하고_빈본문_생략_null은_400이다() throws Exception {
+        User u = user(); long g = goal(u), id = checkin(u, g, "END", 201).at("/data/checkinId").asLong();
+        String path = "/api/v1/todos/state/checkins/" + id;
+        call(patch(path), u, null, 400);
+        call(patch(path), u, "null", 400);
+        for (String body : List.of("{}", "{\"achieved\":null}")) {
+            var error = call(patch(path), u, body, 400);
+            assertThat(error.at("/error/code").asString()).isEqualTo("VALIDATION_FAILED");
+            assertThat(error.at("/error/fields/achieved").isMissingNode()).isFalse();
+        }
+        for (String value : List.of("\"true\"", "\"false\"", "0", "1", "[]", "{}")) {
+            call(patch(path), u, "{\"achieved\":" + value + "}", 400);
+        }
+        assertThat(history(u, g).at("/checkins/content/0/achieved").isNull()).isTrue();
+    }
+
+    @Test void START_MID와_계획중_목표는_수정을_거절하고_지난_목표는_허용한다() throws Exception {
+        User u = user(); long g = goal(u);
+        for (String type : List.of("START", "MID")) {
+            long id = checkin(u, g, type, 201).at("/data/checkinId").asLong();
+            assertThat(call(patch("/api/v1/todos/state/checkins/" + id), u, Map.of("achieved", true), 409)
+                    .at("/error/code").asString()).isEqualTo("CHECKIN_NOT_END");
+        }
+        long end = checkin(u, g, "END", 201).at("/data/checkinId").asLong();
+        jdbc.update("update goal set status='PLANNING' where goal_id=?", g);
+        assertThat(call(patch("/api/v1/todos/state/checkins/" + end), u, Map.of("achieved", true), 409)
+                .at("/error/code").asString()).isEqualTo("CHECKIN_GOAL_NOT_STARTED");
+        jdbc.update("update goal set status='IN_PROGRESS',end_date='2026-10-07' where goal_id=?", g);
+        call(patch("/api/v1/todos/state/checkins/" + end), u, Map.of("achieved", false), 200);
+    }
+
+    @Test void END_수정은_인증_소유권_없는체크인_삭제목표를_검증한다() throws Exception {
+        User u = user(), other = user(); long g = goal(u);
+        long id = checkin(u, g, "END", 201).at("/data/checkinId").asLong();
+        String path = "/api/v1/todos/state/checkins/" + id;
+        call(patch(path), null, Map.of("achieved", true), 401);
+        assertThat(call(patch(path), other, Map.of("achieved", true), 403).at("/error/code").asString()).isEqualTo("FORBIDDEN");
+        assertThat(call(patch("/api/v1/todos/state/checkins/" + Long.MAX_VALUE), u, Map.of("achieved", true), 404)
+                .at("/error/code").asString()).isEqualTo("CHECKIN_NOT_FOUND");
+        jdbc.update("update goal set end_date='2026-10-07' where goal_id=?", g);
+        call(delete("/api/v1/goals/" + g), u, null, 200);
+        assertThat(call(patch(path), u, Map.of("achieved", true), 404).at("/error/code").asString()).isEqualTo("GOAL_NOT_FOUND");
+        assertThat(jdbc.queryForObject("select achieved from goal_checkin where checkin_id=?", Boolean.class, id)).isNull();
+    }
+
+    // 최초 조회 뒤 부모 잠금 대기를 재현합니다. 엔티티를 미리 로드하지 않습니다.
+    CountDownLatch pauseAfterCheckinLink(long id) {
+        CountDownLatch projected = new CountDownLatch(1);
+        doAnswer(inv -> {
+            Optional<Long> value = jdbc.query("select goal_id from goal_checkin where checkin_id=?",
+                    (rs, row) -> rs.getLong(1), id).stream().findFirst();
+            projected.countDown();
+            return value;
+        }).when(checkinRepository).findGoalId(id);
+        return projected;
+    }
+
+    void awaitProjection(CountDownLatch projected) {
+        try { assertThat(projected.await(5, TimeUnit.SECONDS)).isTrue(); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new RuntimeException(e); }
+    }
+
+    @Test void 동시_END_수정은_잠금후_최신값을_기준으로_다시_저장한다() throws Exception {
+        User u = user(); long g = goal(u), id = checkin(u, g, "END", 201).at("/data/checkinId").asLong();
+        checkinService.updateAchievement(u.id(), id, new UpdateCheckinAchievementRequest(true));
+        CountDownLatch projected = pauseAfterCheckinLink(id);
+        var tx = new TransactionTemplate(transactions);
+        try (var pool = Executors.newSingleThreadExecutor()) {
+            final Future<?>[] pending = new Future<?>[1];
+            tx.executeWithoutResult(status -> {
+                goals.findActiveForUpdate(g).orElseThrow();
+                pending[0] = pool.submit(() -> checkinService.updateAchievement(u.id(), id, new UpdateCheckinAchievementRequest(true)));
+                awaitProjection(projected);
+                checkinService.updateAchievement(u.id(), id, new UpdateCheckinAchievementRequest(false));
+            });
+            pending[0].get(5, TimeUnit.SECONDS);
+            assertThat(jdbc.queryForObject("select achieved from goal_checkin where checkin_id=?", Boolean.class, id)).isTrue();
+        } finally { reset(checkinRepository); }
+    }
+
+    @Test void 목표삭제와_경합하는_END_수정은_삭제후_거절하고_원본을_보존한다() throws Exception {
+        User u = user(); long g = goal(u), id = checkin(u, g, "END", 201).at("/data/checkinId").asLong();
+        jdbc.update("update goal set end_date='2026-10-07' where goal_id=?", g);
+        CountDownLatch projected = pauseAfterCheckinLink(id);
+        var tx = new TransactionTemplate(transactions);
+        try (var pool = Executors.newSingleThreadExecutor()) {
+            final Future<?>[] pending = new Future<?>[1];
+            tx.executeWithoutResult(status -> {
+                goals.findActiveForUpdate(g).orElseThrow();
+                pending[0] = pool.submit(() -> checkinService.updateAchievement(u.id(), id, new UpdateCheckinAchievementRequest(true)));
+                awaitProjection(projected);
+                goalService.delete(u.id(), g);
+            });
+            assertThatThrownBy(() -> pending[0].get(5, TimeUnit.SECONDS)).hasCauseInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e.getCause()).getErrorCode()).isEqualTo(com.hama.domain.goal.exception.GoalErrorCode.GOAL_NOT_FOUND));
+            assertThat(jdbc.queryForObject("select achieved from goal_checkin where checkin_id=?", Boolean.class, id)).isNull();
+        } finally { reset(checkinRepository); }
+    }
+
+    @Test void 회원탈퇴와_경합하는_END_수정은_데이터를_되살리지않는다() throws Exception {
+        User u = user(); long g = goal(u), id = checkin(u, g, "END", 201).at("/data/checkinId").asLong();
+        CountDownLatch projected = pauseAfterCheckinLink(id);
+        var tx = new TransactionTemplate(transactions);
+        try (var pool = Executors.newSingleThreadExecutor()) {
+            final Future<?>[] pending = new Future<?>[1];
+            tx.executeWithoutResult(status -> {
+                jdbc.queryForObject("select user_id from users where user_id=? for update", Long.class, u.id());
+                goals.findActiveForUpdate(g).orElseThrow();
+                pending[0] = pool.submit(() -> checkinService.updateAchievement(u.id(), id, new UpdateCheckinAchievementRequest(true)));
+                awaitProjection(projected);
+                userService.withdraw(u.id(), "testPassword123!");
+            });
+            assertThatThrownBy(() -> pending[0].get(5, TimeUnit.SECONDS)).hasCauseInstanceOf(BusinessException.class);
+            assertThat(jdbc.queryForObject("select count(*) from goal_checkin where checkin_id=?", Integer.class, id)).isZero();
+            assertThat(jdbc.queryForObject("select count(*) from goal where goal_id=?", Integer.class, g)).isZero();
+        } finally { reset(checkinRepository); }
+    }
+
+    @Test void END_수정_OpenAPI는_boolean_필수와_200응답을_문서화한다() throws Exception {
+        var doc = call(get("/v3/api-docs"), null, null, 200);
+        var operation = doc.get("paths").get("/api/v1/todos/state/checkins/{checkinId}").get("patch");
+        assertThat(operation.get("responses").has("200")).isTrue();
+        var schema = doc.get("components").get("schemas").get("UpdateCheckinAchievementRequest");
+        assertThat(schema.get("required").valueStream().map(JsonNode::asString)).contains("achieved");
+        assertThat(schema.at("/properties/achieved/type").asString()).isEqualTo("boolean");
     }
 
     // 동일 트랜잭션의 실제 non-locking SQL 뒤에 latch를 두어 잠금 대기 전 read-view를 확정합니다.
