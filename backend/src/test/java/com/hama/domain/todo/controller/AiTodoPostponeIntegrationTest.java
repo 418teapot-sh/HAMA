@@ -37,8 +37,15 @@ class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
     @MockitoSpyBean TodoRepository todos;
 
     long goal(User u, String end) throws Exception {
-        return call(post("/api/v1/goals"), u, Map.of("title", "미루기 검증", "startDate", "2026-09-20", "endDate", end), 201)
-                .at("/data/goalId").asLong();
+        LocalDate start = LocalDate.parse("2026-09-20");
+        if (Goal.withinMaxPeriod(start, LocalDate.parse(end))) {
+            return call(post("/api/v1/goals"), u, Map.of("title", "미루기 검증", "startDate", start.toString(), "endDate", end), 201)
+                    .at("/data/goalId").asLong();
+        }
+        // 기간 상한(1년) 전에 저장된 긴 목표를 재현합니다.
+        long id = goal(u, "2026-10-31");
+        jdbc.update("update goal set end_date = ? where goal_id = ?", end, id);
+        return id;
     }
     long todo(User u, long goal, String date, String start, String end) throws Exception {
         var body = new HashMap<String,Object>(Map.of("category", "AI_GOAL_TASK", "content", "할 일", "goalId", goal, "todoDate", date));

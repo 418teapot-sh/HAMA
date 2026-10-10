@@ -1,6 +1,7 @@
 package com.hama.domain.goalai.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.hama.domain.goal.entity.Goal;
 import com.hama.domain.goal.entity.GoalContent;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -30,7 +31,8 @@ public record GoalDraft(
     public GoalDraft normalized(LocalDate today) {
         if (title == null || title.isBlank() || startDate == null || endDate == null
                 || !storable(startDate) || !storable(endDate)
-                || startDate.isAfter(endDate) || endDate.isBefore(today)) {
+                || startDate.isAfter(endDate) || endDate.isBefore(today)
+                || !Goal.withinMaxPeriod(startDate, endDate)) {
             return null;
         }
         return new GoalDraft(cut(title.strip(), 100), cut(metricName, 50), cut(unit, 20),

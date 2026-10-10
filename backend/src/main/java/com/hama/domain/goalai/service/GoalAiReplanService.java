@@ -55,9 +55,16 @@ public class GoalAiReplanService {
         if (targets.isEmpty()) {
             return new ReplanResponse(0, 0);
         }
-        TimeSlotPlacer placer = new TimeSlotPlacer(busyTimes.read(userId, from, goal.getEndDate(),
+        // 기간 상한 전에 저장된 긴 목표는 1년 안에서만 찾고, 그 뒤에 있는 투두는 건드리지 않습니다.
+        LocalDate end = goal.getEndDate();
+        if (!Goal.withinMaxPeriod(from, end)) {
+            LocalDate limit = from.plusYears(1).minusDays(1);
+            end = limit;
+            targets = targets.stream().filter(todo -> !todo.getTodoDate().isAfter(limit)).toList();
+        }
+        TimeSlotPlacer placer = new TimeSlotPlacer(busyTimes.read(userId, from, end,
                 targets.stream().map(Todo::getId).collect(Collectors.toSet())));
-        return rearrange(targets, placer, from, goal.getEndDate());
+        return rearrange(targets, placer, from, end);
     }
 
     /**

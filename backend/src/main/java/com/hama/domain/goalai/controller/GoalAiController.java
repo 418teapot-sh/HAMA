@@ -101,7 +101,7 @@ public class GoalAiController {
     @Operation(summary = "초안 수정",
             description = """
                     바꿀 필드만 보냅니다. 수정하면 이전 현실성 결과는 지워집니다(세션 조회의 realityResult=null).
-                    기간이 잘못됐으면 400(GOAL_INVALID_PERIOD), 409 는 현실성 체크와 같습니다.
+                    기간이 잘못됐으면 400(GOAL_INVALID_PERIOD), 1년을 넘으면 400(GOAL_PERIOD_TOO_LONG), 409 는 현실성 체크와 같습니다.
                     """)
     @PatchMapping("/sessions/{sessionId}/draft")
     public ApiResponse<DraftResponses.DraftView> updateDraft(
@@ -113,7 +113,8 @@ public class GoalAiController {
     @Operation(summary = "목표 확정",
             description = """
                     초안으로 PLANNING 목표를 만듭니다. 현실성 체크를 했다면 그 판정·코멘트도 함께 저장합니다.
-                    확정 사이 종료일이 지났으면 400(GOAL_INVALID_PERIOD), 409 는 현실성 체크와 같습니다.
+                    확정 사이 종료일이 지났으면 400(GOAL_INVALID_PERIOD), 기간이 1년을 넘으면 400(GOAL_PERIOD_TOO_LONG),
+                    409 는 현실성 체크와 같습니다.
                     """)
     @PostMapping("/sessions/{sessionId}/confirm")
     public ResponseEntity<ApiResponse<DraftResponses.Confirmed>> confirm(
@@ -128,7 +129,8 @@ public class GoalAiController {
                     PLANNING 목표에 A(여유형)·B(집중형) 플랜을 만듭니다. 다시 만들면 선택하지 않은 기존 플랜을 바꿉니다.
                     투두는 목표 시작일과 오늘 중 늦은 날부터 종료일까지 둡니다. preference 는 RELAXED | BALANCED | INTENSIVE(생략 시 BALANCED).
                     없는 목표 404(GOAL_NOT_FOUND), 다른 사람의 목표 403, PLANNING 이 아니면 409(GOAL_NOT_PLANNING),
-                    기간이 없거나 이미 끝났으면 400(GOAL_INVALID_PERIOD), 만드는 사이 목표 기간이 바뀌면 409(AI_PLAN_OUTDATED).
+                    기간이 없거나 이미 끝났으면 400(GOAL_INVALID_PERIOD), 기간이 1년을 넘으면 400(GOAL_PERIOD_TOO_LONG),
+                    만드는 사이 목표 기간이 바뀌면 409(AI_PLAN_OUTDATED).
                     """)
     @PostMapping("/plans")
     public ResponseEntity<ApiResponse<PlanResponses.PlanList>> generatePlans(
