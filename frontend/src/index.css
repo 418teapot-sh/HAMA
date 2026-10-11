@@ -12,6 +12,7 @@
   /* 색상 */
   --color-brand-main: #042558; /* Brand/Main */
   --color-brand-main-80: #2c629b; /* Brand/Main_80 */
+  --color-brand-main-40: #7da0ca; /* Brand/Main_40 (홈 목표 요약 뱃지) */
   --color-brand-eo: #ff3b5b; /* Brand/EO (오류) */
   --color-white-w1: #fcfcfc; /* White/W1 */
   --color-black-black: #171617; /* Black/Black */
@@ -21,6 +22,7 @@
   --color-black-gray60: #747374; /* Black/Gray60 */
   --color-black-gray80: #464545; /* Black/Gray80 */
   --color-card-back-2: #c2e8ff; /* Card_Back_2 (토스트에서 40% 불투명도로 사용) */
+  --color-card-stroke-2: rgb(194 232 255 / 0.3); /* Card_Stroke_2 (#C2E8FF 30%) */
   --color-brand-main-20: #c2e8ff; /* Brand/Main_20 (하단 탭바 + 버튼) */
   --color-card-back: rgb(252 252 252 / 0.75); /* Card_Back (#FCFCFC 75%) */
   --color-stroke: rgb(238 238 238 / 0.6); /* Stroke (#EEEEEE 60%) */
@@ -55,11 +57,21 @@
   --text-caption-cap3--line-height: 130%;
   --text-caption-cap3--font-weight: 400;
   --text-heading-h3: 22px; /* Heading/H3 (굵기는 화면마다 400·700 으로 다르게 씀) */
+  --text-heading-h1: 28px; /* Heading/H1 (홈 목표 제목) */
+  --text-heading-h1--line-height: 120%;
+  --text-heading-h1--font-weight: 800;
+  --text-heading-h1--letter-spacing: -0.02em; /* 자간 -2% */
+  --text-heading-h4: 20px; /* Heading/H4 (홈 섹션 제목) */
+  --text-heading-h4--line-height: normal;
+  --text-heading-h4--font-weight: 700;
   --text-heading-h3--line-height: 100%;
   --text-heading-h6: 18px; /* Heading/H6 */
   --text-heading-h6--line-height: 100%;
   --text-heading-h6--font-weight: 400;
   --text-body-b10: 12px; /* Body/B10 (하단 탭 이름) */
+  --text-body-b9: 12px; /* Body/B9 */
+  --text-body-b9--line-height: 160%;
+  --text-body-b9--font-weight: 600;
   --text-body-b10--line-height: 160%;
   --text-body-b10--font-weight: 400;
   --text-body-b10--letter-spacing: -0.015em; /* 자간 -1.5% */
