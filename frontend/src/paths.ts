@@ -7,4 +7,5 @@ export const paths = {
   login: '/login',
   signup: '/signup',
   landing: '/landing',
+  terms: '/terms',
 } as const
