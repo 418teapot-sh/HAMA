@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { Link, useLocation } from 'react-router'
 import hippo from '../assets/landing/hippo.webp'
 import page from '../assets/landing/page.webp'
 import previewAiDone from '../assets/landing/preview-ai-done.webp'
@@ -11,6 +13,7 @@ import LandingSection, { SectionHeader } from '../features/landing/LandingSectio
 import Lines from '../features/landing/Lines'
 import PlanCard from '../features/landing/PlanCard'
 import { useDesktopZoom } from '../features/landing/useDesktopZoom'
+import { paths } from '../paths'
 
 /** 02 · 서비스 이용 흐름 카드 (줄바꿈은 Figma 그대로) */
 const FLOW = [
@@ -68,8 +71,16 @@ const FAQ_ROWS = [
   ],
 ]
 
-/** 07 · 푸터 링크 (TODO: 약관 페이지는 다음 브랜치에서 만들고 연결) */
-const FOOTER_LINKS = ['이용약관', '환불 및 청약철회', '개인정보처리방침', '문의']
+/** 07 · 푸터 링크 (TODO: 환불 및 청약철회 · 개인정보처리방침 · 문의는 페이지가 생기면 연결) */
+const FOOTER_LINKS: { label: string; to?: string }[] = [
+  { label: '이용약관', to: paths.terms },
+  { label: '환불 및 청약철회' },
+  { label: '개인정보처리방침' },
+  { label: '문의' },
+]
+
+const FOOTER_LINK_CLASS =
+  'text-[14px] leading-[22px] font-bold tracking-[-0.02em] text-[#5480ae] desktop:text-[20px] desktop:leading-[28px] desktop:font-semibold'
 
 /**
  * 랜딩페이지 (Figma 온보딩 > HAMA · 모바일 웹 · 390 / MacBook Pro 14" - 1)
@@ -81,6 +92,13 @@ const FOOTER_LINKS = ['이용약관', '환불 및 청약철회', '개인정보�
  */
 export default function LandingPage() {
   const zoom = useDesktopZoom()
+  const { hash } = useLocation()
+
+  // 다른 페이지에서 들어오면 맨 위부터 보여 주고, /landing#pricing 처럼 섹션을 지정하면 그 섹션으로 스크롤합니다. (이용약관 푸터의 요금제)
+  useEffect(() => {
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView()
+    else window.scrollTo(0, 0)
+  }, [hash])
 
   return (
     <main className="flex min-h-dvh w-full flex-col gap-[24px] bg-white-w1 desktop:gap-[10px]" style={{ zoom }}>
@@ -184,7 +202,7 @@ export default function LandingPage() {
         </LandingSection>
 
         {/* 04 · 요금제 */}
-        <LandingSection tall className="gap-[28px] desktop:gap-[52px]">
+        <LandingSection id="pricing" tall className="gap-[28px] desktop:gap-[52px]">
           <SectionHeader
             title="요금제"
             subtitleWeight={400}
@@ -281,15 +299,17 @@ export default function LandingPage() {
       */}
       <footer className="flex w-full flex-col gap-[20px] px-[20px] py-[32px] desktop:flex-row desktop:items-center desktop:justify-center desktop:gap-[187px] desktop:px-[100px] desktop:py-[60px]">
         <nav className="flex flex-wrap items-start gap-[12px] desktop:items-center desktop:gap-[32px]">
-          {FOOTER_LINKS.map((label) => (
-            <button
-              key={label}
-              type="button"
-              className="text-[14px] leading-[22px] font-bold tracking-[-0.02em] text-[#5480ae] desktop:text-[20px] desktop:leading-[28px] desktop:font-semibold"
-            >
-              {label}
-            </button>
-          ))}
+          {FOOTER_LINKS.map(({ label, to }) =>
+            to ? (
+              <Link key={label} to={to} className={FOOTER_LINK_CLASS}>
+                {label}
+              </Link>
+            ) : (
+              <button key={label} type="button" className={FOOTER_LINK_CLASS}>
+                {label}
+              </button>
+            ),
+          )}
         </nav>
         <p className="text-[10px] leading-[15px] tracking-[-0.03em] text-black-black desktop:text-[18px] desktop:leading-[25px] desktop:tracking-[-0.02em]">
           운영자 [법적 이름] · [주소] · [support@도메인] · 호스팅 [예: Amazon Web Services, Inc.]

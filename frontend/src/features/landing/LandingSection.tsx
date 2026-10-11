@@ -8,6 +8,8 @@ interface LandingSectionProps {
   paddingY?: 64 | 48
   /** 데스크톱에서 높이 982 (01 · 04 · 06 · 내용은 세로 가운데) */
   tall?: boolean
+  /** 다른 페이지에서 이 섹션으로 바로 올 때 쓰는 id (예: 요금제 → pricing) */
+  id?: string
   className?: string
 }
 
@@ -20,9 +22,10 @@ interface LandingSectionProps {
  * 데스크톱: 패딩 100 / 테두리 없음 / 안쪽 너비 최대 1312(=1512-200) 가운데
  * 글자 행간은 Figma 글자 상자 높이(반올림)대로 px 로 적습니다. 예) 16px · 155% → 25px
  */
-export default function LandingSection({ children, paddingY = 48, tall, className = '' }: LandingSectionProps) {
+export default function LandingSection({ children, paddingY = 48, tall, id, className = '' }: LandingSectionProps) {
   return (
     <section
+      id={id}
       className={`flex w-full flex-col items-center border-y border-transparent bg-card-back px-[20px] shadow-card-shadow ring-1 ring-stroke ring-inset backdrop-blur-[10px] ${PADDING_Y[paddingY]} desktop:border-y-0 desktop:p-[100px] desktop:ring-0 ${
         tall ? 'desktop:min-h-[982px] desktop:justify-center' : ''
       }`}
