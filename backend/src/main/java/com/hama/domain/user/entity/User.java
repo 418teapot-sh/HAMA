@@ -22,6 +22,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class User extends BaseTimeEntity {
 
+    /** 가입하면 주는 무료 크레딧(랜딩 "첫 1회는 무료"). */
+    public static final int SIGNUP_FREE_CREDITS = 1;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
@@ -38,13 +41,12 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false, length = 50)
     private String name;
 
-    /** 결제 게이트용. 무료 사용자가 만든 목표 수입니다. */
+    /**
+     * 남은 크레딧(횟수). AI 목표 생성·일정 재계산에 1회씩 씁니다.
+     * 충전·차감은 동시에 일어날 수 있어서 엔티티 값을 고치지 않고 UserRepository 의 UPDATE 로만 바꿉니다.
+     */
     @Column(nullable = false)
-    private int goalCreatedCount;
-
-    /** 결제 게이트용. */
-    @Column(nullable = false)
-    private boolean isPremium;
+    private int credits;
 
     /**
      * 마케팅 알림 수신 동의(선택). 필수 약관은 동의해야만 가입되므로(SignupRequest) 따로 저장하지 않고,
@@ -55,7 +57,7 @@ public class User extends BaseTimeEntity {
 
     /**
      * 회원가입으로 생성합니다.
-     * 가입 시점의 불변식(무료 시작, 목표 생성 0회)을 여기서 강제해서
+     * 가입 시점의 불변식(무료 크레딧 1회)을 여기서 강제해서
      * 호출부가 실수로 다른 값을 넣을 여지를 없앱니다.
      *
      * @param encodedPassword 반드시 인코딩된 비밀번호. 원문을 넘기지 마세요.
@@ -65,14 +67,8 @@ public class User extends BaseTimeEntity {
                 .email(email)
                 .password(encodedPassword)
                 .name(name)
-                .goalCreatedCount(0)
-                .isPremium(false)
+                .credits(SIGNUP_FREE_CREDITS)
                 .marketingAgreed(marketingAgreed)
                 .build();
-    }
-
-    /** 결제 완료(Paddle 웹훅) 시 호출합니다. 이용권은 서비스 종료일(11/20)까지라 만료 처리는 없습니다. */
-    public void markPremium() {
-        this.isPremium = true;
     }
 }

@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HexFormat;
+import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ class PaddleSignatureVerifierTest {
     private final PaddleSignatureVerifier verifier = verifierWith(SECRET);
 
     private static PaddleSignatureVerifier verifierWith(String secret) {
-        return new PaddleSignatureVerifier(new PaddleProperties(secret),
+        return new PaddleSignatureVerifier(new PaddleProperties(secret, Map.of()),
                 Clock.fixed(Instant.ofEpochSecond(NOW), ZoneOffset.UTC));
     }
 

@@ -199,7 +199,7 @@ class AuthApiIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.accessToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.email").value(session.email()))
-                .andExpect(jsonPath("$.data.isPremium").value(false));
+                .andExpect(jsonPath("$.data.credits").value(1));
     }
 
     @Test

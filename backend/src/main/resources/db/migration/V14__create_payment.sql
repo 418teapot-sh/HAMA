@@ -6,6 +6,8 @@ CREATE TABLE payment
     paddle_transaction_id VARCHAR(255) NOT NULL,
     amount                INT          NOT NULL,
     currency              VARCHAR(3)   NOT NULL,
+    -- 이 결제로 충전한 크레딧. 환불할 때 회수할 횟수입니다.
+    credits               INT          NOT NULL,
     paid_at               DATETIME(6)  NOT NULL,
     created_at            DATETIME(6)  NOT NULL,
     updated_at            DATETIME(6)  NOT NULL,

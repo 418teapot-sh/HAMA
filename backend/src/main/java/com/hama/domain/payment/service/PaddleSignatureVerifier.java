@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
  * h1 = hex( HMAC-SHA256( key = 웹훅 시크릿, message = ts + ":" + 원본 본문 ) )
  * </pre>
  *
- * 이 검증이 없으면 누구나 "결제 완료" 웹훅을 만들어 보내서 프리미엄을 켤 수 있습니다.
+ * 이 검증이 없으면 누구나 "결제 완료" 웹훅을 만들어 보내서 크레딧을 충전할 수 있습니다.
  */
 @Slf4j
 @Component

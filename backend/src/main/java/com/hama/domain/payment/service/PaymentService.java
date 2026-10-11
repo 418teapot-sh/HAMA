@@ -3,7 +3,6 @@ package com.hama.domain.payment.service;
 import com.hama.domain.payment.entity.Payment;
 import com.hama.domain.payment.exception.PaymentErrorCode;
 import com.hama.domain.payment.repository.PaymentRepository;
-import com.hama.domain.user.entity.User;
 import com.hama.domain.user.repository.UserRepository;
 import com.hama.global.exception.BusinessException;
 import java.time.LocalDateTime;
@@ -22,8 +21,8 @@ import tools.jackson.databind.json.JsonMapper;
  * <pre>
  * 프론트: Paddle.Checkout.open({ items, customData: { userId } })
  *   → 사용자 결제
- *   → Paddle 이 POST /api/payments/webhook (transaction.completed)
- *   → 여기서 결제 저장 + 프리미엄 켜기
+ *   → Paddle 이 POST /api/v1/payments/webhook (transaction.completed)
+ *   → 여기서 결제 저장 + 산 가격(items[].price.id)만큼 크레딧 충전
  * </pre>
  */
 @Slf4j
@@ -34,6 +33,7 @@ public class PaymentService {
     private static final String TRANSACTION_COMPLETED = "transaction.completed";
 
     private final PaddleSignatureVerifier signatureVerifier;
+    private final PaddleProperties properties;
     private final PaymentRepository paymentRepository;
     private final UserRepository userRepository;
     private final JsonMapper jsonMapper;
@@ -67,25 +67,46 @@ public class PaymentService {
         }
 
         JsonNode customData = transaction.path("custom_data");
-        User user = parseUserId(customData.path("userId"))
-                .flatMap(userRepository::findById)
+        Long userId = parseUserId(customData.path("userId"))
+                .filter(userRepository::existsById)
                 .orElse(null);
-        if (user == null) {
+        if (userId == null) {
             // 돈은 받았는데 누구 것인지 모르는 상태입니다. 재시도해도 결과가 같으니 200 으로 끝내고 사람이 처리합니다.
             log.error("[Payment] 결제는 완료됐지만 사용자를 찾지 못했습니다. Paddle 대시보드에서 확인 후 수동 처리하세요 - txn: {}, customData: {}",
                     transactionId, customData);
             return;
         }
 
-        user.markPremium();
+        int credits = creditsOf(transaction.path("items"), transactionId);
+        userRepository.addCredits(userId, credits);
         int amount = parseAmount(transaction, transactionId);
         String currency = transaction.path("currency_code").asString();
-        paymentRepository.save(Payment.create(user.getId(), transactionId, amount, currency, paidAt(transaction)));
-        log.info("[Payment] 결제 완료 - txn: {}, userId: {}, amount: {} {}", transactionId, user.getId(), amount, currency);
+        paymentRepository.save(Payment.create(userId, transactionId, amount, currency, credits, paidAt(transaction)));
+        log.info("[Payment] 결제 완료 - txn: {}, userId: {}, amount: {} {}, credits: +{}",
+                transactionId, userId, amount, currency, credits);
     }
 
     /**
-     * 금액은 기록용입니다. 못 읽었다고 예외를 내면 롤백돼서 돈을 낸 사용자가 프리미엄을 못 받고,
+     * 산 가격마다 설정(paddle.credit-price-ids)에서 횟수를 찾아 수량만큼 더합니다.
+     * 모르는 가격은 충전하지 않습니다. 돈은 이미 받았으니 예외로 막지 않고, 결제는 저장한 뒤 사람이 처리합니다.
+     */
+    private int creditsOf(JsonNode items, String transactionId) {
+        int total = 0;
+        for (JsonNode item : items) {
+            String priceId = item.path("price").path("id").asString(item.path("price_id").asString());
+            int credits = properties.creditsOf(priceId);
+            if (credits == 0) {
+                log.error("[Payment] 설정에 없는 가격이라 충전하지 않았습니다. paddle.credit-price-ids 와 Paddle 카탈로그를 확인하세요 - txn: {}, price: {}",
+                        transactionId, priceId);
+                continue;
+            }
+            total += credits * Math.max(item.path("quantity").asInt(1), 1);
+        }
+        return total;
+    }
+
+    /**
+     * 금액은 기록용입니다. 못 읽었다고 예외를 내면 롤백돼서 돈을 낸 사용자가 크레딧을 못 받고,
      * Paddle 재전송도 매번 같은 이유로 실패하므로 0 으로 저장하고 로그만 남깁니다.
      */
     private static int parseAmount(JsonNode transaction, String transactionId) {

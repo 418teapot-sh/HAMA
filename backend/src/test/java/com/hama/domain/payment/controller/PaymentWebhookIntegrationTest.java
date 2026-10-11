@@ -42,15 +42,19 @@ class PaymentWebhookIntegrationTest {
     private PaymentRepository paymentRepository;
 
     private User newUser() {
-        return userRepository.save(User.create("pay-" + UUID.randomUUID() + "@hama.com", "encoded", "하마"));
+        return userRepository.save(User.create("pay-" + UUID.randomUUID() + "@hama.com", "encoded", "하마", false));
     }
+
+    /** 5회권 1개. 가격 ID 는 application-test.yml 의 paddle.credit-price-ids */
+    private static final String FIVE_CREDITS = """
+            [{ "price": { "id": "pri_test_5" }, "quantity": 1 }]""";
 
     /** Paddle 문서의 transaction.completed 예시에서 쓰는 필드만 남겼습니다. 금액은 원 단위 문자열입니다. */
     private static String completedEvent(String transactionId, String userIdJson) {
-        return completedEvent(transactionId, userIdJson, "\"2000\"");
+        return completedEvent(transactionId, userIdJson, "\"4950\"", FIVE_CREDITS);
     }
 
-    private static String completedEvent(String transactionId, String userIdJson, String totalJson) {
+    private static String completedEvent(String transactionId, String userIdJson, String totalJson, String itemsJson) {
         return """
                 {
                   "event_id": "evt_%s",
@@ -62,10 +66,11 @@ class PaymentWebhookIntegrationTest {
                     "currency_code": "KRW",
                     "custom_data": { "userId": %s },
                     "billed_at": "2026-10-31T00:59:58.000000Z",
+                    "items": %s,
                     "details": { "totals": { "total": %s } }
                   }
                 }
-                """.formatted(UUID.randomUUID(), transactionId, userIdJson, totalJson);
+                """.formatted(UUID.randomUUID(), transactionId, userIdJson, itemsJson, totalJson);
     }
 
     private ResultActions sendWebhook(String body, String secret) throws Exception {
@@ -81,32 +86,60 @@ class PaymentWebhookIntegrationTest {
                 .content(body.getBytes(StandardCharsets.UTF_8)));
     }
 
-    private boolean isPremium(Long userId) {
-        return userRepository.findById(userId).orElseThrow().isPremium();
+    private int credits(Long userId) {
+        return userRepository.findById(userId).orElseThrow().getCredits();
     }
 
     @Test
-    void 결제_완료_웹훅이_오면_결제를_저장하고_프리미엄을_켠다() throws Exception {
+    void 결제_완료_웹훅이_오면_결제를_저장하고_산_만큼_크레딧을_충전한다() throws Exception {
         User user = newUser();
         String transactionId = "txn_" + UUID.randomUUID();
 
         sendWebhook(completedEvent(transactionId, String.valueOf(user.getId())), SECRET).andExpect(status().isOk());
 
-        assertThat(isPremium(user.getId())).isTrue();
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS + 5);
         Payment payment = paymentOf(transactionId);
-        assertThat(payment.getAmount()).isEqualTo(2000);
+        assertThat(payment.getAmount()).isEqualTo(4950);
         assertThat(payment.getCurrency()).isEqualTo("KRW");
+        assertThat(payment.getCredits()).isEqualTo(5);
     }
 
     @Test
-    void 금액을_읽지_못해도_프리미엄은_켜고_금액은_0_으로_저장한다() throws Exception {
+    void 여러_상품과_수량을_합쳐서_충전한다() throws Exception {
+        User user = newUser();
+        String items = """
+                [{ "price": { "id": "pri_test_12" }, "quantity": 1 },
+                 { "price_id": "pri_test_1", "quantity": 2 }]""";
+
+        sendWebhook(completedEvent("txn_" + UUID.randomUUID(), String.valueOf(user.getId()), "\"12300\"", items), SECRET)
+                .andExpect(status().isOk());
+
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS + 12 + 2);
+    }
+
+    @Test
+    void 설정에_없는_가격은_충전하지_않고_결제만_저장한다() throws Exception {
+        User user = newUser();
+        String transactionId = "txn_" + UUID.randomUUID();
+        String items = """
+                [{ "price": { "id": "pri_unknown" }, "quantity": 1 }]""";
+
+        sendWebhook(completedEvent(transactionId, String.valueOf(user.getId()), "\"1200\"", items), SECRET)
+                .andExpect(status().isOk());
+
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS);
+        assertThat(paymentOf(transactionId).getCredits()).isZero();
+    }
+
+    @Test
+    void 금액을_읽지_못해도_크레딧은_충전하고_금액은_0_으로_저장한다() throws Exception {
         User user = newUser();
         String transactionId = "txn_" + UUID.randomUUID();
 
-        sendWebhook(completedEvent(transactionId, String.valueOf(user.getId()), "\"19.99\""), SECRET)
+        sendWebhook(completedEvent(transactionId, String.valueOf(user.getId()), "\"19.99\"", FIVE_CREDITS), SECRET)
                 .andExpect(status().isOk());
 
-        assertThat(isPremium(user.getId())).isTrue();
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS + 5);
         assertThat(paymentOf(transactionId).getAmount()).isZero();
     }
 
@@ -117,13 +150,15 @@ class PaymentWebhookIntegrationTest {
     }
 
     @Test
-    void 같은_거래의_웹훅이_두_번_와도_한_번만_저장한다() throws Exception {
+    void 같은_거래의_웹훅이_두_번_와도_한_번만_저장하고_충전한다() throws Exception {
         User user = newUser();
         String transactionId = "txn_" + UUID.randomUUID();
         String body = completedEvent(transactionId, String.valueOf(user.getId()));
 
         sendWebhook(body, SECRET).andExpect(status().isOk());
         sendWebhook(body, SECRET).andExpect(status().isOk());
+
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS + 5);
 
         assertThat(paymentRepository.findAll().stream()
                 .filter(payment -> payment.getPaddleTransactionId().equals(transactionId))
@@ -137,18 +172,18 @@ class PaymentWebhookIntegrationTest {
         sendWebhook(completedEvent("txn_" + UUID.randomUUID(), "\"" + user.getId() + "\""), SECRET)
                 .andExpect(status().isOk());
 
-        assertThat(isPremium(user.getId())).isTrue();
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS + 5);
     }
 
     @Test
-    void 서명이_틀리면_401_이고_프리미엄을_켜지_않는다() throws Exception {
+    void 서명이_틀리면_401_이고_충전하지_않는다() throws Exception {
         User user = newUser();
 
         sendWebhook(completedEvent("txn_" + UUID.randomUUID(), String.valueOf(user.getId())), "forged-secret")
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("INVALID_WEBHOOK_SIGNATURE"));
 
-        assertThat(isPremium(user.getId())).isFalse();
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS);
     }
 
     @Test

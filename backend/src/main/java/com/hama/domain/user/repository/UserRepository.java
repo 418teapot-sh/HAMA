@@ -5,6 +5,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -22,4 +23,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByIdForUpdate(Long id);
 
     boolean existsByEmail(String email);
+
+    /** 결제 완료 시 충전합니다. 읽고 더해서 저장하면 동시에 일어난 차감을 덮어쓰므로 DB 에서 더합니다. */
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE User u SET u.credits = u.credits + :amount WHERE u.id = :id")
+    int addCredits(Long id, int amount);
 }

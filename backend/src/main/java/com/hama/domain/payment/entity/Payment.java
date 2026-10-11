@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 완료된 결제 한 건입니다. 영수증·세금·환불 원장은 Paddle(판매 대행사)이 갖고 있고,
- * 여기에는 "누가 언제 얼마를 냈고 프리미엄을 켰나"만 남깁니다.
+ * 여기에는 "누가 언제 얼마를 내고 몇 회를 충전했나"만 남깁니다.
  */
 @Entity
 @Getter
@@ -47,16 +47,21 @@ public class Payment extends BaseTimeEntity {
     @Column(nullable = false, length = 3)
     private String currency;
 
+    /** 이 결제로 충전한 크레딧. 환불할 때 회수할 횟수입니다. */
+    @Column(nullable = false)
+    private int credits;
+
     @Column(nullable = false)
     private LocalDateTime paidAt;
 
-    public static Payment create(Long userId, String paddleTransactionId, int amount, String currency,
+    public static Payment create(Long userId, String paddleTransactionId, int amount, String currency, int credits,
                                  LocalDateTime paidAt) {
         return Payment.builder()
                 .userId(userId)
                 .paddleTransactionId(paddleTransactionId)
                 .amount(amount)
                 .currency(currency)
+                .credits(credits)
                 .paidAt(paidAt)
                 .build();
     }

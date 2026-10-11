@@ -54,8 +54,14 @@ liner:
 paddle:
   api-key: ${PADDLE_API_KEY:}
   # 웹훅 서명 검증용. 이게 없으면 아무나 "결제 완료" 웹훅을 위조해서
-  # isPremium 을 켤 수 있습니다.
+  # 크레딧을 충전할 수 있습니다.
   webhook-secret: ${PADDLE_WEBHOOK_SECRET:}
+  # 충전 횟수 → Paddle 가격 ID(pri_...). 카탈로그 상품 3개와 맞춥니다. Sandbox 와 Live 의 값이 다릅니다.
+  # 여기 없는 가격으로 결제가 오면 충전하지 않고 에러 로그를 남깁니다.
+  credit-price-ids:
+    1: ${PADDLE_PRICE_ID_1:}
+    5: ${PADDLE_PRICE_ID_5:}
+    12: ${PADDLE_PRICE_ID_12:}
 
 logging:
   pattern:
