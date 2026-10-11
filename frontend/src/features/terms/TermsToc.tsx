@@ -1,13 +1,13 @@
 import PolicyLink from './PolicyLink'
 import { TermsDivider } from './TermsArticle'
-import { articleId } from './termsContent'
+import { POLICY_DOCS, articleId, type PolicyDoc } from './policies'
 
 /** 목차 · 다른 문서 링크 글자: 500 / #5480AE (Figma 에만 있는 색이라 값으로 씀) */
 const ITEM = 'text-left font-medium text-[#5480ae]'
 
 interface TermsTocProps {
-  /** 목차 이름 (조항 순서대로) */
-  labels: string[]
+  /** 지금 보고 있는 문서 (다른 문서에는 나머지 두 문서가 나옵니다) */
+  doc: PolicyDoc
 }
 
 /**
@@ -17,9 +17,10 @@ interface TermsTocProps {
  * 데스크톱: 너비 240 / 패딩 24 / 모든 줄 사이 20 (한 칸으로 1~10) / 항목 16px 행간 150%(24px)
  *   데스크톱은 칸 묶음을 display: contents 로 풀어 항목이 상자 바로 아래에 오게 합니다.
  *   (모바일 li 는 flex 로 두어 행간이 li 기본 글자 크기 16px 기준으로 늘어나지 않게 합니다)
- * 목차 항목을 누르면 그 조항으로 스크롤합니다.
+ * 목차 항목을 누르면 그 조항으로 스크롤합니다. 조항 수가 홀수면 모바일 왼쪽 칸이 하나 더 많습니다.
  */
-export default function TermsToc({ labels }: TermsTocProps) {
+export default function TermsToc({ doc }: TermsTocProps) {
+  const labels = doc.articles.map((article) => article.tocLabel)
   const half = Math.ceil(labels.length / 2)
   const columns = [labels.slice(0, half), labels.slice(half)]
 
@@ -55,9 +56,11 @@ export default function TermsToc({ labels }: TermsTocProps) {
       </div>
       <TermsDivider />
       <h2 className="text-[14px] leading-[21px] font-bold text-brand-main desktop:text-[18px] desktop:leading-[27px]">다른 문서</h2>
-      {/* TODO: 환불 및 청약철회 · 개인정보처리방침 페이지가 생기면 연결 */}
-      <PolicyLink className={`${ITEM} text-[14px] leading-[21px] desktop:text-[16px] desktop:leading-[24px]`}>환불 및 청약철회</PolicyLink>
-      <PolicyLink className={`${ITEM} text-[14px] leading-[21px] desktop:text-[16px] desktop:leading-[24px]`}>개인정보처리방침</PolicyLink>
+      {POLICY_DOCS.filter((other) => other.key !== doc.key).map((other) => (
+        <PolicyLink key={other.key} to={other.path} className={`${ITEM} text-[14px] leading-[21px] desktop:text-[16px] desktop:leading-[24px]`}>
+          {other.linkLabel}
+        </PolicyLink>
+      ))}
     </nav>
   )
 }

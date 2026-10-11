@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Link, useLocation } from 'react-router'
+import { useLocation } from 'react-router'
 import hippo from '../assets/landing/hippo.webp'
 import page from '../assets/landing/page.webp'
 import previewAiDone from '../assets/landing/preview-ai-done.webp'
@@ -8,12 +8,13 @@ import previewTodo from '../assets/landing/preview-todo.webp'
 import share from '../assets/landing/share.webp'
 import target from '../assets/landing/target.webp'
 import InfoCard from '../features/landing/InfoCard'
-import LandingButton from '../features/landing/LandingButton'
 import LandingSection, { SectionHeader } from '../features/landing/LandingSection'
 import Lines from '../features/landing/Lines'
 import PlanCard from '../features/landing/PlanCard'
+import SignupCta from '../features/landing/SignupCta'
 import { useDesktopZoom } from '../features/landing/useDesktopZoom'
-import { paths } from '../paths'
+import { OPERATOR_EMAIL, OPERATOR_INFO, POLICY_DOCS } from '../features/terms/policies'
+import PolicyLink from '../features/terms/PolicyLink'
 
 /** 02 · 서비스 이용 흐름 카드 (줄바꿈은 Figma 그대로) */
 const FLOW = [
@@ -33,7 +34,15 @@ const PREVIEWS = [
  * 06 · 결제 관련 안내. 답변 줄바꿈은 Figma 그대로이고 모바일 · 데스크톱이 달라 따로 적습니다.
  * 모바일은 2개씩 묶음(묶음 사이 28, 안 18), 데스크톱은 2개씩 한 줄(줄 사이 52, 칸 사이 28)
  */
-const FAQ_ROWS = [
+interface Faq {
+  q: string
+  a: string[]
+  /** 데스크톱 줄바꿈이 다를 때 */
+  desktop?: string[]
+  tight?: boolean
+}
+
+const FAQ_ROWS: Faq[][] = [
   [
     {
       q: 'Q. 자동으로 또 결제가 되나요?',
@@ -58,24 +67,23 @@ const FAQ_ROWS = [
   [
     {
       q: 'Q. 환불은 어떻게 받나요?',
-      a: ['A. 구매 후 30일 이내라면 사유를 묻지 않고 전액 환불해', '드립니다. [support@도메인]으로 알려주시면 Paddle을', '통해 처리됩니다.'],
-      desktop: ['A. 구매 후 30일 이내라면 사유를 묻지 않고 전액 환불해 드립니다.', '[support@도메인]으로 알려주시면 Paddle을 통해 처리됩니다.'],
+      // 10/11 팀 결정 문구 (Figma 문구와 달라 줄바꿈 없이 화면 너비대로 줄이 바뀝니다)
+      a: [
+        `A. 크레딧을 쓰지 않았다면 사유를 묻지 않고 전액 환불해 드립니다. ${OPERATOR_EMAIL}로 알려주시면 Paddle을 통해 처리됩니다. 서비스 종료일에 남은 크레딧은 신청하지 않아도 환불됩니다.`,
+      ],
     },
     {
       q: 'Q. 이미 쓴 크레딧도 환불되나요?',
-      a: ['A. [사용분 처리 기준 작성 — 전자상거래법상 제공이 개시된', '부분은 청약철회가 제한될 수 있고, 미사용분은 환불 대상', '입니다.]'],
-      desktop: ['A. [사용분 처리 기준 작성 — 전자상거래법상 제공이 개시된 부분은', '청약철회가 제한될 수 있고, 미사용분은 환불 대상입니다.]'],
+      a: ['A. 이미 쓴 크레딧은 환불되지 않습니다. 일부만 썼다면 결제 금액에서 쓴 횟수 × 1,200원을 뺀 금액을 돌려드립니다.'],
       tight: true,
     },
   ],
 ]
 
-/** 07 · 푸터 링크 (TODO: 환불 및 청약철회 · 개인정보처리방침 · 문의는 페이지가 생기면 연결) */
-const FOOTER_LINKS: { label: string; to?: string }[] = [
-  { label: '이용약관', to: paths.terms },
-  { label: '환불 및 청약철회' },
-  { label: '개인정보처리방침' },
-  { label: '문의' },
+/** 07 · 푸터 링크: 약관 · 정책 페이지 3개 + 문의(운영자 메일) */
+const FOOTER_LINKS = [
+  ...POLICY_DOCS.map((doc) => ({ label: doc.linkLabel, to: doc.path })),
+  { label: '문의', to: `mailto:${OPERATOR_EMAIL}` },
 ]
 
 const FOOTER_LINK_CLASS =
@@ -123,14 +131,7 @@ export default function LandingPage() {
               </p>
             </div>
           </div>
-          <div className="flex w-full flex-col items-center gap-[5px] desktop:gap-[8px]">
-            <LandingButton variant="gradient" desktopSize="hero">
-              회원가입하고 시작하기
-            </LandingButton>
-            <p className="text-center text-[13px] leading-[20px] text-black-gray60 desktop:text-[18px] desktop:leading-[25px]">
-              첫 1회는 무료 | 자동 결제 없음
-            </p>
-          </div>
+          <SignupCta place="hero" />
         </LandingSection>
 
         {/* 02 · 서비스 이용 흐름 */}
@@ -173,7 +174,7 @@ export default function LandingPage() {
               desktopLeft
               subtitle={
                 <>
-                  할일 조회, 할일 체크, 내보내기는
+                  할일 조회, 할 일 체크, 내보내기는
                   <br />
                   <strong className="font-bold">크레딧을 쓰지 않습니다.</strong>
                 </>
@@ -221,8 +222,6 @@ export default function LandingPage() {
               price="1,200원"
               perUse="1회당 1,200원"
               borderClass="border-black-gray40 desktop:border-black-gray60"
-              buttonLabel="1회 충전하기"
-              buttonVariant="gray"
             />
             <PlanCard
               title="5회"
@@ -230,10 +229,8 @@ export default function LandingPage() {
               description="여러 목표를 동시에"
               price="4,950원"
               perUse="1회당 990원"
-              saving="1회보다 1,300원 절약 !"
+              saving="1회보다 1,300원 절약"
               borderClass="border-brand-main"
-              buttonLabel="회원가입하고 시작하기"
-              buttonVariant="gradient"
             />
             <PlanCard
               title={
@@ -244,12 +241,12 @@ export default function LandingPage() {
               description="더 많은 목표를 동시에"
               price="9,900원"
               perUse="1회당 825원"
-              saving="5회보다 1,980원 절약 !"
+              saving="5회보다 1,980원 절약"
               borderClass="border-black-gray60"
-              buttonLabel="10회 충전하기"
-              buttonVariant="navy"
             />
           </div>
+          {/* 10/12 Figma: 카드마다 있던 충전 버튼을 없애고 카드 아래에 시작하기 버튼 하나 */}
+          <SignupCta place="pricing" />
         </LandingSection>
 
         {/* 05 · 제공 혜택 (모바일: 묶음 사이 28 · 안 18 / 데스크톱: 2개씩 한 줄, 줄 사이 52 · 칸 사이 28) */}
@@ -267,7 +264,10 @@ export default function LandingPage() {
             <InfoCard title="차감되지 않는 것">
               <Lines lines={['할 일 체크, 목표 조회, 기록 열람, 데이터 내보내기는', '크레딧을 쓰지 않습니다.']} />
             </InfoCard>
-            <InfoCard title="유효기간">충전한 크레딧은 구매일로부터 1년동안 사용할 수 있습니다.</InfoCard>
+            {/* 10/11 팀 결정 문구 (Figma: 구매일로부터 1년동안) */}
+            <InfoCard title="유효기간">
+              충전한 크레딧은 서비스 종료일(2026년 11월 20일)까지 사용할 수 있습니다. 남은 유료 크레딧은 종료 후 자동으로 환불됩니다.
+            </InfoCard>
           </div>
           {/* 데스크톱 높이 126 · 내용 세로 가운데 (Figma 고정 높이) */}
           <InfoCard title="AI 기능에 대한 고지" desktopGrow={false} className="desktop:h-[126px] desktop:justify-center">
@@ -293,25 +293,20 @@ export default function LandingPage() {
 
       {/*
         07 · 푸터 (배경 없음)
+        운영자 정보가 10/11 팀 결정 문구로 길어져 데스크톱에서 두 줄이 되므로 링크 줄은 줄지 않게(shrink-0) 둡니다.
         모바일: 패딩 32·20 / 세로 간격 20 / 링크 14px 700 행간 155% 사이 12 / 운영자 정보 10px 400 자간 -3%
         데스크톱: 패딩 60·100 / 가로 가운데 간격 187 / 링크 20px 600 행간 140% 사이 32 / 운영자 정보 18px 400 자간 -2%
       */}
       <footer className="flex w-full flex-col gap-[20px] px-[20px] py-[32px] desktop:flex-row desktop:items-center desktop:justify-center desktop:gap-[187px] desktop:px-[100px] desktop:py-[60px]">
-        <nav className="flex flex-wrap items-start gap-[12px] desktop:items-center desktop:gap-[32px]">
-          {FOOTER_LINKS.map(({ label, to }) =>
-            to ? (
-              <Link key={label} to={to} className={FOOTER_LINK_CLASS}>
-                {label}
-              </Link>
-            ) : (
-              <button key={label} type="button" className={FOOTER_LINK_CLASS}>
-                {label}
-              </button>
-            ),
-          )}
+        <nav className="flex flex-wrap items-start gap-[12px] desktop:shrink-0 desktop:flex-nowrap desktop:items-center desktop:gap-[32px]">
+          {FOOTER_LINKS.map(({ label, to }) => (
+            <PolicyLink key={label} to={to} className={FOOTER_LINK_CLASS}>
+              {label}
+            </PolicyLink>
+          ))}
         </nav>
         <p className="text-[10px] leading-[15px] tracking-[-0.03em] text-black-black desktop:text-[18px] desktop:leading-[25px] desktop:tracking-[-0.02em]">
-          운영자 [법적 이름] · [주소] · [support@도메인] · 호스팅 [예: Amazon Web Services, Inc.]
+          {OPERATOR_INFO}
         </p>
       </footer>
     </main>

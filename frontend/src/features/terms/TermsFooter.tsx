@@ -1,14 +1,10 @@
 import { paths } from '../../paths'
+import { OPERATOR_INFO, POLICY_DOCS } from './policies'
 import PolicyLink from './PolicyLink'
 
-/**
- * 정책 링크. 이용약관 → 이 페이지, 요금제 → 랜딩 요금제 섹션.
- * TODO: 환불 및 청약철회 · 개인정보처리방침 페이지가 생기면 연결
- */
+/** 정책 링크 (Figma 순서): 이용약관 · 환불 및 청약철회 · 개인정보처리방침 → 각 페이지, 요금제 → 랜딩 요금제 섹션 */
 const LINKS = [
-  { label: '이용약관', to: paths.terms },
-  { label: '환불 및 청약철회' },
-  { label: '개인정보처리방침' },
+  ...POLICY_DOCS.map((doc) => ({ label: doc.linkLabel, to: doc.path })),
   { label: '요금제', to: `${paths.landing}#pricing` },
 ]
 
@@ -33,7 +29,7 @@ export default function TermsFooter() {
         ))}
       </nav>
       <p className="text-[10px] leading-[16px] tracking-[-0.03em] text-black-gray60 desktop:text-[16px] desktop:leading-[26px] desktop:tracking-normal">
-        운영자 [법적 이름] · [주소] · [support@도메인] · 호스팅 [예: Amazon Web Services, Inc.]
+        {OPERATOR_INFO}
       </p>
     </footer>
   )
