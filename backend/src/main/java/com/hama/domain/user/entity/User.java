@@ -44,8 +44,9 @@ public class User extends BaseTimeEntity {
     /**
      * 남은 크레딧(횟수). AI 목표 생성·일정 재계산에 1회씩 씁니다.
      * 충전·차감은 동시에 일어날 수 있어서 엔티티 값을 고치지 않고 UserRepository 의 UPDATE 로만 바꿉니다.
+     * updatable = false: 다른 필드를 고쳐 저장할 때 읽어 둔 옛값으로 덮어쓰지 않게 합니다.
      */
-    @Column(nullable = false)
+    @Column(nullable = false, updatable = false)
     private int credits;
 
     /**

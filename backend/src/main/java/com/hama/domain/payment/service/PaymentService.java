@@ -13,7 +13,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -38,8 +38,12 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final UserRepository userRepository;
     private final JsonMapper jsonMapper;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
+    /**
+     * 토큰 없이 열린 경로라 서명부터 확인합니다. 트랜잭션(DB 연결)은 서명이 맞을 때만 엽니다.
+     * 그렇지 않으면 위조 요청만으로 커넥션 풀을 다 쓸 수 있습니다.
+     */
     public void handleWebhook(String signature, byte[] rawBody) {
         if (!signatureVerifier.isValid(signature, rawBody)) {
             throw new BusinessException(PaymentErrorCode.INVALID_WEBHOOK_SIGNATURE);
@@ -52,7 +56,7 @@ public class PaymentService {
             log.info("[Payment] 처리하지 않는 웹훅 - type: {}, event: {}", eventType, event.path("event_id").asString());
             return;
         }
-        completeTransaction(event.path("data"));
+        transactionTemplate.executeWithoutResult(status -> completeTransaction(event.path("data")));
     }
 
     /**
@@ -68,18 +72,15 @@ public class PaymentService {
         }
 
         JsonNode customData = transaction.path("custom_data");
-        Long userId = parseUserId(customData.path("userId"))
-                .filter(userRepository::existsById)
-                .orElse(null);
-        if (userId == null) {
+        Long userId = parseUserId(customData.path("userId")).orElse(null);
+        int credits = userId == null ? 0 : creditsOf(transaction.path("items"), transactionId);
+        // 충전 UPDATE 가 바꾼 행이 없으면 없는 사용자입니다. 따로 조회하면 그 사이에 탈퇴한 경우를 놓칩니다.
+        if (userId == null || userRepository.addCredits(userId, credits) == 0) {
             // 돈은 받았는데 누구 것인지 모르는 상태입니다. 재시도해도 결과가 같으니 200 으로 끝내고 사람이 처리합니다.
             log.error("[Payment] 결제는 완료됐지만 사용자를 찾지 못했습니다. Paddle 대시보드에서 확인 후 수동 처리하세요 - txn: {}, customData: {}",
                     transactionId, customData);
             return;
         }
-
-        int credits = creditsOf(transaction.path("items"), transactionId);
-        userRepository.addCredits(userId, credits);
         int amount = parseAmount(transaction, transactionId);
         String currency = transaction.path("currency_code").asString();
         paymentRepository.save(Payment.create(userId, transactionId, amount, currency, credits, paidAt(transaction, transactionId)));
@@ -116,7 +117,8 @@ public class PaymentService {
      * Paddle 재전송도 매번 같은 이유로 실패하므로 0 으로 저장하고 로그만 남깁니다.
      */
     private static int parseAmount(JsonNode transaction, String transactionId) {
-        String total = transaction.path("details").path("totals").path("total").asString();
+        JsonNode node = transaction.path("details").path("totals").path("total");
+        String total = node.isValueNode() ? node.asString() : node.toString();
         try {
             return Integer.parseInt(total);
         } catch (NumberFormatException e) {

@@ -134,6 +134,18 @@ class PaymentWebhookIntegrationTest {
     }
 
     @Test
+    void 금액이_객체로_와도_충전하고_금액은_0_으로_저장한다() throws Exception {
+        User user = newUser();
+        String transactionId = "txn_" + UUID.randomUUID();
+
+        sendWebhook(completedEvent(transactionId, String.valueOf(user.getId()), "{ \"amount\": 4950 }", FIVE_CREDITS),
+                SECRET).andExpect(status().isOk());
+
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS + 5);
+        assertThat(paymentOf(transactionId).getAmount()).isZero();
+    }
+
+    @Test
     void 결제_시각을_읽지_못해도_충전한다() throws Exception {
         User user = newUser();
         String body = completedEvent("txn_" + UUID.randomUUID(), String.valueOf(user.getId()))
