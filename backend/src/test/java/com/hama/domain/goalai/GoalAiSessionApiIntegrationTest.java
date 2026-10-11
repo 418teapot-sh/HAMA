@@ -23,7 +23,7 @@ class GoalAiSessionApiIntegrationTest extends GoalAiTestSupport {
         assertThat(data.get("status").asString()).isEqualTo("COLLECTING");
         assertThat(data.at("/aiMessage/content").asString()).isEqualTo("현재 토익 점수(또는 수준)는 어느 정도인가요?");
         assertThat(data.at("/aiMessage/expects").asString()).isEqualTo("CURRENT_LEVEL");
-        assertThat(AI.requests().getFirst().systemPrompt()).contains("2026-10-01");
+        assertThat(AI.requests().getFirst().systemPrompt()).contains("2026-10-01", "2027-09-30");
     }
 
     @Test

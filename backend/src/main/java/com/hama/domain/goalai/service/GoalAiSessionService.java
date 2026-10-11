@@ -47,7 +47,8 @@ public class GoalAiSessionService {
              "draft": ready 일 때만 {"title": 100자 이하 목표 문장, "metricName": 측정 지표, "unit": 단위,
                       "startValue": 현재 수치, "targetValue": 목표 수치, "startDate": "yyyy-MM-dd", "endDate": "yyyy-MM-dd",
                       "weeklyAvailableHours": 주간 가용시간 숫자, "currentLevel": 현재 수준 설명}, 아니면 null}
-            시작일을 말하지 않으면 오늘로 하고, 종료일은 오늘 이후여야 해. 기간은 최대 1년이야.
+            시작일을 말하지 않으면 오늘로 하고, 종료일은 오늘 이후여야 해.
+            종료일은 시작일 + 364일까지야(시작일 포함 365일). 오늘 시작이면 종료일은 %s까지야.
             """;
     private final GoalAiSessionRepository sessions;
     private final GoalAiMessageRepository messages;
@@ -125,7 +126,7 @@ public class GoalAiSessionService {
     private Turn ask(List<AiMessage> history) {
         LocalDate today = LocalDate.now(clock);
         SessionTurn answer = aiClient.chatForJson(
-                AiRequest.of("goal-session", SESSION_PROMPT.formatted(today), history), SessionTurn.class);
+                AiRequest.of("goal-session", SESSION_PROMPT.formatted(today, today.plusDays(Goal.MAX_PERIOD_DAYS - 1)), history), SessionTurn.class);
         if (answer == null || answer.reply() == null || answer.reply().isBlank()) {
             throw new BusinessException(AiErrorCode.AI_UPSTREAM_ERROR,
                     new IllegalStateException("[goal-session] AI 응답에 reply 가 없습니다."));

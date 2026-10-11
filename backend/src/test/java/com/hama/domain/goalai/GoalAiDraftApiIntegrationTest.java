@@ -33,6 +33,8 @@ class GoalAiDraftApiIntegrationTest extends GoalAiTestSupport {
         assertThat(data.get("needsSplit").asBoolean()).isFalse();
         assertThat(data.at("/suggestions/0/patch/endDate").asString()).isEqualTo("2027-01-31");
         assertThat(AI.requests().getLast().purpose()).isEqualTo("reality-check");
+        // 초안 시작일(2026-10-01) + 364일. 서버가 받는 연장 상한을 날짜로 알려 줍니다.
+        assertThat(AI.requests().getLast().systemPrompt()).contains("2027-09-30");
 
         JsonNode detail = call(get(path(sessionId, "")), user, null, 200).get("data");
         assertThat(detail.at("/realityResult/verdict").asString()).isEqualTo("CHALLENGING");
