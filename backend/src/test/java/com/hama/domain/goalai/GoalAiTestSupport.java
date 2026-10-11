@@ -66,7 +66,10 @@ public abstract class GoalAiTestSupport {
         String email = "goalai-" + UUID.randomUUID() + "@hama.com";
         JsonNode response = call(post("/api/v1/auth/signup"), null,
                 Map.of("email", email, "password", "password1234!", "name", "목표AI", "termsAgreed", true, "privacyAgreed", true, "ageConfirmed", true), 200);
-        return new User(users.findByEmail(email).orElseThrow().getId(), response.at("/data/accessToken").asString());
+        long id = users.findByEmail(email).orElseThrow().getId();
+        // 가입하면 1회뿐이라 플랜 선택 → replan 을 이어 하면 부족합니다. 차감은 CreditDeductionIntegrationTest 가 따로 봅니다.
+        jdbc.update("update users set credits = 10 where user_id = ?", id);
+        return new User(id, response.at("/data/accessToken").asString());
     }
 
     protected JsonNode call(MockHttpServletRequestBuilder request, User user, Object body, int expected)

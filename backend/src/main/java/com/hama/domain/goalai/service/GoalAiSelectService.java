@@ -13,6 +13,7 @@ import com.hama.domain.goalai.dto.SelectResponse;
 import com.hama.domain.goalai.entity.GoalPlan;
 import com.hama.domain.goalai.exception.GoalAiErrorCode;
 import com.hama.domain.goalai.repository.GoalPlanRepository;
+import com.hama.domain.payment.service.CreditService;
 import com.hama.domain.todo.entity.Todo;
 import com.hama.domain.todo.repository.TodoRepository;
 import com.hama.global.exception.BusinessException;
@@ -37,11 +38,12 @@ public class GoalAiSelectService {
     private final TodoRepository todos;
     private final BusyTimeReader busyTimes;
     private final GoalAiJson json;
+    private final CreditService credits;
     private final Clock clock;
 
     public GoalAiSelectService(GoalRepository goals, GoalPlanRepository plans, MilestoneRepository milestones,
             PeriodGoalRepository periodGoals, TodoRepository todos, BusyTimeReader busyTimes, GoalAiJson json,
-            @Qualifier("be3Clock") Clock clock) {
+            CreditService credits, @Qualifier("be3Clock") Clock clock) {
         this.goals = goals;
         this.plans = plans;
         this.milestones = milestones;
@@ -49,11 +51,14 @@ public class GoalAiSelectService {
         this.todos = todos;
         this.busyTimes = busyTimes;
         this.json = json;
+        this.credits = credits;
         this.clock = clock;
     }
 
     @Transactional
     public SelectResponse select(Long userId, Long planId) {
+        // AI 목표 확정에 1회. 목표를 잠그기 전에 씁니다(CreditService 락 순서). 아래에서 실패하면 롤백으로 돌아옵니다.
+        credits.use(userId);
         LocalDate today = LocalDate.now(clock);
         GoalPlan plan = plans.findById(planId)
                 .orElseThrow(() -> new BusinessException(GoalAiErrorCode.AI_PLAN_NOT_FOUND));

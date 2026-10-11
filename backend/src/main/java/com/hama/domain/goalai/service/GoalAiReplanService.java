@@ -5,6 +5,7 @@ import com.hama.domain.goal.entity.GoalStatus;
 import com.hama.domain.goal.repository.GoalRepository;
 import com.hama.domain.goalai.dto.ReplanResponse;
 import com.hama.domain.goalai.exception.GoalAiErrorCode;
+import com.hama.domain.payment.service.CreditService;
 import com.hama.domain.todo.entity.Todo;
 import com.hama.domain.todo.repository.TodoRepository;
 import com.hama.global.exception.BusinessException;
@@ -30,18 +31,22 @@ public class GoalAiReplanService {
     private final GoalRepository goals;
     private final TodoRepository todos;
     private final BusyTimeReader busyTimes;
+    private final CreditService credits;
     private final Clock clock;
 
     public GoalAiReplanService(GoalRepository goals, TodoRepository todos, BusyTimeReader busyTimes,
-            @Qualifier("be3Clock") Clock clock) {
+            CreditService credits, @Qualifier("be3Clock") Clock clock) {
         this.goals = goals;
         this.todos = todos;
         this.busyTimes = busyTimes;
+        this.credits = credits;
         this.clock = clock;
     }
 
     @Transactional
     public ReplanResponse replan(Long userId, Long goalId, LocalDate requestedFrom) {
+        // 재계산에 1회. 목표를 잠그기 전에 쓰고(CreditService 락 순서), 옮긴 게 없으면 아래에서 돌려줍니다.
+        credits.use(userId);
         LocalDate today = LocalDate.now(clock);
         Goal goal = GoalAiPlanService.owned(goals.findActiveForUpdate(goalId), userId);
         if (goal.effectiveStatus(today) != GoalStatus.IN_PROGRESS) {
@@ -55,11 +60,17 @@ public class GoalAiReplanService {
         }
         List<Todo> targets = todos.findPendingGoalTasksForUpdate(goalId);
         if (targets.isEmpty()) {
+            credits.giveBack(userId);
             return new ReplanResponse(0, 0);
         }
         TimeSlotPlacer placer = new TimeSlotPlacer(busyTimes.read(userId, from, goal.getEndDate(),
                 targets.stream().map(Todo::getId).collect(Collectors.toSet())));
-        return rearrange(targets, placer, from, goal.getEndDate());
+        ReplanResponse result = rearrange(targets, placer, from, goal.getEndDate());
+        // 바뀐 투두가 있으면 moved 에 들어갑니다(빈 시간이 없어 날짜만 옮긴 투두 포함). 0 이면 DB 에 바뀐 게 없습니다.
+        if (result.movedCount() == 0) {
+            credits.giveBack(userId);
+        }
+        return result;
     }
 
     /**
