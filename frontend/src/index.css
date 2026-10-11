@@ -64,6 +64,10 @@
   --text-body-b10--font-weight: 400;
   --text-body-b10--letter-spacing: -0.015em; /* 자간 -1.5% */
 
+  /* 화면 너비: 이 너비부터 랜딩을 데스크톱(Figma MacBook Pro 14" 1512px) 디자인으로 보여 줍니다. desktop: 접두사로 씁니다
+     (1512px 보다 좁으면 랜딩 화면 전체를 비율대로 줄여 보여 줌: features/landing/useDesktopZoom) */
+  --breakpoint-desktop: 64rem; /* 1024px */
+
   /* 효과 (Figma 효과 스타일 이름 그대로) */
   --shadow-shadow: 0 15px 40px 0 rgb(206 206 206 / 0.08); /* shadow: X 0, Y 15, 흐림 40, 스프레드 0, #CECECE 8% (약관 카드·하단 탭바) */
   --shadow-card-shadow: 0 15px 48px 0 rgb(84 128 174 / 0.08); /* Card_Shadow: X 0, Y 15, 흐림 48, 스프레드 0, #5480AE 8% (하단 탭바 + 버튼) */
