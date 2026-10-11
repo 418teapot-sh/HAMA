@@ -8,6 +8,7 @@ import com.hama.global.exception.BusinessException;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -81,14 +82,15 @@ public class PaymentService {
         userRepository.addCredits(userId, credits);
         int amount = parseAmount(transaction, transactionId);
         String currency = transaction.path("currency_code").asString();
-        paymentRepository.save(Payment.create(userId, transactionId, amount, currency, credits, paidAt(transaction)));
+        paymentRepository.save(Payment.create(userId, transactionId, amount, currency, credits, paidAt(transaction, transactionId)));
         log.info("[Payment] 결제 완료 - txn: {}, userId: {}, amount: {} {}, credits: +{}",
                 transactionId, userId, amount, currency, credits);
     }
 
     /**
      * 산 가격마다 설정(paddle.credit-price-ids)에서 횟수를 찾아 수량만큼 더합니다.
-     * 모르는 가격은 충전하지 않습니다. 돈은 이미 받았으니 예외로 막지 않고, 결제는 저장한 뒤 사람이 처리합니다.
+     * 모르는 가격이 하나라도 있으면(가격 ID 설정 누락, Sandbox·Live ID 혼동) 돈은 받았는데 줄 크레딧을 모르는 상태입니다.
+     * 저장하면 중복 검사에 막혀 다시 처리할 수 없으니 저장하지 않고 실패로 응답합니다. Paddle 이 재전송하므로 설정을 고치면 그때 충전됩니다.
      */
     private int creditsOf(JsonNode items, String transactionId) {
         int total = 0;
@@ -96,11 +98,15 @@ public class PaymentService {
             String priceId = item.path("price").path("id").asString(item.path("price_id").asString());
             int credits = properties.creditsOf(priceId);
             if (credits == 0) {
-                log.error("[Payment] 설정에 없는 가격이라 충전하지 않았습니다. paddle.credit-price-ids 와 Paddle 카탈로그를 확인하세요 - txn: {}, price: {}",
+                log.error("[Payment] 설정에 없는 가격이라 처리하지 않았습니다. paddle.credit-price-ids 와 Paddle 카탈로그를 확인하세요 - txn: {}, price: {}",
                         transactionId, priceId);
-                continue;
+                throw new BusinessException(PaymentErrorCode.UNKNOWN_PRICE);
             }
             total += credits * Math.max(item.path("quantity").asInt(1), 1);
+        }
+        if (total == 0) {
+            log.error("[Payment] 결제에 상품이 없습니다 - txn: {}", transactionId);
+            throw new BusinessException(PaymentErrorCode.UNKNOWN_PRICE);
         }
         return total;
     }
@@ -120,8 +126,11 @@ public class PaymentService {
         }
     }
 
-    /** 프론트가 customData 에 숫자로 넣든 문자열로 넣든 받습니다. */
+    /** 프론트가 customData 에 숫자로 넣든 문자열로 넣든 받습니다. 객체·배열이면 없는 것으로 봅니다. */
     private static Optional<Long> parseUserId(JsonNode userId) {
+        if (!userId.isValueNode()) {
+            return Optional.empty();
+        }
         try {
             return Optional.of(Long.valueOf(userId.asString()));
         } catch (NumberFormatException e) {
@@ -129,12 +138,19 @@ public class PaymentService {
         }
     }
 
-    /** billed_at 은 UTC(RFC 3339)로 옵니다. 다른 시각 컬럼처럼 서버 시간대로 바꿔 저장합니다. */
-    private static LocalDateTime paidAt(JsonNode transaction) {
-        String billedAt = transaction.path("billed_at").asString();
-        if (billedAt.isEmpty()) {
+    /**
+     * billed_at 은 UTC(RFC 3339)로 옵니다. 다른 시각 컬럼처럼 서버 시간대로 바꿔 저장합니다.
+     * 기록용이라 못 읽으면 금액처럼 실패시키지 않고 지금 시각으로 저장합니다(실패하면 재전송도 매번 같은 이유로 실패).
+     */
+    private static LocalDateTime paidAt(JsonNode transaction, String transactionId) {
+        String billedAt = transaction.path("billed_at").asString("");
+        try {
+            return OffsetDateTime.parse(billedAt).atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+        } catch (DateTimeParseException e) {
+            if (!billedAt.isEmpty()) {
+                log.error("[Payment] 결제 시각을 읽지 못해 지금 시각으로 저장합니다 - txn: {}, billed_at: {}", transactionId, billedAt);
+            }
             return LocalDateTime.now();
         }
-        return OffsetDateTime.parse(billedAt).atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
     }
 }

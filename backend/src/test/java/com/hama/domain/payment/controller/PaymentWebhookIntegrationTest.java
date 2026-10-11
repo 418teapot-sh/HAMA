@@ -118,17 +118,39 @@ class PaymentWebhookIntegrationTest {
     }
 
     @Test
-    void 설정에_없는_가격은_충전하지_않고_결제만_저장한다() throws Exception {
+    void 설정에_없는_가격이_섞여_있으면_저장하지_않고_실패해서_재전송을_받는다() throws Exception {
         User user = newUser();
         String transactionId = "txn_" + UUID.randomUUID();
         String items = """
-                [{ "price": { "id": "pri_unknown" }, "quantity": 1 }]""";
+                [{ "price": { "id": "pri_test_5" }, "quantity": 1 },
+                 { "price": { "id": "pri_unknown" }, "quantity": 1 }]""";
 
-        sendWebhook(completedEvent(transactionId, String.valueOf(user.getId()), "\"1200\"", items), SECRET)
-                .andExpect(status().isOk());
+        sendWebhook(completedEvent(transactionId, String.valueOf(user.getId()), "\"6150\"", items), SECRET)
+                .andExpect(status().is5xxServerError())
+                .andExpect(jsonPath("$.error.code").value("UNKNOWN_PRICE"));
 
         assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS);
-        assertThat(paymentOf(transactionId).getCredits()).isZero();
+        assertThat(paymentRepository.existsByPaddleTransactionId(transactionId)).isFalse();
+    }
+
+    @Test
+    void 결제_시각을_읽지_못해도_충전한다() throws Exception {
+        User user = newUser();
+        String body = completedEvent("txn_" + UUID.randomUUID(), String.valueOf(user.getId()))
+                .replace("2026-10-31T00:59:58.000000Z", "not-a-date");
+
+        sendWebhook(body, SECRET).andExpect(status().isOk());
+
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS + 5);
+    }
+
+    @Test
+    void customData_의_userId_가_객체면_사용자를_못_찾은_것으로_200() throws Exception {
+        String transactionId = "txn_" + UUID.randomUUID();
+
+        sendWebhook(completedEvent(transactionId, "{ \"id\": 1 }"), SECRET).andExpect(status().isOk());
+
+        assertThat(paymentRepository.existsByPaddleTransactionId(transactionId)).isFalse();
     }
 
     @Test
