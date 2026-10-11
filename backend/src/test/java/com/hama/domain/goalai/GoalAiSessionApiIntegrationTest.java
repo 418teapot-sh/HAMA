@@ -23,7 +23,7 @@ class GoalAiSessionApiIntegrationTest extends GoalAiTestSupport {
         assertThat(data.get("status").asString()).isEqualTo("COLLECTING");
         assertThat(data.at("/aiMessage/content").asString()).isEqualTo("현재 토익 점수(또는 수준)는 어느 정도인가요?");
         assertThat(data.at("/aiMessage/expects").asString()).isEqualTo("CURRENT_LEVEL");
-        assertThat(AI.requests().getFirst().systemPrompt()).contains("2026-10-01");
+        assertThat(AI.requests().getFirst().systemPrompt()).contains("2026-10-01", "2027-09-30");
     }
 
     @Test
@@ -63,6 +63,28 @@ class GoalAiSessionApiIntegrationTest extends GoalAiTestSupport {
         JsonNode data = call(post("/api/v1/goals/ai/sessions"), user, Map.of("rawGoal", "토익"), 201).get("data");
 
         assertThat(data.get("status").asString()).isEqualTo("COLLECTING");
+        assertThat(data.at("/aiMessage/content").asString()).contains("시작일과 종료일");
+        assertThat(data.at("/aiMessage/expects").asString()).isEqualTo("PERIOD");
+    }
+
+    @Test
+    void READY_뒤에_쓸_수_없는_초안이_오면_이전_초안을_두고_다시_묻는다() throws Exception {
+        User user = user();
+        long sessionId = readySession(user);
+
+        AI.answer(READY_ANSWER.replace("2026-12-31", "2026-09-01"));
+        JsonNode pastEnd = call(post("/api/v1/goals/ai/sessions/" + sessionId + "/messages"), user,
+                Map.of("content", "9월 1일까지요"), 200).get("data");
+        assertThat(pastEnd.get("status").asString()).isEqualTo("READY");
+        assertThat(pastEnd.at("/aiMessage/expects").asString()).isEqualTo("PERIOD");
+        assertThat(pastEnd.at("/goalDraft/endDate").asString()).isEqualTo("2026-12-31");
+
+        AI.answer(READY_ANSWER.replace("\"3개월 안에 토익 850점 달성\"", "\" \""));
+        JsonNode blankTitle = call(post("/api/v1/goals/ai/sessions/" + sessionId + "/messages"), user,
+                Map.of("content", "제목은 아무거나요"), 200).get("data");
+        assertThat(blankTitle.get("status").asString()).isEqualTo("READY");
+        assertThat(blankTitle.at("/aiMessage/expects").asString()).isEqualTo("OTHER");
+        assertThat(blankTitle.at("/goalDraft/title").asString()).isEqualTo("3개월 안에 토익 850점 달성");
     }
 
     @Test
@@ -75,7 +97,7 @@ class GoalAiSessionApiIntegrationTest extends GoalAiTestSupport {
                 Map.of("content", "2년 동안 할게요"), 200).get("data");
 
         assertThat(data.get("status").asString()).isEqualTo("READY");
-        assertThat(data.at("/aiMessage/content").asString()).contains("최대 1년");
+        assertThat(data.at("/aiMessage/content").asString()).contains("365일", "2027-09-30");
         assertThat(data.at("/aiMessage/expects").asString()).isEqualTo("PERIOD");
         assertThat(data.at("/goalDraft/endDate").asString()).isEqualTo("2026-12-31");
         JsonNode session = call(get("/api/v1/goals/ai/sessions/" + sessionId), user, null, 200).get("data");

@@ -54,7 +54,7 @@ public class GoalAiDraftService {
                 "label": 한 줄 한국어 설명,
                 "patch": EXTEND_PERIOD 는 {"endDate":"yyyy-MM-dd"}, LOWER_TARGET 는 {"targetValue":숫자},
                          MORE_TIME 는 {"weeklyAvailableHours":숫자}}]}
-            EXTEND_PERIOD 의 종료일은 시작일부터 최대 1년(365일) 안이어야 해.
+            EXTEND_PERIOD 의 종료일은 %s 이하여야 해(시작일 + 364일).
             """;
 
     private final GoalAiSessionRepository sessions;
@@ -84,7 +84,8 @@ public class GoalAiDraftService {
         LocalDate today = LocalDate.now(clock);
         Integer available = availableHours(draft);
 
-        RealityAnswer answer = aiClient.chatForJson(AiRequest.of("reality-check", REALITY_PROMPT.formatted(today),
+        RealityAnswer answer = aiClient.chatForJson(AiRequest.of("reality-check", REALITY_PROMPT.formatted(today,
+                        draft.startDate().plusDays(Goal.MAX_PERIOD_DAYS - 1)),
                 List.of(AiMessage.user("초안: " + draftJson + "\n기간 내 총 가용시간: "
                         + (available == null ? "알 수 없음" : available + "시간")))), RealityAnswer.class);
         RealityResult result = toResult(answer, draft, available);
