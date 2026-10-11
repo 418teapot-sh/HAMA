@@ -31,6 +31,22 @@ class GoalDraftTest {
         assertThat(draft("토익", TODAY.plusDays(5), TODAY.plusDays(1)).normalized(TODAY)).isNull();
         assertThat(draft("토익", TODAY.minusDays(30), TODAY.minusDays(1)).normalized(TODAY)).isNull();
         assertThat(draft("토익", TODAY, LocalDate.of(10000, 1, 1)).normalized(TODAY)).isNull();
+        assertThat(draft("토익", TODAY, TODAY.plusDays(365)).normalized(TODAY)).isNull();
+        assertThat(draft("토익", TODAY, TODAY.plusDays(364)).normalized(TODAY)).isNotNull();
+    }
+
+    @Test
+    void 쓸_수_없는_초안은_원인을_알려_준다() {
+        assertThat(draft("토익", TODAY, TODAY.plusDays(90)).problem(TODAY)).isNull();
+        assertThat(draft(" ", TODAY, TODAY.plusDays(90)).problem(TODAY)).isEqualTo(GoalDraft.Problem.TITLE);
+        assertThat(draft("토익", null, TODAY.plusDays(90)).problem(TODAY)).isEqualTo(GoalDraft.Problem.PERIOD);
+        assertThat(draft("토익", TODAY.plusDays(5), TODAY.plusDays(1)).problem(TODAY))
+                .isEqualTo(GoalDraft.Problem.PERIOD);
+        assertThat(draft("토익", TODAY.minusDays(30), TODAY.minusDays(1)).problem(TODAY))
+                .isEqualTo(GoalDraft.Problem.PERIOD);
+        assertThat(draft("토익", TODAY, LocalDate.of(10000, 1, 1)).problem(TODAY)).isEqualTo(GoalDraft.Problem.PERIOD);
+        assertThat(draft("토익", TODAY, TODAY.plusDays(365)).problem(TODAY))
+                .isEqualTo(GoalDraft.Problem.PERIOD_TOO_LONG);
     }
 
     @Test

@@ -61,13 +61,12 @@ class AuthServiceTest {
     class 회원가입 {
 
         @Test
-        void 무료_상태로_가입하고_토큰을_발급한다() {
+        void 무료_크레딧_1회로_가입하고_토큰을_발급한다() {
             given(userRepository.existsByEmail(EMAIL)).willReturn(false);
             given(passwordEncoder.encode("password1234!")).willReturn("encoded");
             given(userRepository.saveAndFlush(any(User.class))).willAnswer(invocation -> {
                 User user = invocation.getArgument(0);
-                assertThat(user.isPremium()).isFalse();
-                assertThat(user.getGoalCreatedCount()).isZero();
+                assertThat(user.getCredits()).isEqualTo(1);
                 assertThat(user.getPassword()).isEqualTo("encoded");
                 ReflectionTestUtils.setField(user, "id", 1L);
                 return user;

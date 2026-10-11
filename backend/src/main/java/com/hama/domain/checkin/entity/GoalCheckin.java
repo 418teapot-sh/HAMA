@@ -65,4 +65,14 @@ public class GoalCheckin extends BaseTimeEntity {
         checkin.checkedAt = time;
         return checkin;
     }
+
+    public void updateAchievement(Boolean achieved) {
+        if (type != CheckinType.END) {
+            throw new BusinessException(CheckinErrorCode.CHECKIN_NOT_END);
+        }
+        if (achieved == null) {
+            throw new BusinessException(CheckinErrorCode.CHECKIN_INVALID_INPUT);
+        }
+        this.achieved = achieved;
+    }
 }

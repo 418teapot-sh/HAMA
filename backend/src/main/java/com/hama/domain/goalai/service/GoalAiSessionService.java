@@ -4,6 +4,7 @@ import static com.hama.domain.goalai.service.SessionGuards.owned;
 import static com.hama.domain.goalai.service.SessionGuards.requireOpen;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.hama.domain.goal.entity.Goal;
 import com.hama.domain.goalai.dto.GoalDraft;
 import com.hama.domain.goalai.dto.RealityResult;
 import com.hama.domain.goalai.dto.SessionResponses;
@@ -47,8 +48,8 @@ public class GoalAiSessionService {
                       "startValue": 현재 수치, "targetValue": 목표 수치, "startDate": "yyyy-MM-dd", "endDate": "yyyy-MM-dd",
                       "weeklyAvailableHours": 주간 가용시간 숫자, "currentLevel": 현재 수준 설명}, 아니면 null}
             시작일을 말하지 않으면 오늘로 하고, 종료일은 오늘 이후여야 해.
+            종료일은 시작일 + 364일까지야(시작일 포함 365일). 오늘 시작이면 종료일은 %s까지야.
             """;
-
     private final GoalAiSessionRepository sessions;
     private final GoalAiMessageRepository messages;
     private final AiClient aiClient;
@@ -73,7 +74,9 @@ public class GoalAiSessionService {
             GoalAiSession session = sessions.save(GoalAiSession.start(userId, rawGoal));
             messages.save(GoalAiMessage.user(session.getId(), rawGoal));
             GoalAiMessage reply = messages.save(GoalAiMessage.ai(session.getId(), turn.reply(), turn.expects()));
-            session.updateDraft(json.write(turn.draft()));
+            if (!turn.keepDraft()) {
+                session.updateDraft(json.write(turn.draft()));
+            }
             return new SessionResponses.Started(session.getId(), session.getStatus(),
                     SessionResponses.AiMessageView.from(reply));
         });
@@ -100,9 +103,11 @@ public class GoalAiSessionService {
             requireOpen(session);
             messages.save(GoalAiMessage.user(sessionId, content));
             GoalAiMessage reply = messages.save(GoalAiMessage.ai(sessionId, turn.reply(), turn.expects()));
-            session.updateDraft(json.write(turn.draft()));
+            if (!turn.keepDraft()) {
+                session.updateDraft(json.write(turn.draft()));
+            }
             return new SessionResponses.Reply(session.getStatus(), SessionResponses.AiMessageView.from(reply),
-                    turn.draft());
+                    turn.keepDraft() ? json.read(session.getDraftJson(), GoalDraft.class) : turn.draft());
         });
     }
 
@@ -121,20 +126,37 @@ public class GoalAiSessionService {
     private Turn ask(List<AiMessage> history) {
         LocalDate today = LocalDate.now(clock);
         SessionTurn answer = aiClient.chatForJson(
-                AiRequest.of("goal-session", SESSION_PROMPT.formatted(today), history), SessionTurn.class);
+                AiRequest.of("goal-session", SESSION_PROMPT.formatted(today, today.plusDays(Goal.MAX_PERIOD_DAYS - 1)), history), SessionTurn.class);
         if (answer == null || answer.reply() == null || answer.reply().isBlank()) {
             throw new BusinessException(AiErrorCode.AI_UPSTREAM_ERROR,
                     new IllegalStateException("[goal-session] AI 응답에 reply 가 없습니다."));
         }
-        GoalDraft draft = Boolean.TRUE.equals(answer.ready()) && answer.draft() != null
-                ? answer.draft().normalized(today) : null;
-        return new Turn(answer.reply().strip(), draft == null ? Expects.parse(answer.expects()) : null, draft);
+        if (!Boolean.TRUE.equals(answer.ready()) || answer.draft() == null) {
+            return new Turn(answer.reply().strip(), Expects.parse(answer.expects()), null, false);
+        }
+        // AI 답("초안을 만들었어요")을 그대로 보내면 초안 없이 완료된 것처럼 보이므로 서버가 다시 묻습니다.
+        GoalDraft.Problem problem = answer.draft().problem(today);
+        if (problem != null) {
+            return reask(problem, answer.draft());
+        }
+        return new Turn(answer.reply().strip(), null, answer.draft().normalized(today), false);
+    }
+
+    private static Turn reask(GoalDraft.Problem problem, GoalDraft draft) {
+        return switch (problem) {
+            case TITLE -> new Turn("목표를 한 문장으로 다시 알려 주세요.", Expects.OTHER, null, true);
+            case PERIOD -> new Turn("시작일과 종료일을 다시 알려 주세요. 종료일은 오늘 이후여야 해요.",
+                    Expects.PERIOD, null, true);
+            case PERIOD_TOO_LONG -> new Turn("기간은 시작일 포함 365일까지예요. 종료일을 %s 까지로 다시 알려 주세요."
+                    .formatted(draft.startDate().plusDays(Goal.MAX_PERIOD_DAYS - 1)), Expects.PERIOD, null, true);
+        };
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record SessionTurn(String reply, String expects, Boolean ready, GoalDraft draft) {
     }
 
-    private record Turn(String reply, Expects expects, GoalDraft draft) {
+    /** keepDraft 면 이번 턴의 초안을 받지 않고 이전 초안·상태를 그대로 둡니다. */
+    private record Turn(String reply, Expects expects, GoalDraft draft, boolean keepDraft) {
     }
 }

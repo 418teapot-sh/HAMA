@@ -14,10 +14,10 @@ public record UserResponse(
         @Schema(description = "이름", example = "하마")
         String name,
 
-        @Schema(description = "프리미엄(유료) 사용자 여부", example = "false")
-        boolean isPremium
+        @Schema(description = "남은 크레딧(횟수)", example = "1")
+        int credits
 ) {
     public static UserResponse from(User user) {
-        return new UserResponse(user.getId(), user.getEmail(), user.getName(), user.isPremium());
+        return new UserResponse(user.getId(), user.getEmail(), user.getName(), user.getCredits());
     }
 }

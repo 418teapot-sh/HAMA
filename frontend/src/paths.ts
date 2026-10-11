@@ -6,4 +6,8 @@ export const paths = {
   mypage: '/mypage',
   login: '/login',
   signup: '/signup',
+  landing: '/landing',
+  terms: '/terms',
+  refund: '/refund',
+  privacy: '/privacy',
 } as const

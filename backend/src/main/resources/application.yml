@@ -28,7 +28,7 @@ app:
   cookie:
     # 리프레시 토큰 쿠키가 재발급·로그아웃 요청에만 붙도록 경로를 좁힙니다.
     # 모든 API 에 딸려가면 노출 면적만 넓어집니다.
-    path: /api/auth
+    path: /api/v1/auth
     # secure / same-site 는 환경마다 달라서 프로필별 파일에서 정합니다.
     # (로컬은 http 라서 Secure 쿠키가 브라우저에 저장되지 않습니다)
 
@@ -54,8 +54,14 @@ liner:
 paddle:
   api-key: ${PADDLE_API_KEY:}
   # 웹훅 서명 검증용. 이게 없으면 아무나 "결제 완료" 웹훅을 위조해서
-  # isPremium 을 켤 수 있습니다.
+  # 크레딧을 충전할 수 있습니다.
   webhook-secret: ${PADDLE_WEBHOOK_SECRET:}
+  # 충전 횟수 → Paddle 가격 ID(pri_...). 카탈로그 상품 3개와 맞춥니다. Sandbox 와 Live 의 값이 다릅니다.
+  # 여기 없는 가격으로 결제가 오면 충전하지 않고 에러 로그를 남깁니다.
+  credit-price-ids:
+    1: ${PADDLE_PRICE_ID_1:}
+    5: ${PADDLE_PRICE_ID_5:}
+    12: ${PADDLE_PRICE_ID_12:}
 
 logging:
   pattern:

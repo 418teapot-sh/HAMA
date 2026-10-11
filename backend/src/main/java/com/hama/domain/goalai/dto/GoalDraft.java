@@ -1,6 +1,7 @@
 package com.hama.domain.goalai.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.hama.domain.goal.entity.Goal;
 import com.hama.domain.goal.entity.GoalContent;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -23,14 +24,29 @@ public record GoalDraft(
     private static final BigDecimal MAX_VALUE = new BigDecimal("99999999.99");
     private static final BigDecimal MAX_WEEKLY_HOURS = new BigDecimal("168.0");
 
+    /** 초안을 쓸 수 없는 이유. 원인마다 사용자에게 다시 물을 내용이 다릅니다. */
+    public enum Problem {
+        TITLE, PERIOD, PERIOD_TOO_LONG
+    }
+
+    /** 쓸 수 있는 초안이면 null, 아니면 그 이유입니다. */
+    public Problem problem(LocalDate today) {
+        if (title == null || title.isBlank()) {
+            return Problem.TITLE;
+        }
+        if (startDate == null || endDate == null || !storable(startDate) || !storable(endDate)
+                || startDate.isAfter(endDate) || endDate.isBefore(today)) {
+            return Problem.PERIOD;
+        }
+        return Goal.withinMaxPeriod(startDate, endDate) ? null : Problem.PERIOD_TOO_LONG;
+    }
+
     /**
-     * AI 가 준 초안을 DB 에 담을 수 있는 모양으로 맞춥니다. 제목·기간이 없거나 기간이 잘못됐으면 null(아직 수집 중)입니다.
+     * AI 가 준 초안을 DB 에 담을 수 있는 모양으로 맞춥니다. {@link #problem} 이 있으면 null(아직 수집 중)입니다.
      * AI 는 길이·자릿수를 지키지 않을 수 있어서 거절하지 않고 자르거나 비웁니다.
      */
     public GoalDraft normalized(LocalDate today) {
-        if (title == null || title.isBlank() || startDate == null || endDate == null
-                || !storable(startDate) || !storable(endDate)
-                || startDate.isAfter(endDate) || endDate.isBefore(today)) {
+        if (problem(today) != null) {
             return null;
         }
         return new GoalDraft(cut(title.strip(), 100), cut(metricName, 50), cut(unit, 20),
