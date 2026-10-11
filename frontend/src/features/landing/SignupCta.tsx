@@ -1,3 +1,5 @@
+import { useNavigate } from 'react-router'
+import { paths } from '../../paths'
 import LandingButton from './LandingButton'
 
 /** 모바일 버튼 · 안내 문구 사이 간격과 안내 문구 글자 (데스크톱은 둘 다 사이 8 · 18px 행간 140%(25px)) */
@@ -11,13 +13,14 @@ const MOBILE = {
 /**
  * 회원가입하고 시작하기 버튼 + "첫 1회는 무료 | 자동 결제 없음" (Figma 01 · 시작하기 / 04 · 요금제 아래)
  * 버튼은 모바일 너비 가득 · 데스크톱 hero 크기, 안내 문구 400 가운데 Black/Gray60
- * TODO: 누르면 이동할 곳은 회의 후 연결 (지금은 모양만)
+ * 누르면 회원가입 화면으로 이동합니다.
  */
 export default function SignupCta({ place }: { place: keyof typeof MOBILE }) {
   const mobile = MOBILE[place]
+  const navigate = useNavigate()
   return (
     <div className={`flex w-full flex-col items-center ${mobile.gap} desktop:gap-[8px]`}>
-      <LandingButton>
+      <LandingButton onClick={() => navigate(paths.signup)}>
         회원가입하고 시작하기
       </LandingButton>
       <p className={`text-center text-black-gray60 ${mobile.note} desktop:text-[18px] desktop:leading-[25px]`}>
