@@ -18,8 +18,7 @@ import { paths } from '../paths'
 /** 02 · 서비스 이용 흐름 카드 (줄바꿈은 Figma 그대로) */
 const FLOW = [
   { image: target, title: '목표 작성하기', description: ['문장으로 AI와 함께할', '목표 작성하기'] },
-  // TODO: Figma 문구가 "투드리스트"로 되어 있어 그대로 둠 (오타인지 확인 필요)
-  { image: page, title: 'AI 투두리스트 생성', description: ['작성한 목표를 바탕으로', 'AI가 투드리스트 생성'] },
+  { image: page, title: 'AI 투두리스트 생성', description: ['작성한 목표를 바탕으로', 'AI가 투두리스트 생성'] },
   { image: share, title: '리포트로 관리', description: ['진행한 투두리스트 기반으로', '상태 관리 및 목표 수정'] },
 ]
 
