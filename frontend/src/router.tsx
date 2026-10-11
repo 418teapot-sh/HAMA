@@ -3,6 +3,7 @@ import RequireAuth from './features/auth/RequireAuth'
 import MobileLayout from './layouts/MobileLayout'
 import TabLayout from './layouts/TabLayout'
 import HomePage from './pages/HomePage'
+import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import MyPage from './pages/MyPage'
 import ReportPage from './pages/ReportPage'
@@ -11,6 +12,8 @@ import TodoPage from './pages/TodoPage'
 import { paths } from './paths'
 
 export const router = createBrowserRouter([
+  // 랜딩은 넓은 화면에서 데스크톱 디자인으로 보여 주므로 모바일 폭(402) 레이아웃 밖에 둡니다.
+  { path: paths.landing, element: <LandingPage /> },
   {
     element: <MobileLayout />,
     children: [
