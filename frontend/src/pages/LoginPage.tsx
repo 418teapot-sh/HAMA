@@ -62,8 +62,8 @@ export default function LoginPage() {
         variant="close"
         leftLabel="닫기"
         leftIcon={<img src={icClose} alt="" className="size-[24px]" />}
-        // TODO: 닫기 버튼을 눌렀을 때 이동할 화면 확인 필요(랜딩 페이지 예정)
-        onLeftClick={undefined}
+        // 닫으면 서비스 소개(랜딩)로 돌아갑니다.
+        onLeftClick={() => navigate(paths.landing)}
       />
 
       <main className="flex w-full flex-col">

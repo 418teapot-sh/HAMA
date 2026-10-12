@@ -15,10 +15,10 @@ import icEyesSee from '../assets/icons/ic_eyes_see.svg'
 
 type AgreementKey = 'termsAgreed' | 'privacyAgreed' | 'ageConfirmed' | 'marketingAgreed'
 
-/** Figma 약관 동의 항목 문구 그대로. key 는 회원가입 API 의 필드 이름입니다. */
+/** Figma 약관 동의 항목 문구 그대로. key 는 회원가입 API 의 필드 이름, href 는 화살표를 눌렀을 때 열 약관 페이지입니다. */
 const AGREEMENT_ITEMS: (AgreementItem & { key: AgreementKey })[] = [
-  { key: 'termsAgreed', label: '서비스 이용 약관 동의 (필수)', required: true },
-  { key: 'privacyAgreed', label: '개인정보 수집 및 이용 동의 (필수)', required: true },
+  { key: 'termsAgreed', label: '서비스 이용 약관 동의 (필수)', required: true, href: paths.terms },
+  { key: 'privacyAgreed', label: '개인정보 수집 및 이용 동의 (필수)', required: true, href: paths.privacy },
   { key: 'ageConfirmed', label: '만 14세 이상 확인 (필수)', required: true },
   { key: 'marketingAgreed', label: '마케팅 알림 수신 동의 (선택)', required: false },
 ]

@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import icRight from '../assets/icons/ic_right.svg'
 import Checkbox from './Checkbox'
 
@@ -5,6 +6,8 @@ export interface AgreementItem {
   key: string
   label: string
   required: boolean
+  /** 오른쪽 화살표(ic_right)를 누르면 새 탭으로 열 약관 페이지 주소. 없으면 화살표는 모양만 */
+  href?: string
 }
 
 interface AgreementProps {
@@ -61,8 +64,14 @@ export default function Agreement({ items, checked, onChange }: AgreementProps) 
                 </span>
                 <span className="text-body-b8 text-black-gray80">{item.label}</span>
               </label>
-              {/* TODO: ic_right 를 눌렀을 때 약관 상세로 이동할지 확인 필요 (지금은 아이콘만) */}
-              <img src={icRight} alt="" className="size-[24px] shrink-0" />
+              {/* 약관 페이지는 새 탭으로 열어, 쓰던 회원가입 입력이 사라지지 않게 합니다. */}
+              {item.href ? (
+                <Link to={item.href} target="_blank" rel="noopener noreferrer" aria-label={`${item.label} 내용 보기`} className="shrink-0">
+                  <img src={icRight} alt="" className="size-[24px]" />
+                </Link>
+              ) : (
+                <img src={icRight} alt="" className="size-[24px] shrink-0" />
+              )}
             </div>
           )
         })}
