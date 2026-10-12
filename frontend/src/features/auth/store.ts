@@ -13,7 +13,8 @@ export interface User {
   id: number
   email: string
   name: string
-  isPremium: boolean
+  /** 남은 크레딧(횟수) */
+  credits: number
 }
 
 interface AuthState {
