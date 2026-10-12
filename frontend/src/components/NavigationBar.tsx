@@ -12,6 +12,10 @@ interface NavigationBarProps {
   leftIcon?: ReactNode
   leftLabel?: string
   onLeftClick?: () => void
+  /** 오른쪽 아이콘 (24×24). 목표 추가 화면의 닫기(X) 등 */
+  rightIcon?: ReactNode
+  rightLabel?: string
+  onRightClick?: () => void
 }
 
 /**
@@ -19,7 +23,16 @@ interface NavigationBarProps {
  * 높이 60(hug) / 패딩 12·20 / 아래 테두리 1px Black/Gray10 / 양쪽 정렬 space-between
  * 제목: Heading/H6 (18/400/100%) Black/Black, 가운데 영역 안에서 가운데 정렬
  */
-export default function NavigationBar({ variant = 'default', title, leftIcon, leftLabel, onLeftClick }: NavigationBarProps) {
+export default function NavigationBar({
+  variant = 'default',
+  title,
+  leftIcon,
+  leftLabel,
+  onLeftClick,
+  rightIcon,
+  rightLabel,
+  onRightClick,
+}: NavigationBarProps) {
   const leftSize = variant === 'close' ? 'size-[36px]' : 'size-[32px]'
   const rightSize = variant === 'close' ? 'size-[32px]' : 'size-[36px]'
 
@@ -40,7 +53,18 @@ export default function NavigationBar({ variant = 'default', title, leftIcon, le
       <div className="flex flex-1 items-center justify-center">
         {title && <h1 className="text-heading-h6 text-black-black">{title}</h1>}
       </div>
-      <div className={`shrink-0 ${rightSize}`} />
+      <div className={`shrink-0 ${rightSize}`}>
+        {rightIcon && (
+          <button
+            type="button"
+            aria-label={rightLabel}
+            onClick={onRightClick}
+            className={`flex items-center justify-center ${rightSize}`}
+          >
+            {rightIcon}
+          </button>
+        )}
+      </div>
     </header>
   )
 }
