@@ -69,6 +69,10 @@
   --text-heading-h6: 18px; /* Heading/H6 */
   --text-heading-h6--line-height: 100%;
   --text-heading-h6--font-weight: 400;
+  --text-body-b11: 11px; /* Body/B11 (입력 오류 안내) */
+  --text-body-b11--line-height: 160%;
+  --text-body-b11--font-weight: 400;
+  --text-body-b11--letter-spacing: -0.02em; /* 자간 -2% */
   --text-body-b10: 12px; /* Body/B10 (하단 탭 이름) */
   --text-body-b9: 12px; /* Body/B9 */
   --text-body-b9--line-height: 160%;
