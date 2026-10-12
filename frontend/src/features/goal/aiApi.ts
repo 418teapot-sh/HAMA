@@ -1,5 +1,6 @@
 import { api } from '../../api/client'
 import type { ApiResponse } from '../../api/types'
+import { getGoal } from './api'
 
 /** 요청·응답 형식은 Swagger(https://api.todohama.site/swagger-ui/index.html) 기준입니다. */
 
@@ -73,6 +74,11 @@ export async function generatePlans(goalId: number) {
   return res.data.data.plans
 }
 
+/** 플랜 선택. 플랜대로 마일스톤·주간 목표·투두를 만들고 목표를 진행 중(IN_PROGRESS)으로 바꿉니다 */
+export async function selectPlan(planId: number) {
+  await api.post(`${BASE}/plans/${planId}/select`)
+}
+
 export interface GoalAiInput {
   goal: string
   currentLevel: string
@@ -135,6 +141,6 @@ export async function createGoalWithAi(input: GoalAiInput) {
   })
 
   const goalId = await confirmSession(started.sessionId)
-  const plans = await generatePlans(goalId)
-  return { goalId, plans }
+  const [goal, plans] = await Promise.all([getGoal(goalId), generatePlans(goalId)])
+  return { goal, plans }
 }

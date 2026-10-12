@@ -53,6 +53,22 @@ export interface GoalTree {
   milestones: MilestoneNode[]
 }
 
+/** 목표 상세 (GET /api/v1/goals/{goalId}) 중 화면에 쓰는 값 */
+export interface GoalDetail {
+  goalId: number
+  title: string
+  /** 'YYYY-MM-DD' */
+  startDate: string
+  /** 'YYYY-MM-DD' */
+  endDate: string
+  status: GoalStatus
+}
+
+export async function getGoal(goalId: number) {
+  const res = await api.get<ApiResponse<GoalDetail>>(`/api/v1/goals/${goalId}`)
+  return res.data.data
+}
+
 /** 진행 중인 목표 중 마감이 가장 가까운 하나. 없으면 null */
 export async function getCurrentGoal() {
   const res = await api.get<ApiResponse<PageResponse<GoalSummary>>>('/api/v1/goals', {
