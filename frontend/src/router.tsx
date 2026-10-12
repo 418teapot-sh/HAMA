@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router'
 import RequireAuth from './features/auth/RequireAuth'
 import MobileLayout from './layouts/MobileLayout'
 import TabLayout from './layouts/TabLayout'
+import GoalCreatePage from './pages/GoalCreatePage'
 import HomePage from './pages/HomePage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
               { path: paths.mypage, element: <MyPage /> },
             ],
           },
+          { path: paths.goalNew, element: <GoalCreatePage /> },
         ],
       },
       { path: paths.login, element: <LoginPage /> },
