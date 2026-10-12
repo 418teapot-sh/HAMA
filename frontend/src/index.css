@@ -12,6 +12,7 @@
   /* 색상 */
   --color-brand-main: #042558; /* Brand/Main */
   --color-brand-main-80: #2c629b; /* Brand/Main_80 */
+  --color-brand-main-60: #5480ae; /* Brand/Main_60 (목표 추가 제목 그라데이션) */
   --color-brand-main-40: #7da0ca; /* Brand/Main_40 (홈 목표 요약 뱃지) */
   --color-brand-eo: #ff3b5b; /* Brand/EO (오류) */
   --color-white-w1: #fcfcfc; /* White/W1 */
@@ -68,6 +69,10 @@
   --text-heading-h6: 18px; /* Heading/H6 */
   --text-heading-h6--line-height: 100%;
   --text-heading-h6--font-weight: 400;
+  --text-body-b11: 11px; /* Body/B11 (입력 오류 안내) */
+  --text-body-b11--line-height: 160%;
+  --text-body-b11--font-weight: 400;
+  --text-body-b11--letter-spacing: -0.02em; /* 자간 -2% */
   --text-body-b10: 12px; /* Body/B10 (하단 탭 이름) */
   --text-body-b9: 12px; /* Body/B9 */
   --text-body-b9--line-height: 160%;

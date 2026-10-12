@@ -7,6 +7,7 @@ export const paths = {
   login: '/login',
   signup: '/signup',
   landing: '/landing',
+  goalNew: '/goals/new',
   terms: '/terms',
   refund: '/refund',
   privacy: '/privacy',

@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router'
 import icAdd from '../assets/icons/ic_add.svg'
 import { paths } from '../paths'
 import { HomeIcon, MyPageIcon, ReportIcon, TodoIcon } from './TabIcons'
@@ -14,6 +15,8 @@ import TabItem from './TabItem'
  * - Home Bar(402×32): 휴대폰이 그리는 영역이라 막대는 그리지 않고 높이만 비워 둡니다.
  */
 export default function TabBar() {
+  const navigate = useNavigate()
+
   return (
     <nav
       aria-label="하단 메뉴"
@@ -29,11 +32,12 @@ export default function TabBar() {
           + 버튼 (Figma 컴포넌트: Frame 2085668201)
           68×68 고정 / 반경 100 / 배경 Brand/Main_20(#C2E8FF) / 테두리 1px Stroke(안쪽)
           효과 Card_Shadow(Y15 흐림48 #5480AE 8%) + 배경 흐림 20 / 아이콘 ic_add 48×48 가운데
-          TODO: 눌렀을 때 이동할 화면 확인 필요 (목표 추가 화면 예정 · 상빈 담당)
+          누르면 목표 추가 화면(paths.goalNew)으로 이동
         */}
         <button
           type="button"
           aria-label="추가"
+          onClick={() => navigate(paths.goalNew)}
           className="flex size-[68px] shrink-0 items-center justify-center rounded-[100px] bg-brand-main-20 shadow-card-shadow ring-1 ring-stroke ring-inset backdrop-blur-[10px]"
         >
           <img src={icAdd} alt="" className="size-[48px]" />
