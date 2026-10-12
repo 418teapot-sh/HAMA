@@ -7,7 +7,7 @@ interface PlanCardProps {
   description: string
   price: string
   perUse: string
-  /** 빨간 절약 문구 (예: 1회보다 1,300원 절약) */
+  /** 빨간 절약 문구 (예: 1회보다 1,050원 절약) */
   saving?: string
   /** 카드 테두리 색 (모바일 · 데스크톱이 다를 수 있어 둘 다 적음) */
   borderClass: string

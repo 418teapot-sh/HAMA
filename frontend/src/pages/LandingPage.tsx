@@ -229,7 +229,7 @@ export default function LandingPage() {
               description="여러 목표를 동시에"
               price="4,950원"
               perUse="1회당 990원"
-              saving="1회보다 1,300원 절약"
+              saving="1회보다 1,050원 절약"
               borderClass="border-brand-main"
             />
             <PlanCard
