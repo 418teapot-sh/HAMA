@@ -16,6 +16,10 @@ type CalendarProps = {
   marks?: Record<string, CalendarMark[]>
   /** 보이는 달이 바뀔 때 (그 달 데이터 다시 불러오기용) */
   onMonthChange?: (year: number, month: number) => void
+  /** 노란 원으로 따로 표시할 날짜 (투두 날짜 이동에서 옮길 날짜, Figma 투두리스트_날짜 이동: 원 #F8B629 · 글자 White/W1) */
+  highlightDate?: Date | null
+  /** 누를 수 없게 할 날짜 (투두 날짜 이동에서 지난 날짜) */
+  isDateDisabled?: (date: Date) => boolean
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
@@ -69,10 +73,18 @@ function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
  * - 요일: 32×28, Body/B8 Black/Gray60
  * - 날짜 격자: 7열, 가로 간격 8 / 세로 간격 4, 칸(DayCell) 32×60
  * - 날짜 숫자: 21×21 원 안에 Body/B8. 기본 Black/Black, 지난 날짜 Black/Gray40,
- *   선택한 날짜는 원 배경 Brand/Main + 글자 White/W1
+ *   선택한 날짜는 원 배경 Brand/Main + 글자 White/W1, highlightDate 는 원 배경 #F8B629(일정 색) + 글자 White/W1
  * - 표시(뱃지): 숫자 아래 8 간격, 32×10 / 반경 100 / 카테고리 색 / 글자 8px White/W1, 최대 3개
+ *   글자가 칸보다 길면 말줄임(…) (Figma 투두리스트 '영어...', 디자이너 답변)
  */
-export default function Calendar({ selectedDate, onSelectDate, marks = {}, onMonthChange }: CalendarProps) {
+export default function Calendar({
+  selectedDate,
+  onSelectDate,
+  marks = {},
+  onMonthChange,
+  highlightDate,
+  isDateDisabled,
+}: CalendarProps) {
   const [today] = useState(startOfToday)
   const [viewMonth, setViewMonth] = useState(
     () => new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1),
@@ -132,6 +144,7 @@ export default function Calendar({ selectedDate, onSelectDate, marks = {}, onMon
 
             const key = toDateKey(date)
             const isSelected = isSameDay(date, selectedDate)
+            const isHighlighted = highlightDate ? isSameDay(date, highlightDate) : false
             const isPast = date < today
             const dayMarks = marks[key] ?? []
 
@@ -141,12 +154,17 @@ export default function Calendar({ selectedDate, onSelectDate, marks = {}, onMon
                 type="button"
                 aria-label={`${date.getMonth() + 1}월 ${date.getDate()}일`}
                 aria-pressed={isSelected}
+                disabled={isDateDisabled?.(date)}
                 className="flex h-[60px] w-[32px] flex-col items-center gap-[8px]"
                 onClick={() => onSelectDate(date)}
               >
                 <span
                   className={`flex size-[21px] items-center justify-center rounded-full text-body-b8 ${
-                    isSelected ? 'bg-brand-main text-white-w1' : isPast ? 'text-black-gray40' : 'text-black-black'
+                    isHighlighted
+                      ? 'bg-category-schedule text-white-w1'
+                      : isSelected
+                        ? 'bg-brand-main text-white-w1'
+                        : isPast ? 'text-black-gray40' : 'text-black-black'
                   }`}
                 >
                   {date.getDate()}
@@ -156,7 +174,7 @@ export default function Calendar({ selectedDate, onSelectDate, marks = {}, onMon
                   {dayMarks.slice(0, MAX_MARKS).map((mark) => (
                     <span
                       key={mark.id}
-                      className={`flex h-[10px] w-full items-center justify-center overflow-hidden rounded-full whitespace-nowrap text-[8px] leading-[1.3] text-white-w1 ${MARK_COLOR[mark.category]}`}
+                      className={`block h-[10px] w-full truncate rounded-full text-center text-[8px] leading-[1.3] font-bold text-white-w1 ${MARK_COLOR[mark.category]}`}
                     >
                       {mark.title}
                     </span>
