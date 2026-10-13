@@ -15,6 +15,7 @@ import com.hama.domain.user.entity.User;
 import com.hama.domain.user.repository.UserRepository;
 import com.hama.global.auth.JwtProperties;
 import com.hama.global.auth.JwtTokenProvider;
+import com.hama.global.exception.BusinessException;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -30,6 +31,7 @@ class AuthServiceTest {
 
     private static final String SECRET = "test-only-secret-key-do-not-use-in-production-0123456789";
     private static final String EMAIL = "test@hama.com";
+    private static final String IP = "203.0.113.1";
 
     @Mock
     private UserRepository userRepository;
@@ -101,7 +103,7 @@ class AuthServiceTest {
             given(userRepository.findByIdForShare(1L)).willReturn(Optional.of(savedUser()));
             given(passwordEncoder.matches("password1234!", "encoded")).willReturn(true);
 
-            AuthTokens tokens = authService.login(new LoginRequest(EMAIL, "password1234!"));
+            AuthTokens tokens = authService.login(new LoginRequest(EMAIL, "password1234!"), IP);
 
             assertThat(tokens.accessToken()).isNotBlank();
         }
@@ -112,7 +114,7 @@ class AuthServiceTest {
             given(userRepository.findByIdForShare(1L)).willReturn(Optional.empty());
             given(passwordEncoder.matches("password1234!", "encoded")).willReturn(true);
 
-            assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "password1234!")))
+            assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "password1234!"), IP))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
         }
 
@@ -122,9 +124,9 @@ class AuthServiceTest {
             given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
             given(passwordEncoder.matches("wrong-password", "encoded")).willReturn(false);
 
-            assertThatThrownBy(() -> authService.login(new LoginRequest("unknown@hama.com", "password1234!")))
+            assertThatThrownBy(() -> authService.login(new LoginRequest("unknown@hama.com", "password1234!"), IP))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
-            assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "wrong-password")))
+            assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "wrong-password"), IP))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
         }
 
@@ -134,12 +136,27 @@ class AuthServiceTest {
             given(passwordEncoder.matches("wrong-password", "encoded")).willReturn(false);
 
             for (int i = 0; i < PasswordAttemptLimiter.MAX_ATTEMPTS; i++) {
-                assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "wrong-password")))
+                assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "wrong-password"), IP))
                         .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
             }
 
-            assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "wrong-password")))
+            assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "wrong-password"), IP))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.TOO_MANY_PASSWORD_ATTEMPTS);
+        }
+
+        @Test
+        void 다른_IP_에서_틀린_시도는_본인_로그인을_잠그지_않는다() {
+            given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
+            given(passwordEncoder.matches("wrong-password", "encoded")).willReturn(false);
+            given(passwordEncoder.matches("password1234!", "encoded")).willReturn(true);
+            given(userRepository.findByIdForShare(1L)).willReturn(Optional.of(savedUser()));
+
+            for (int i = 0; i <= PasswordAttemptLimiter.MAX_ATTEMPTS; i++) {
+                assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "wrong-password"), "198.51.100.9"))
+                        .isInstanceOf(BusinessException.class);
+            }
+
+            assertThat(authService.login(new LoginRequest(EMAIL, "password1234!"), IP)).isNotNull();
         }
     }
 
