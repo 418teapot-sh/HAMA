@@ -14,6 +14,8 @@ export interface User {
   email: string
   name: string
   isPremium: boolean
+  /** 남은 크레딧 (목표 생성 · 일정 재계산에 1회씩 씀) */
+  credits: number
 }
 
 interface AuthState {
