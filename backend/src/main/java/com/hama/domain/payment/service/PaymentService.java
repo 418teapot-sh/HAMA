@@ -12,6 +12,7 @@ import java.time.format.DateTimeParseException;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -32,6 +33,8 @@ import tools.jackson.databind.json.JsonMapper;
 public class PaymentService {
 
     private static final String TRANSACTION_COMPLETED = "transaction.completed";
+    /** V14 payment 의 unique 제약 이름 */
+    private static final String TRANSACTION_ID_UNIQUE = "uk_payment_paddle_transaction_id";
 
     private final PaddleSignatureVerifier signatureVerifier;
     private final PaddleProperties properties;
@@ -56,16 +59,32 @@ public class PaymentService {
             log.info("[Payment] 처리하지 않는 웹훅 - type: {}, event: {}", eventType, event.path("event_id").asString());
             return;
         }
-        transactionTemplate.executeWithoutResult(status -> completeTransaction(event.path("data")));
+        JsonNode transaction = event.path("data");
+        String transactionId = transaction.path("id").asString();
+        try {
+            transactionTemplate.executeWithoutResult(status -> completeTransaction(transaction, transactionId));
+        } catch (DataIntegrityViolationException e) {
+            // 같은 거래 웹훅이 동시에 와서 둘 다 중복 검사를 통과하면, 늦은 쪽은 paddle_transaction_id unique 에 걸려
+            // 롤백됩니다(충전도 취소). 먼저 온 요청이 처리한 거래라 200 으로 끝냅니다. 다른 제약 위반이면 그대로 던집니다.
+            // JPA 를 거치면 DuplicateKeyException 이 아니라 DataIntegrityViolationException 으로 와서 제약 이름으로 가립니다.
+            if (!isViolationOf(e, TRANSACTION_ID_UNIQUE)) {
+                throw e;
+            }
+            log.info("[Payment] 동시에 온 같은 거래 웹훅이라 넘깁니다 - txn: {}", transactionId);
+        }
+    }
+
+    /** MySQL 메시지: Duplicate entry '...' for key 'payment.uk_payment_paddle_transaction_id' */
+    private static boolean isViolationOf(DataIntegrityViolationException e, String constraint) {
+        String message = e.getMostSpecificCause().getMessage();
+        return message != null && message.contains(constraint);
     }
 
     /**
      * Paddle 은 같은 웹훅을 여러 번 보낼 수 있어서(응답 지연·재시도) 거래 ID 로 한 번만 처리합니다.
-     * 두 요청이 거의 동시에 오면 둘 다 아래 검사를 통과할 수 있지만, paddle_transaction_id unique 에 걸린 쪽은
-     * 500 으로 끝나고 Paddle 이 다시 보냈을 때 이미 처리된 거래로 넘어갑니다.
+     * 두 요청이 거의 동시에 오면 둘 다 아래 검사를 통과할 수 있는데, 그때는 {@link #handleWebhook} 이 unique 위반을 받아 넘깁니다.
      */
-    private void completeTransaction(JsonNode transaction) {
-        String transactionId = transaction.path("id").asString();
+    private void completeTransaction(JsonNode transaction, String transactionId) {
         if (paymentRepository.existsByPaddleTransactionId(transactionId)) {
             log.info("[Payment] 이미 처리한 거래 - txn: {}", transactionId);
             return;
