@@ -5,18 +5,9 @@ import Calendar, { type CalendarMark } from '../components/Calendar'
 import { getMonthCalendar, toCalendarMarks } from '../features/calendar/api'
 import { getCurrentGoal, getGoalTree, type GoalSummary, type GoalTree } from '../features/goal/api'
 import GoalSummaryCard from '../features/goal/components/GoalSummaryCard'
+import { getCurrentPeriodGoals } from '../features/goal/tree'
 import { paths } from '../paths'
-import { formatKoreanDate, toDateKey } from '../utils/date'
-
-/** 오늘이 기간 안에 있는 기간 목표(월/주) 제목들 */
-function getCurrentPeriodGoals(tree: GoalTree | null) {
-  if (!tree) return []
-  const today = toDateKey(new Date())
-  return tree.milestones
-    .flatMap((milestone) => milestone.periodGoals)
-    .filter((periodGoal) => periodGoal.startDate <= today && today <= periodGoal.endDate)
-    .map((periodGoal) => periodGoal.title)
-}
+import { formatKoreanDate } from '../utils/date'
 
 /**
  * 홈 (Figma: 홈)
