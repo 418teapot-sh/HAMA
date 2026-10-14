@@ -6,10 +6,8 @@ import icRight from '../assets/icons/ic_right.svg'
 import InputField from '../components/InputField'
 import Modal from '../components/Modal'
 import NavigationBar from '../components/NavigationBar'
-import Toast from '../components/Toast'
 import { loadMe, logout, withdraw } from '../features/auth/api'
 import { useAuthStore } from '../features/auth/store'
-import { useToast } from '../hooks/useToast'
 import { paths } from '../paths'
 
 /** 카드: 반경 20 / 배경 Card_Back / 테두리 1 Stroke / 그림자 shadow */
@@ -54,7 +52,6 @@ function withdrawErrorMessage(code: string | undefined) {
 export default function MyPage() {
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
-  const toast = useToast()
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [password, setPassword] = useState('')
   const [withdrawError, setWithdrawError] = useState<string>()
@@ -104,15 +101,14 @@ export default function MyPage() {
             <h2 className="text-heading-h2 text-brand-main-80">남은 크레딧</h2>
             <p className="text-heading-h4 text-category-task">{user ? `${user.credits}회` : '-'}</p>
           </InfoCard>
-          {/* TODO: 결제 화면·API 가 정해지면 연결합니다 */}
-          <button
-            type="button"
-            onClick={() => toast.show('결제는 곧 열릴 예정이에요.')}
+          <Link
+            to={paths.charge}
+            state={{ from: paths.mypage }}
             className="flex items-center gap-[2px] self-end text-body-b8 text-black-gray80"
           >
             결제하기
             <img src={icRight} alt="" className="size-[20px]" />
-          </button>
+          </Link>
         </div>
 
         <InfoCard className="gap-[4px] px-[20px] py-[16px]">
@@ -164,7 +160,6 @@ export default function MyPage() {
         />
       </Modal>
 
-      <Toast message={toast.message} />
     </>
   )
 }

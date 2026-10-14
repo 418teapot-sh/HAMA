@@ -8,6 +8,7 @@ export const paths = {
   signup: '/signup',
   landing: '/landing',
   goalNew: '/goals/new',
+  charge: '/charge',
   terms: '/terms',
   refund: '/refund',
   privacy: '/privacy',

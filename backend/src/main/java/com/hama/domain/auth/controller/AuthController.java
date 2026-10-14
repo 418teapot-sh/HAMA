@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -49,11 +50,13 @@ public class AuthController {
             description = """
                     body 에 accessToken, Set-Cookie 에 refreshToken 이 옵니다.
                     이메일이 없거나 비밀번호가 틀려도 구분하지 않고 401(INVALID_CREDENTIALS)입니다.
-                    이메일 하나당 15분에 5회까지 시도할 수 있고, 넘으면 429(TOO_MANY_PASSWORD_ATTEMPTS)입니다.
+                    같은 IP 에서 이메일 하나당 15분에 5회까지 시도할 수 있고, 넘으면 429(TOO_MANY_PASSWORD_ATTEMPTS)입니다.
                     """)
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<TokenResponse>> login(@Valid @RequestBody LoginRequest request) {
-        return withRefreshCookie(authService.login(request));
+    public ResponseEntity<ApiResponse<TokenResponse>> login(@Valid @RequestBody LoginRequest request,
+                                                            HttpServletRequest servletRequest) {
+        // nginx 가 X-Forwarded-For 를 접속 IP 로 덮어쓰고 forward-headers-strategy 가 반영하므로 위조할 수 없습니다.
+        return withRefreshCookie(authService.login(request, servletRequest.getRemoteAddr()));
     }
 
     @Operation(summary = "토큰 재발급",

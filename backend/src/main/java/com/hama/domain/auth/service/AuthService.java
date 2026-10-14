@@ -57,8 +57,10 @@ public class AuthService {
      * 어느 쪽인지 알려주면 로그인 화면이 가입 여부 조회기가 됩니다.
      */
     @Transactional
-    public AuthTokens login(LoginRequest request) {
-        attemptLimiter.check(request.email());
+    public AuthTokens login(LoginRequest request, String clientIp) {
+        // 이메일만 키로 쓰면 남의 이메일로 5번 틀려서 그 계정을 잠글 수 있어서 접속 IP 를 함께 씁니다.
+        String attemptKey = request.email() + "|" + clientIp;
+        attemptLimiter.check(attemptKey);
 
         User user = userRepository.findByEmail(request.email())
                 .filter(found -> passwordEncoder.matches(request.password(), found.getPassword()))
@@ -69,7 +71,7 @@ public class AuthService {
         userRepository.findByIdForShare(user.getId())
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_CREDENTIALS));
 
-        attemptLimiter.onSuccess(request.email());
+        attemptLimiter.onSuccess(attemptKey);
         return issueTokens(user.getId());
     }
 
