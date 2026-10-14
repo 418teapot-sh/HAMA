@@ -6,13 +6,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import com.hama.domain.goalai.GoalAiTestSupport;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 
 /** AI 목표 확정·일정 재계산의 크레딧 차감. 흐름은 GoalAiSelect/ReplanApiIntegrationTest 와 같습니다. */
 class CreditDeductionIntegrationTest extends GoalAiTestSupport {
 
-    private int credits(User user) {
-        return jdbc.queryForObject("select credits from users where user_id = ?", Integer.class, user.id());
+    private Integer credits(User user) {
+        Integer credits = jdbc.queryForObject("select credits from users where user_id = ?", Integer.class, user.id());
+        assertThat(credits).as("users.credits of %d", user.id()).isNotNull();
+        return credits;
     }
 
     private void setCredits(User user, int credits) {
@@ -47,17 +51,41 @@ class CreditDeductionIntegrationTest extends GoalAiTestSupport {
                 .isZero();
     }
 
-    @Test
-    void 플랜_선택이_실패하면_쓴_크레딧이_돌아온다() throws Exception {
+    /** credits.use 뒤에서 던지는 예외마다 롤백으로 크레딧이 돌아오는지 봅니다. */
+    @ParameterizedTest
+    @ValueSource(strings = {"AI_PLAN_ALREADY_SELECTED", "GOAL_NOT_PLANNING", "AI_PLAN_OUTDATED", "FORBIDDEN",
+            "AI_PLAN_NOT_FOUND"})
+    void 플랜_선택이_실패하면_쓴_크레딧이_돌아온다(String code) throws Exception {
         User user = user();
         long goalId = planningGoal(user);
-        long planA = generatePlans(user, goalId).at("/plans/0/planId").asLong();
-        call(post("/api/v1/goals/ai/plans/" + planA + "/select"), user, null, 200);
-        int before = credits(user);
+        JsonNode plans = generatePlans(user, goalId).get("plans");
+        long planA = plans.at("/0/planId").asLong();
+        User caller = user;
+        long target = planA;
+        int status = 409;
+        switch (code) {
+            case "AI_PLAN_ALREADY_SELECTED" -> call(post("/api/v1/goals/ai/plans/" + planA + "/select"), user, null, 200);
+            case "GOAL_NOT_PLANNING" -> {
+                call(post("/api/v1/goals/ai/plans/" + planA + "/select"), user, null, 200);
+                target = plans.at("/1/planId").asLong();
+            }
+            case "AI_PLAN_OUTDATED" -> jdbc.update("update goal set end_date = '2027-01-31' where goal_id = ?", goalId);
+            case "FORBIDDEN" -> {
+                caller = user();
+                status = 403;
+            }
+            case "AI_PLAN_NOT_FOUND" -> {
+                target = 999999999L;
+                status = 404;
+            }
+            default -> throw new IllegalArgumentException(code);
+        }
+        int before = credits(caller);
 
-        call(post("/api/v1/goals/ai/plans/" + planA + "/select"), user, null, 409);
+        JsonNode error = call(post("/api/v1/goals/ai/plans/" + target + "/select"), caller, null, status);
 
-        assertThat(credits(user)).isEqualTo(before);
+        assertThat(error.at("/error/code").asString()).isEqualTo(code);
+        assertThat(credits(caller)).isEqualTo(before);
     }
 
     @Test
@@ -66,6 +94,7 @@ class CreditDeductionIntegrationTest extends GoalAiTestSupport {
         long goalId = planningGoal(user);
         long planA = generatePlans(user, goalId).at("/plans/0/planId").asLong();
         call(post("/api/v1/goals/ai/plans/" + planA + "/select"), user, null, 200);
+        // 오늘(GoalAiTestSupport 고정 시계, 2026-10-01) 이후 투두 하나를 어제로 밀어 둡니다.
         long todoId = jdbc.queryForObject(
                 "select min(todo_id) from todo where goal_id = ? and todo_date > '2026-10-01'", Long.class, goalId);
         jdbc.update("update todo set todo_date = '2026-09-30' where todo_id = ?", todoId);
@@ -82,6 +111,27 @@ class CreditDeductionIntegrationTest extends GoalAiTestSupport {
         assertThat(none.get("movedCount").asInt()).isZero();
         assertThat(none.get("unplacedCount").asInt()).isZero();
         assertThat(credits(user)).isEqualTo(1);
+    }
+
+    @Test
+    void replan_은_빈_시간이_없어_날짜만_옮겨도_1회_쓴다() throws Exception {
+        User user = user();
+        long goalId = planningGoal(user);
+        long planA = generatePlans(user, goalId).at("/plans/0/planId").asLong();
+        call(post("/api/v1/goals/ai/plans/" + planA + "/select"), user, null, 200);
+        long todoId = jdbc.queryForObject(
+                "select min(todo_id) from todo where goal_id = ? and todo_date > '2026-10-01'", Long.class, goalId);
+        jdbc.update("update todo set todo_date = '2026-09-30' where todo_id = ?", todoId);
+        // 목표 기간 내내 종일 일정으로 막아 빈 시간이 없게 합니다.
+        call(post("/api/v1/calendar/schedules"), user, Map.of("type", "PERSONAL", "title", "출장",
+                "startAt", "2026-10-01T00:00:00", "endAt", "2027-01-01T00:00:00", "allDay", true), 201);
+        setCredits(user, 1);
+
+        JsonNode data = call(post("/api/v1/goals/ai/replan"), user, Map.of("goalId", goalId), 200).get("data");
+
+        assertThat(data.get("movedCount").asInt()).isPositive();
+        assertThat(data.get("unplacedCount").asInt()).isPositive();
+        assertThat(credits(user)).isZero();
     }
 
     @Test

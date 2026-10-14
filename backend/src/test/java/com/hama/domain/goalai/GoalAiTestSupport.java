@@ -30,6 +30,8 @@ import tools.jackson.databind.json.JsonMapper;
 public abstract class GoalAiTestSupport {
 
     protected static final FakeAiClient AI = new FakeAiClient();
+    /** 가입하면 1회뿐이라 플랜 선택 → replan 을 이어 하면 부족합니다. 차감은 CreditDeductionIntegrationTest 가 따로 봅니다. */
+    protected static final int DEFAULT_TEST_CREDITS = 10;
 
     @TestBean(methodName = "fakeAi")
     protected AiClient aiClient;
@@ -67,8 +69,7 @@ public abstract class GoalAiTestSupport {
         JsonNode response = call(post("/api/v1/auth/signup"), null,
                 Map.of("email", email, "password", "password1234!", "name", "목표AI", "termsAgreed", true, "privacyAgreed", true, "ageConfirmed", true), 200);
         long id = users.findByEmail(email).orElseThrow().getId();
-        // 가입하면 1회뿐이라 플랜 선택 → replan 을 이어 하면 부족합니다. 차감은 CreditDeductionIntegrationTest 가 따로 봅니다.
-        jdbc.update("update users set credits = 10 where user_id = ?", id);
+        jdbc.update("update users set credits = ? where user_id = ?", DEFAULT_TEST_CREDITS, id);
         return new User(id, response.at("/data/accessToken").asString());
     }
 
