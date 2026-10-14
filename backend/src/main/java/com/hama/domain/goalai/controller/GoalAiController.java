@@ -6,6 +6,8 @@ import com.hama.domain.goalai.dto.PlanResponses;
 import com.hama.domain.goalai.dto.RealityResult;
 import com.hama.domain.goalai.dto.ReplanRequest;
 import com.hama.domain.goalai.dto.ReplanResponse;
+import com.hama.domain.goalai.dto.ReviewRequests;
+import com.hama.domain.goalai.dto.ReviewResponse;
 import com.hama.domain.goalai.dto.SelectResponse;
 import com.hama.domain.goalai.dto.SessionRequests;
 import com.hama.domain.goalai.dto.SessionResponses;
@@ -13,6 +15,7 @@ import com.hama.domain.goalai.dto.UpdateGoalDraftRequest;
 import com.hama.domain.goalai.service.GoalAiDraftService;
 import com.hama.domain.goalai.service.GoalAiPlanService;
 import com.hama.domain.goalai.service.GoalAiReplanService;
+import com.hama.domain.goalai.service.GoalAiReviewService;
 import com.hama.domain.goalai.service.GoalAiSelectService;
 import com.hama.domain.goalai.service.GoalAiSessionService;
 import com.hama.global.auth.AuthUser;
@@ -48,6 +51,7 @@ public class GoalAiController {
     private final GoalAiPlanService planService;
     private final GoalAiSelectService selectService;
     private final GoalAiReplanService replanService;
+    private final GoalAiReviewService reviewService;
 
     @Operation(summary = "목표 입력 (세션 시작)",
             description = """
@@ -176,5 +180,29 @@ public class GoalAiController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Valid @RequestBody ReplanRequest request) {
         return ApiResponse.success(replanService.replan(authUser.userId(), request.goalId(), request.fromDate()));
+    }
+
+    @Operation(summary = "목표 종료 AI 리뷰 생성",
+            description = """
+                    END 체크인 뒤 목표 전체(지표·투두 진행률·체크인 기록)를 AI 에 넘겨 달성 여부와 성과 비교·칭찬/격려 멘트를 돌려받습니다.
+                    achieved 는 AI 가 직접 판정하며 END 체크인의 achieved 는 참고만 합니다. 목표당 리뷰는 1건이고, 다시 부르면 덮어씁니다.
+                    PLANNING 목표는 409(AI_REVIEW_GOAL_NOT_STARTED), END 체크인이 없으면 409(AI_REVIEW_END_REQUIRED).
+                    없는 목표 404(GOAL_NOT_FOUND), 다른 사람의 목표 403(FORBIDDEN).
+                    """)
+    @PostMapping("/reviews")
+    public ResponseEntity<ApiResponse<ReviewResponse>> createReview(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @Valid @RequestBody ReviewRequests.Create request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
+                reviewService.create(authUser.userId(), request.goalId(), request.currentStatus())));
+    }
+
+    @Operation(summary = "목표 종료 AI 리뷰 조회",
+            description = "가장 최근에 만든 리뷰를 돌려줍니다. 아직 리뷰가 없으면 404(AI_REVIEW_NOT_FOUND). 403 은 생성과 같습니다.")
+    @GetMapping("/reviews")
+    public ApiResponse<ReviewResponse> review(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam Long goalId) {
+        return ApiResponse.success(reviewService.get(authUser.userId(), goalId));
     }
 }
