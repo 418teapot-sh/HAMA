@@ -38,9 +38,9 @@ export interface PolicyDoc {
 
 /** 운영자 정보 (랜딩 · 약관 푸터 공통) */
 export const OPERATOR_EMAIL = 's3unghwan@gmail.com'
-export const OPERATOR_INFO = `운영자 송승환 · 서울특별시 마포구 와우산로 94 (홍익대학교) · ${OPERATOR_EMAIL} · 호스팅 Amazon Web Services, Inc.`
+export const OPERATOR_INFO = `운영자 송승환 · 서울특별시 중구 다산로 32 (신당동, 남산타운) · ${OPERATOR_EMAIL} · 호스팅 Amazon Web Services, Inc.`
 
-const UPDATED_AT = '최종 수정일 2026. 10. 13. · 시행일 2026. 10. 31.'
+const UPDATED_AT = '최종 수정일 2026. 10. 15. · 시행일 2026. 10. 31.'
 
 /** 제9조 Paddle 영문 고지 (Paddle 이 요구하는 문구 그대로) */
 export const PADDLE_NOTICE =
@@ -157,7 +157,7 @@ export const TERMS: PolicyDoc = {
     {
       tocLabel: '문의처',
       title: '제10조 문의처',
-      blocks: [`${OPERATOR_EMAIL} · 운영자 송승환 · 소재지 서울특별시 마포구 와우산로 94 (홍익대학교)`],
+      blocks: [`${OPERATOR_EMAIL} · 운영자 송승환 · 소재지 서울특별시 중구 다산로 32 (신당동, 남산타운)`],
     },
   ],
 }
