@@ -79,3 +79,13 @@ export async function restoreSession() {
   }
   await loadMe()
 }
+
+/**
+ * 회원탈퇴. 비밀번호를 확인한 뒤 계정과 모든 데이터를 지웁니다 (되돌릴 수 없음).
+ * 성공하면 refreshToken 쿠키가 지워지므로 메모리의 토큰도 비웁니다.
+ * 실패: 400 PASSWORD_MISMATCH, 15분에 5회 초과 시 429 TOO_MANY_PASSWORD_ATTEMPTS
+ */
+export async function withdraw(password: string) {
+  await api.post('/api/v1/users/me/withdraw', { password })
+  useAuthStore.getState().clear()
+}

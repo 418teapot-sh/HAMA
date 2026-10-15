@@ -12,7 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 키(로그인은 이메일, 탈퇴는 {@code withdraw:userId})당 비밀번호 시도 횟수를 세서 무차별 대입(brute force)을 막습니다.
+ * 키(로그인은 이메일+IP, 탈퇴는 {@code withdraw:userId})당 비밀번호 시도 횟수를 세서 무차별 대입(brute force)을 막습니다.
  *
  * <p>단일 서버(EC2 한 대) 구성이라 인메모리로 충분하고, 서버 재시작 시 초기화돼도 괜찮습니다.
  * 서버를 여러 대로 늘리면 서버마다 따로 세므로 Redis 등으로 옮겨야 합니다.

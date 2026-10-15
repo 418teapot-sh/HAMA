@@ -53,6 +53,22 @@ export interface GoalTree {
   milestones: MilestoneNode[]
 }
 
+/** 목표 상세 (GET /api/v1/goals/{goalId}) 중 화면에 쓰는 값 */
+export interface GoalDetail {
+  goalId: number
+  title: string
+  /** 'YYYY-MM-DD' */
+  startDate: string
+  /** 'YYYY-MM-DD' */
+  endDate: string
+  status: GoalStatus
+}
+
+export async function getGoal(goalId: number) {
+  const res = await api.get<ApiResponse<GoalDetail>>(`/api/v1/goals/${goalId}`)
+  return res.data.data
+}
+
 /** 진행 중인 목표 중 마감이 가장 가까운 하나. 없으면 null */
 export async function getCurrentGoal() {
   const res = await api.get<ApiResponse<PageResponse<GoalSummary>>>('/api/v1/goals', {
@@ -63,5 +79,26 @@ export async function getCurrentGoal() {
 
 export async function getGoalTree(goalId: number) {
   const res = await api.get<ApiResponse<GoalTree>>(`/api/v1/goals/${goalId}/tree`)
+  return res.data.data
+}
+
+/** 목표 목록. IN_PROGRESS 는 마감 가까운 순, PAST 는 최근 종료 순 */
+export async function getGoals(status: 'IN_PROGRESS' | 'PAST', size = 20) {
+  const res = await api.get<ApiResponse<PageResponse<GoalSummary>>>('/api/v1/goals', {
+    params: { status, page: 0, size },
+  })
+  return res.data.data.content
+}
+
+/** 목표 삭제. 진행 중인 목표는 409(GOAL_NOT_DELETABLE) */
+export async function deleteGoal(goalId: number) {
+  await api.delete(`/api/v1/goals/${goalId}`)
+}
+
+/** 일정 재계산. 밀린·겹친 AI 투두를 오늘부터 빈 시간에 다시 배치합니다 */
+export async function replanGoal(goalId: number) {
+  const res = await api.post<ApiResponse<{ movedCount: number; unplacedCount: number }>>('/api/v1/goals/ai/replan', {
+    goalId,
+  })
   return res.data.data
 }
