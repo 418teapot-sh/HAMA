@@ -186,7 +186,9 @@ public class GoalAiController {
             description = """
                     END 체크인 뒤 목표 전체(지표·투두 진행률·체크인 기록)를 AI 에 넘겨 달성 여부와 성과 비교·칭찬/격려 멘트를 돌려받습니다.
                     achieved 는 AI 가 직접 판정하며 END 체크인의 achieved 는 참고만 합니다. 목표당 리뷰는 1건이고, 다시 부르면 덮어씁니다.
-                    PLANNING 목표는 409(AI_REVIEW_GOAL_NOT_STARTED), END 체크인이 없으면 409(AI_REVIEW_END_REQUIRED).
+                    호출마다 크레딧 1개를 쓰고(402 INSUFFICIENT_CREDITS), 실패하면 돌려줍니다.
+                    PLANNING 목표는 409(AI_REVIEW_GOAL_NOT_STARTED), 종료일이 지나지 않았으면 409(AI_REVIEW_GOAL_NOT_ENDED),
+                    END 체크인이 없으면 409(AI_REVIEW_END_REQUIRED), AI 응답을 기다리는 동안 목표·체크인이 바뀌면 409(AI_REVIEW_OUTDATED).
                     없는 목표 404(GOAL_NOT_FOUND), 다른 사람의 목표 403(FORBIDDEN).
                     """)
     @PostMapping("/reviews")

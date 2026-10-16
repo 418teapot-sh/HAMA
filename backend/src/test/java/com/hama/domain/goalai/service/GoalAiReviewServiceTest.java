@@ -3,8 +3,13 @@ package com.hama.domain.goalai.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.hama.domain.checkin.entity.CheckinType;
+import com.hama.domain.checkin.entity.GoalCheckin;
 import com.hama.domain.goalai.service.GoalAiReviewService.ReviewAnswer;
 import com.hama.global.exception.BusinessException;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class GoalAiReviewServiceTest {
@@ -33,5 +38,35 @@ class GoalAiReviewServiceTest {
         String cut = GoalAiReviewService.cut(tooLong);
         assertThat(cut).hasSize(500);
         assertThat(cut).isEqualTo("가".repeat(500));
+    }
+
+    @Test
+    void MID_가_많으면_최근_N개만_남기고_START_END_는_항상_남긴다() {
+        LocalDateTime base = LocalDateTime.of(2026, 10, 1, 0, 0);
+        List<GoalCheckin> all = new ArrayList<>();
+        all.add(checkin(CheckinType.START, base.minusDays(30)));
+        for (int i = 0; i < 25; i++) {
+            all.add(checkin(CheckinType.MID, base.minusDays(29 - i)));
+        }
+        all.add(checkin(CheckinType.END, base));
+
+        List<GoalCheckin> limited = GoalAiReviewService.limitMid(all, 20);
+
+        assertThat(limited).hasSize(22);
+        assertThat(limited.get(0).getType()).isEqualTo(CheckinType.START);
+        assertThat(limited.get(limited.size() - 1).getType()).isEqualTo(CheckinType.END);
+        assertThat(limited).filteredOn(c -> c.getType() == CheckinType.MID).hasSize(20)
+                .containsExactlyElementsOf(all.subList(6, 26));
+    }
+
+    @Test
+    void MID_가_제한_이하면_그대로_둔다() {
+        LocalDateTime base = LocalDateTime.of(2026, 10, 1, 0, 0);
+        List<GoalCheckin> all = List.of(checkin(CheckinType.START, base.minusDays(1)), checkin(CheckinType.MID, base));
+        assertThat(GoalAiReviewService.limitMid(all, 20)).isEqualTo(all);
+    }
+
+    private static GoalCheckin checkin(CheckinType type, LocalDateTime checkedAt) {
+        return GoalCheckin.create(1L, type, null, null, null, checkedAt, LocalDateTime.of(2026, 10, 2, 0, 0));
     }
 }
