@@ -3,6 +3,7 @@ package com.hama.domain.checkin.repository;
 import com.hama.domain.checkin.entity.CheckinType;
 import com.hama.domain.checkin.entity.GoalCheckin;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,4 +23,7 @@ public interface CheckinRepository extends JpaRepository<GoalCheckin, Long> {
 
     boolean existsByGoalIdAndType(Long goalId, CheckinType type);
     Page<GoalCheckin> findByGoalIdOrderByCheckedAtDescIdDesc(Long goalId, Pageable pageable);
+
+    /** 종료 리뷰(AI)에 넘길 기록. 오래된 것부터입니다. */
+    List<GoalCheckin> findByGoalIdOrderByCheckedAtAscIdAsc(Long goalId);
 }
