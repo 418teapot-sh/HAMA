@@ -12,7 +12,15 @@ import com.hama.domain.user.repository.UserRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
@@ -178,9 +186,16 @@ class PaymentWebhookIntegrationTest {
     }
 
     private Payment paymentOf(String transactionId) {
+        return paymentsOf(transactionId).findFirst().orElseThrow();
+    }
+
+    private long paymentCount(String transactionId) {
+        return paymentsOf(transactionId).count();
+    }
+
+    private Stream<Payment> paymentsOf(String transactionId) {
         return paymentRepository.findAll().stream()
-                .filter(payment -> payment.getPaddleTransactionId().equals(transactionId))
-                .findFirst().orElseThrow();
+                .filter(payment -> payment.getPaddleTransactionId().equals(transactionId));
     }
 
     @Test
@@ -193,10 +208,36 @@ class PaymentWebhookIntegrationTest {
         sendWebhook(body, SECRET).andExpect(status().isOk());
 
         assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS + 5);
+        assertThat(paymentCount(transactionId)).isEqualTo(1);
+    }
 
-        assertThat(paymentRepository.findAll().stream()
-                .filter(payment -> payment.getPaddleTransactionId().equals(transactionId))
-                .count()).isEqualTo(1);
+    @Test
+    void 같은_거래의_웹훅이_동시에_와도_둘_다_200_이고_한_번만_충전한다() throws Exception {
+        User user = newUser();
+        String transactionId = "txn_" + UUID.randomUUID();
+        String body = completedEvent(transactionId, String.valueOf(user.getId()));
+
+        // 두 스레드가 같이 출발하도록 맞춥니다. 매번 둘 다 중복 검사를 통과한다는 보장은 없지만, 통과해도 한 번만 충전돼야 합니다.
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<Integer>> responses = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                responses.add(pool.submit(() -> {
+                    start.await();
+                    return sendWebhook(body, SECRET).andReturn().getResponse().getStatus();
+                }));
+            }
+            start.countDown();
+            for (Future<Integer> response : responses) {
+                assertThat(response.get(10, TimeUnit.SECONDS)).isEqualTo(200);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(paymentCount(transactionId)).isEqualTo(1);
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS + 5);
     }
 
     @Test
@@ -234,5 +275,15 @@ class PaymentWebhookIntegrationTest {
         sendWebhook("""
                 { "event_id": "evt_1", "event_type": "customer.created", "data": {} }
                 """, SECRET).andExpect(status().isOk());
+    }
+
+    @Test
+    void 거래_ID_가_비어_있으면_저장도_충전도_하지_않는다() throws Exception {
+        User user = newUser();
+
+        sendWebhook(completedEvent("", String.valueOf(user.getId())), SECRET).andExpect(status().isOk());
+
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS);
+        assertThat(paymentRepository.existsByPaddleTransactionId("")).isFalse();
     }
 }
