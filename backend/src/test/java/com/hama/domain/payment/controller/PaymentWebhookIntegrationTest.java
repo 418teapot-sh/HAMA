@@ -263,4 +263,14 @@ class PaymentWebhookIntegrationTest {
                 { "event_id": "evt_1", "event_type": "customer.created", "data": {} }
                 """, SECRET).andExpect(status().isOk());
     }
+
+    @Test
+    void 거래_ID_가_비어_있으면_저장도_충전도_하지_않는다() throws Exception {
+        User user = newUser();
+
+        sendWebhook(completedEvent("", String.valueOf(user.getId())), SECRET).andExpect(status().isOk());
+
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS);
+        assertThat(paymentRepository.existsByPaddleTransactionId("")).isFalse();
+    }
 }

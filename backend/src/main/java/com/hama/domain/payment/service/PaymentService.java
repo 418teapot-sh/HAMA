@@ -61,6 +61,12 @@ public class PaymentService {
         }
         JsonNode transaction = event.path("data");
         String transactionId = transaction.path("id").asString();
+        if (transactionId.isBlank()) {
+            // ID 가 없으면 중복 검사를 할 수 없습니다. 빈 ID 로 저장하면 다음 결제가 중복으로 걸립니다.
+            log.error("[Payment] ID 가 없는 웹훅이라 처리하지 않았습니다. Paddle 대시보드에서 확인하세요 - type: {}, event: {}",
+                    eventType, event.path("event_id").asString());
+            return;
+        }
         try {
             transactionTemplate.executeWithoutResult(status -> completeTransaction(transaction, transactionId));
         } catch (DataIntegrityViolationException e) {
