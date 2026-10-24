@@ -1,10 +1,6 @@
 package com.hama.domain.payment.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -16,7 +12,15 @@ import com.hama.domain.user.repository.UserRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
@@ -24,9 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -45,10 +47,6 @@ class PaymentWebhookIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    private JdbcTemplate jdbc;
-
-    /** 동시 요청 테스트에서 중복 검사가 둘 다 통과한 상황을 만들려고 감쌉니다. 나머지 테스트에선 그대로 동작합니다. */
-    @MockitoSpyBean
     private PaymentRepository paymentRepository;
 
     private User newUser() {
@@ -188,9 +186,16 @@ class PaymentWebhookIntegrationTest {
     }
 
     private Payment paymentOf(String transactionId) {
+        return paymentsOf(transactionId).findFirst().orElseThrow();
+    }
+
+    private long paymentCount(String transactionId) {
+        return paymentsOf(transactionId).count();
+    }
+
+    private Stream<Payment> paymentsOf(String transactionId) {
         return paymentRepository.findAll().stream()
-                .filter(payment -> payment.getPaddleTransactionId().equals(transactionId))
-                .findFirst().orElseThrow();
+                .filter(payment -> payment.getPaddleTransactionId().equals(transactionId));
     }
 
     @Test
@@ -203,27 +208,35 @@ class PaymentWebhookIntegrationTest {
         sendWebhook(body, SECRET).andExpect(status().isOk());
 
         assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS + 5);
-
-        assertThat(paymentRepository.findAll().stream()
-                .filter(payment -> payment.getPaddleTransactionId().equals(transactionId))
-                .count()).isEqualTo(1);
+        assertThat(paymentCount(transactionId)).isEqualTo(1);
     }
 
     @Test
-    void 같은_거래의_웹훅이_동시에_와서_둘_다_중복_검사를_통과해도_200_이고_한_번만_충전한다() throws Exception {
+    void 같은_거래의_웹훅이_동시에_와도_둘_다_200_이고_한_번만_충전한다() throws Exception {
         User user = newUser();
         String transactionId = "txn_" + UUID.randomUUID();
         String body = completedEvent(transactionId, String.valueOf(user.getId()));
-        sendWebhook(body, SECRET).andExpect(status().isOk());
 
-        // 늦게 온 요청의 중복 검사를 "없음"으로 답해, 먼저 온 요청이 아직 커밋 전이던 상황을 만듭니다.
-        doReturn(false).when(paymentRepository).existsByPaddleTransactionId(transactionId);
-        sendWebhook(body, SECRET).andExpect(status().isOk());
+        // 두 스레드가 같이 출발하도록 맞춥니다. 매번 둘 다 중복 검사를 통과한다는 보장은 없지만, 통과해도 한 번만 충전돼야 합니다.
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<Integer>> responses = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                responses.add(pool.submit(() -> {
+                    start.await();
+                    return sendWebhook(body, SECRET).andReturn().getResponse().getStatus();
+                }));
+            }
+            start.countDown();
+            for (Future<Integer> response : responses) {
+                assertThat(response.get(10, TimeUnit.SECONDS)).isEqualTo(200);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
 
-        // 두 번째 요청도 저장까지 가서 unique 에 걸렸다는 뜻입니다(보통의 중복 검사로 끝났다면 save 는 1번).
-        verify(paymentRepository, times(2)).save(argThat(payment -> payment.getPaddleTransactionId().equals(transactionId)));
-        assertThat(jdbc.queryForObject("select count(*) from payment where paddle_transaction_id = ?", Integer.class,
-                transactionId)).isEqualTo(1);
+        assertThat(paymentCount(transactionId)).isEqualTo(1);
         assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS + 5);
     }
 
