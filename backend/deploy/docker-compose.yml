@@ -22,5 +22,9 @@ services:
       LINER_API_KEY: ${LINER_API_KEY:-}
       PADDLE_API_KEY: ${PADDLE_API_KEY:-}
       PADDLE_WEBHOOK_SECRET: ${PADDLE_WEBHOOK_SECRET:-}
+      # 비어 있으면 결제 웹훅이 모르는 가격으로 500 을 냅니다. Paddle Live 가격 ID(pri_...)를 넣으세요.
+      PADDLE_PRICE_ID_1: ${PADDLE_PRICE_ID_1:-}
+      PADDLE_PRICE_ID_5: ${PADDLE_PRICE_ID_5:-}
+      PADDLE_PRICE_ID_12: ${PADDLE_PRICE_ID_12:-}
     # t3.micro(1GB)에서 OS·Docker 와 나눠 씁니다. 힙은 이 값의 60%(Dockerfile)입니다.
     mem_limit: 640m
