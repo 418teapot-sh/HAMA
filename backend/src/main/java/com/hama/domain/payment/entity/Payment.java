@@ -8,20 +8,17 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
  * 완료된 결제 한 건입니다. 영수증·세금·환불 원장은 Paddle(판매 대행사)이 갖고 있고,
  * 여기에는 "누가 언제 얼마를 내고 몇 회를 충전했나"만 남깁니다.
+ * 저장은 중복을 거르려고 {@code PaymentRepository#insertIfAbsent} 로만 합니다.
  */
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Builder(access = AccessLevel.PRIVATE)
-@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class Payment extends BaseTimeEntity {
 
     @Id
@@ -53,16 +50,4 @@ public class Payment extends BaseTimeEntity {
 
     @Column(nullable = false)
     private LocalDateTime paidAt;
-
-    public static Payment create(Long userId, String paddleTransactionId, int amount, String currency, int credits,
-                                 LocalDateTime paidAt) {
-        return Payment.builder()
-                .userId(userId)
-                .paddleTransactionId(paddleTransactionId)
-                .amount(amount)
-                .currency(currency)
-                .credits(credits)
-                .paidAt(paidAt)
-                .build();
-    }
 }

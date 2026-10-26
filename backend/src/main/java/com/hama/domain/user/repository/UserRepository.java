@@ -25,7 +25,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
 
     /*
-     * 크레딧은 아래 두 UPDATE 로만 바꿉니다. 호출한 쪽 트랜잭션(플랜 선택·replan)이 들고 있는 목표·투두를 떼어 내지 않도록
+     * 크레딧은 아래 세 UPDATE 로만 바꿉니다. 호출한 쪽 트랜잭션(플랜 선택·replan)이 들고 있는 목표·투두를 떼어 내지 않도록
      * clearAutomatically 는 쓰지 않습니다. 그래서 같은 트랜잭션에서 이미 읽은 User 의 credits 는 옛값이니 다시 읽지 마세요.
      */
 
@@ -38,4 +38,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Modifying(flushAutomatically = true)
     @Query("UPDATE User u SET u.credits = u.credits - 1 WHERE u.id = :id AND u.credits > 0")
     int useCredit(Long id);
+
+    /** 환불 시 회수합니다. 남은 것보다 많으면 0 에서 멈춥니다(이미 쓴 크레딧은 되돌릴 수 없음). */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE User u SET u.credits = CASE WHEN u.credits > :amount THEN u.credits - :amount ELSE 0 END WHERE u.id = :id")
+    int takeBackCredits(Long id, int amount);
 }
