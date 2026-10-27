@@ -62,6 +62,9 @@
   --text-heading-h1--line-height: 120%;
   --text-heading-h1--font-weight: 800;
   --text-heading-h1--letter-spacing: -0.02em; /* 자간 -2% */
+  --text-heading-h2: 24px; /* Heading/H2 (마이페이지 남은 크레딧) */
+  --text-heading-h2--line-height: 150%;
+  --text-heading-h2--font-weight: 600;
   --text-heading-h4: 20px; /* Heading/H4 (홈 섹션 제목) */
   --text-heading-h4--line-height: normal;
   --text-heading-h4--font-weight: 700;

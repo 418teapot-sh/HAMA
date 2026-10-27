@@ -8,6 +8,24 @@ spring:
     # 로컬에서 외부 API 키를 넣을 때 쓰고, .env 는 .gitignore 로 막혀 있습니다.
     # dev 는 이 파일 대신 컨테이너 환경변수(서버 ~/hama/.env, deploy/.env.example 참고)를 씁니다.
     import: optional:file:.env[.properties]
+  mail:
+    # Resend SMTP. 비밀번호 칸에 Resend API 키를 넣습니다. 키가 없으면(로컬·테스트) 메일 대신 로그만 남깁니다(AccountMailSender).
+    host: smtp.resend.com
+    port: 465
+    username: resend
+    password: ${RESEND_API_KEY:}
+    properties:
+      mail.smtp.ssl.enable: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
+  task:
+    execution:
+      shutdown:
+        # 배포로 서버가 교체(ASG 인스턴스 새로 고침)될 때 대기 중인 @Async 작업(재설정 메일 등)을 버리지 않고 기다립니다.
+        # 사용자는 이미 200 을 받아서, 버리면 메일이 안 왔는데도 다시 요청할 이유를 모릅니다.
+        await-termination: true
+        await-termination-period: 30s
   jpa:
     # 트랜잭션 밖(뷰 렌더링 시점)까지 영속성 컨텍스트를 열어두지 않습니다.
     # 켜두면 요청 내내 DB 커넥션을 붙잡고 있어 커넥션 풀이 금방 마릅니다.
@@ -31,6 +49,15 @@ app:
     path: /api/v1/auth
     # secure / same-site 는 환경마다 달라서 프로필별 파일에서 정합니다.
     # (로컬은 http 라서 Secure 쿠키가 브라우저에 저장되지 않습니다)
+  mail:
+    # 받는 쪽이 사칭으로 보지 않도록 Resend 에 인증한 도메인 주소여야 합니다. 받는 메일함은 없어도 됩니다.
+    from: "HAMA <no-reply@todohama.site>"
+    # 비밀번호 재설정 메일의 링크. 뒤에 ?token= 이 붙습니다. 프론트 /reset-password 화면입니다.
+    reset-password-url: ${RESET_PASSWORD_URL:https://www.todohama.site/reset-password}
+    # 이메일 찾기 문의가 들어오면 알림을 받을 운영자 주소(약관·푸터에 공개된 주소)
+    operator: s3unghwan@gmail.com
+    # RESEND_API_KEY 가 없을 때 메일 본문(재설정 링크)을 로그에 남길지. 링크는 비밀번호를 바꿀 수 있는 값이라 로컬에서만 켭니다.
+    log-body: false
 
 cors:
   # 배포 시 CORS_ALLOWED_ORIGINS 로 덮어쓰세요.
@@ -80,3 +107,8 @@ management:
   endpoint:
     health:
       show-details: never
+  health:
+    mail:
+      # 메일 서버(Resend)가 잠깐 안 되면 /actuator/health 가 DOWN 이 되고, ALB 가 멀쩡한 서버를 비정상으로 보고 ASG 가 갈아치웁니다.
+      # 메일은 부가 기능이라 서버 상태에 넣지 않습니다.
+      enabled: false

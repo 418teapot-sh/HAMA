@@ -4,6 +4,8 @@ type ModalProps = {
   open: boolean
   title: ReactNode
   description?: ReactNode
+  /** 설명 아래·버튼 위에 넣을 내용 (예: 회원탈퇴 비밀번호 입력칸) */
+  children?: ReactNode
   cancelText?: string
   confirmText: string
   onCancel: () => void
@@ -14,6 +16,7 @@ export default function Modal({
   open,
   title,
   description,
+  children,
   cancelText = '닫기',
   confirmText,
   onCancel,
@@ -36,6 +39,8 @@ export default function Modal({
           <p className="text-heading-h6 font-semibold text-black-black">{title}</p>
           {description && <p className="text-body-b8 text-black-gray60">{description}</p>}
         </div>
+
+        {children}
 
         <div className="flex gap-[8px]">
           <button

@@ -159,6 +159,7 @@ public class GoalAiController {
                     빈 시간이 없으면 시간 없이 날짜만 두고 placement.unplacedTodos 에 담습니다.
                     없는 플랜 404(AI_PLAN_NOT_FOUND), 다른 사람의 플랜 403, 이미 고른 플랜 409(AI_PLAN_ALREADY_SELECTED),
                     다른 플랜을 이미 골랐으면 409(GOAL_NOT_PLANNING), 목표 기간이 바뀌었거나 플랜 시작일이 지났으면 409(AI_PLAN_OUTDATED).
+                    크레딧을 1회 씁니다. 남은 크레딧이 없으면 다른 검사보다 먼저 402(INSUFFICIENT_CREDITS)이고, 실패하면 차감되지 않습니다.
                     """)
     @PostMapping("/plans/{planId}/select")
     public ApiResponse<SelectResponse> selectPlan(
@@ -174,6 +175,8 @@ public class GoalAiController {
                     빈 시간이 끝까지 없으면 시간 없이 날짜만 둡니다(unplacedCount). 미룬 횟수는 늘지 않습니다.
                     fromDate 를 생략하면 오늘(KST)과 목표 시작일 중 늦은 날입니다.
                     진행 중이 아닌 목표 409(GOAL_NOT_IN_PROGRESS), fromDate 가 오늘 이전이거나 목표 기간 밖이면 400(AI_REPLAN_INVALID_DATE).
+                    크레딧을 1회 씁니다. 남은 크레딧이 없으면 다른 검사보다 먼저 402(INSUFFICIENT_CREDITS)이고,
+                    실패하거나 바뀐 투두가 없으면(movedCount 0) 차감되지 않습니다.
                     """)
     @PostMapping("/replan")
     public ApiResponse<ReplanResponse> replan(

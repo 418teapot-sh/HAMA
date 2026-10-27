@@ -13,7 +13,6 @@ export interface User {
   id: number
   email: string
   name: string
-  isPremium: boolean
   /** 남은 크레딧 (목표 생성 · 일정 재계산에 1회씩 씀) */
   credits: number
 }

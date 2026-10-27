@@ -36,7 +36,7 @@ public class RefreshToken extends BaseTimeEntity {
     private Long userId;
 
     /**
-     * 원본 토큰이 아니라 RefreshTokenHasher 로 해시한 값. DB 가 유출돼도 토큰을 그대로 쓸 수 없게 합니다.
+     * 원본 토큰이 아니라 TokenHasher 로 해시한 값. DB 가 유출돼도 토큰을 그대로 쓸 수 없게 합니다.
      * 재발급·로그아웃은 이 값으로 행을 찾습니다.
      */
     @Column(nullable = false, unique = true)
