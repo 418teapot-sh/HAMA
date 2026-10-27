@@ -3,6 +3,8 @@ import RequireAuth from './features/auth/RequireAuth'
 import MobileLayout from './layouts/MobileLayout'
 import TabLayout from './layouts/TabLayout'
 import ChargePage from './pages/ChargePage'
+import FindEmailPage from './pages/FindEmailPage'
+import FindPasswordPage from './pages/FindPasswordPage'
 import GoalCreatePage from './pages/GoalCreatePage'
 import HomePage from './pages/HomePage'
 import LandingPage from './pages/LandingPage'
@@ -10,6 +12,7 @@ import LoginPage from './pages/LoginPage'
 import MyPage from './pages/MyPage'
 import PrivacyPage from './pages/PrivacyPage'
 import RefundPage from './pages/RefundPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import ReportPage from './pages/ReportPage'
 import SignupPage from './pages/SignupPage'
 import TermsPage from './pages/TermsPage'
@@ -43,6 +46,9 @@ export const router = createBrowserRouter([
       },
       { path: paths.login, element: <LoginPage /> },
       { path: paths.signup, element: <SignupPage /> },
+      { path: paths.findEmail, element: <FindEmailPage /> },
+      { path: paths.findPassword, element: <FindPasswordPage /> },
+      { path: paths.resetPassword, element: <ResetPasswordPage /> },
     ],
   },
 ])
