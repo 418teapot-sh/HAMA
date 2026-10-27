@@ -57,6 +57,16 @@ jobs:
           ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.EC2_HOST }} 'bash -s' <<'EOF'
           set -e
           cd ~/hama
+
+          # 환경변수는 SSM Parameter Store /hama/* 에서 받아 .env 를 새로 만듭니다(EC2 역할 hama-ec2-role, 읽기 전용).
+          # 값을 바꾸려면 SSM 에서 고치고 다시 배포합니다. 못 받아 오면 기존 .env 를 그대로 두고 배포를 멈춥니다.
+          set -o pipefail
+          umask 077
+          aws ssm get-parameters-by-path --path /hama --with-decryption --region ap-northeast-2 \
+            --query "Parameters[].[Name,Value]" --output text | sed 's#^/hama/##; s/\t/=/' > .env.tmp
+          test -s .env.tmp
+          mv .env.tmp .env
+
           docker tag hama-backend:latest hama-backend:previous 2>/dev/null || true
           gunzip -c hama-backend.tar.gz | docker load
           rm hama-backend.tar.gz
