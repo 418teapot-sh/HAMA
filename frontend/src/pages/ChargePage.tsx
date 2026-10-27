@@ -71,8 +71,9 @@ export default function ChargePage() {
 
         <div className="flex h-[48px] w-full items-center justify-between gap-[12px] rounded-[12px] border border-card-stroke-2 bg-card-back-2/40 px-[16px] shadow-card-shadow backdrop-blur-[10px]">
           <span className="text-body-b7 font-semibold text-brand-main">남은 크레딧</span>
-          {/* Figma 는 0회(Brand/EO 빨강)만 있어 1회 이상일 때도 같은 색으로 둡니다. TODO: 1회 이상 색 확인 */}
-          <span className="text-body-b7 font-semibold text-brand-eo">{credits}회</span>
+          {/* Figma 충전 · 5회 선택(10/26 갱신본): 0회는 Black/Gray60 (디자이너 답변).
+              TODO: 1회 이상일 때 색은 Figma 에 없어 기존 Brand/EO 를 그대로 둠 · 확인 필요 */}
+          <span className={`text-body-b7 font-semibold ${credits === 0 ? 'text-black-gray60' : 'text-brand-eo'}`}>{credits}회</span>
         </div>
 
         <div role="radiogroup" aria-label="충전할 횟수" className="flex flex-col gap-[12px]">

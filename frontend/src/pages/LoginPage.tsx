@@ -9,6 +9,7 @@ import { login } from '../features/auth/api'
 import { EMAIL_FORMAT_ERROR, isValidEmail } from '../features/auth/validation'
 import { paths } from '../paths'
 import icClose from '../assets/icons/ic_close.svg'
+import logoHama from '../assets/logo/logo_hama.svg'
 
 /** Figma 로그인 오류 화면의 토스트 문구 그대로 */
 const LOGIN_FAILED_MESSAGE = '로그인에 실패했어요. 다시 시도해 주세요'
@@ -18,7 +19,7 @@ const LOGIN_FAILED_MESSAGE = '로그인에 실패했어요. 다시 시도해 주
  *
  * 구조 (Figma 레이어 기준)
  * - NavigationBar: 왼쪽 닫기(ic_close)
- * - Container: 높이 170 / 위 30·아래 20 패딩 / 간격 10 → 로고 자리
+ * - Container: 높이 170 / 위 30·아래 20 패딩 / 간격 10 → 로고 (Vector 214×40, 가운데)
  * - 폼 프레임: 세로 간격 12
  *   - InputField 이메일, InputField 비밀번호
  *   - 하단 프레임: 좌우 패딩 20 / 세로 간격 20
@@ -68,8 +69,7 @@ export default function LoginPage() {
 
       <main className="flex w-full flex-col">
         <div className="flex h-[170px] w-full flex-col items-center justify-center gap-[10px] pt-[30px] pb-[20px]">
-          {/* TODO: 로고 이미지가 나오면 교체 (Figma 에는 '로고 자리' 텍스트만 있음) */}
-          <span className="text-caption-cap1 text-brand-main">로고 자리</span>
+          <img src={logoHama} alt="HAMA" width={214} height={40} className="h-[40px] w-[214px]" />
         </div>
 
         <form noValidate onSubmit={handleSubmit} className="flex w-full flex-col gap-[12px]">
@@ -101,13 +101,12 @@ export default function LoginPage() {
 
           <div className="flex w-full flex-col gap-[20px] px-[20px]">
             <div className="flex w-full items-center justify-between">
-              {/* TODO: 이메일 찾기·비밀번호 찾기는 백엔드 API 가 없어 동작 미정 */}
-              <button type="button" className="text-body-b6 text-black-gray40">
+              <Link to={paths.findEmail} className="text-body-b6 text-black-gray40">
                 이메일 찾기
-              </button>
-              <button type="button" className="text-body-b6 text-black-gray40">
+              </Link>
+              <Link to={paths.findPassword} className="text-body-b6 text-black-gray40">
                 비밀번호 찾기
-              </button>
+              </Link>
             </div>
 
             <Button type="submit" disabled={submitting}>

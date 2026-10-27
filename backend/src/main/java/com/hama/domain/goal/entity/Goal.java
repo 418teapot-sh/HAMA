@@ -31,6 +31,10 @@ public class Goal extends BaseTimeEntity {
 
     public static final int MAX_PERIOD_DAYS = 365;
 
+    /** {@link #resultStatus} 에 저장하는 값. goals/ai 종료 리뷰(GoalAiReviewService)만 씁니다. */
+    public static final String RESULT_ACHIEVED = "ACHIEVED";
+    public static final String RESULT_MISSED = "MISSED";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "goal_id")
@@ -141,6 +145,11 @@ public class Goal extends BaseTimeEntity {
 
     public void delete(LocalDateTime now) {
         this.deletedAt = now;
+    }
+
+    /** 종료 리뷰(AI)가 판정한 달성 여부를 기록합니다. 다시 리뷰하면 덮어씁니다. */
+    public void recordResult(boolean achieved) {
+        this.resultStatus = achieved ? RESULT_ACHIEVED : RESULT_MISSED;
     }
 
     /** 종료일이 오늘보다 이전이면 PAST. PLANNING(플랜 선택 전)은 종료일과 무관하게 PLANNING 입니다. */
