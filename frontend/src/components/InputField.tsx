@@ -7,6 +7,12 @@ interface InputFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: string
   /** 입력 박스 오른쪽 요소 (예: 비밀번호 보이기 버튼) */
   rightSlot?: ReactNode
+  /**
+   * 좌우 패딩 20 을 넣을지 (기본 true).
+   * 로그인 · 회원가입의 InputField 는 자체 좌우 패딩 20 이 있고,
+   * 이메일 · 비밀번호 찾기 화면은 바깥 프레임(콘텐츠)에 패딩이 있어 InputField 에는 없습니다.
+   */
+  padded?: boolean
 }
 
 /**
@@ -20,13 +26,13 @@ interface InputFieldProps extends InputHTMLAttributes<HTMLInputElement> {
  *
  * TODO: #47 의 공용 Input 이 develop 에 머지되면 그걸로 교체합니다.
  */
-export default function InputField({ id, label, value, error, rightSlot, className = '', ...rest }: InputFieldProps) {
+export default function InputField({ id, label, value, error, rightSlot, padded = true, className = '', ...rest }: InputFieldProps) {
   const filled = String(value ?? '').length > 0
   const borderColor = error ? 'ring-brand-eo' : filled ? 'ring-black-gray40' : 'ring-black-gray10'
   const errorId = `${id}-error`
 
   return (
-    <div className={`flex w-full flex-col gap-[4px] px-[20px] ${className}`}>
+    <div className={`flex w-full flex-col gap-[4px] ${padded ? 'px-[20px]' : ''} ${className}`}>
       <label htmlFor={id} className="text-body-b4 text-black-black">
         {label}
       </label>
