@@ -6,7 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 
 /**
- * 리프레시 토큰을 DB 에 평문으로 저장하지 않기 위한 해시 유틸리티.
+ * 리프레시 토큰·비밀번호 재설정 토큰을 DB 에 평문으로 저장하지 않기 위한 해시 유틸리티.
  * 토큰 자체가 서명된 고엔트로피 값이라 비밀번호와 달리 느린 해시(BCrypt)가 필요 없어 SHA-256 을 씁니다.
  */
 final class RefreshTokenHasher {

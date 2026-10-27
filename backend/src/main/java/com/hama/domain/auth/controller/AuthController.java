@@ -1,8 +1,12 @@
 package com.hama.domain.auth.controller;
 
+import com.hama.domain.auth.dto.EmailInquiryRequest;
 import com.hama.domain.auth.dto.LoginRequest;
+import com.hama.domain.auth.dto.PasswordResetConfirmRequest;
+import com.hama.domain.auth.dto.PasswordResetRequest;
 import com.hama.domain.auth.dto.SignupRequest;
 import com.hama.domain.auth.dto.TokenResponse;
+import com.hama.domain.auth.service.AccountRecoveryService;
 import com.hama.domain.auth.service.AuthService;
 import com.hama.domain.auth.service.AuthTokens;
 import com.hama.global.auth.RefreshTokenCookieFactory;
@@ -23,7 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "인증", description = """
-        회원가입 · 로그인 · 토큰 재발급 · 로그아웃.
+        회원가입 · 로그인 · 토큰 재발급 · 로그아웃 · 비밀번호 재설정 · 이메일 찾기 문의.
         액세스 토큰은 응답 body 로, 리프레시 토큰은 HttpOnly 쿠키로 내려갑니다.
         프론트는 요청에 `credentials: 'include'`(axios 는 `withCredentials: true`)를 켜야 쿠키가 오갑니다.
         """)
@@ -34,6 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final AccountRecoveryService accountRecoveryService;
     private final RefreshTokenCookieFactory cookieFactory;
 
     @Operation(summary = "회원가입",
@@ -86,6 +91,43 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookieFactory.delete().toString())
                 .body(ApiResponse.noContent());
+    }
+
+    @Operation(summary = "비밀번호 재설정 메일 요청",
+            description = """
+                    가입된 이메일이면 재설정 링크(`{프론트}/reset-password?token=...`, 30분, 한 번만 사용)를 메일로 보냅니다.
+                    가입 여부를 숨기려고 없는 이메일이어도 똑같이 200 입니다. 다시 요청하면 새 링크가 가고 옛 링크는 무효가 됩니다.
+                    이메일·IP 마다 15분에 5번까지이고, 넘으면 429(TOO_MANY_REQUESTS)입니다.
+                    """)
+    @PostMapping("/password-reset")
+    public ApiResponse<Void> requestPasswordReset(@Valid @RequestBody PasswordResetRequest request,
+                                                  HttpServletRequest servletRequest) {
+        accountRecoveryService.requestPasswordReset(request.email(), servletRequest.getRemoteAddr());
+        return ApiResponse.noContent();
+    }
+
+    @Operation(summary = "새 비밀번호 설정",
+            description = """
+                    재설정 링크의 token 과 새 비밀번호로 비밀번호를 바꿉니다. 바꾸면 모든 기기에서 로그아웃되니 새 비밀번호로 로그인하게 하세요.
+                    링크가 만료(30분)됐거나, 이미 썼거나, 메일을 다시 받아 바뀌었으면 400(INVALID_PASSWORD_RESET_TOKEN)입니다.
+                    새 비밀번호 규칙은 회원가입과 같습니다(어기면 400 VALIDATION_FAILED).
+                    """)
+    @PostMapping("/password-reset/confirm")
+    public ApiResponse<Void> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
+        accountRecoveryService.confirmPasswordReset(request);
+        return ApiResponse.noContent();
+    }
+
+    @Operation(summary = "이메일 찾기 문의",
+            description = """
+                    이름과 답변받을 이메일을 남기면 운영자가 가입 정보를 확인해 메일로 안내합니다(자동으로 찾아주지 않음).
+                    IP 마다 15분에 5번까지이고, 넘으면 429(TOO_MANY_REQUESTS)입니다.
+                    """)
+    @PostMapping("/email-inquiry")
+    public ApiResponse<Void> submitEmailInquiry(@Valid @RequestBody EmailInquiryRequest request,
+                                                HttpServletRequest servletRequest) {
+        accountRecoveryService.submitEmailInquiry(request, servletRequest.getRemoteAddr());
+        return ApiResponse.noContent();
     }
 
     private ResponseEntity<ApiResponse<TokenResponse>> withRefreshCookie(AuthTokens tokens) {
