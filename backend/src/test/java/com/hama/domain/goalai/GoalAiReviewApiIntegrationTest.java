@@ -204,7 +204,8 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
 
         call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 402);
 
-        assertThat(AI.requests()).isEmpty();
+        // inProgressGoal() 설정 과정(세션 대화·플랜 생성)에서도 AI 를 부르므로, 전체가 아니라 리뷰 호출만 확인합니다.
+        assertThat(AI.requests().stream().filter(r -> r.purpose().equals("goal-review"))).isEmpty();
     }
 
     @Test
