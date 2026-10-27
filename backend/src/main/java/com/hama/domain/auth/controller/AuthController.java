@@ -55,7 +55,7 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<TokenResponse>> login(@Valid @RequestBody LoginRequest request,
                                                             HttpServletRequest servletRequest) {
-        // nginx 가 X-Forwarded-For 를 접속 IP 로 덮어쓰고 forward-headers-strategy 가 반영하므로 위조할 수 없습니다.
+        // forward-headers-strategy: native 가 X-Forwarded-For 를 오른쪽부터 읽어 프록시가 붙인 진짜 접속 IP 를 쓰므로 위조할 수 없습니다.
         return withRefreshCookie(authService.login(request, servletRequest.getRemoteAddr()));
     }
 

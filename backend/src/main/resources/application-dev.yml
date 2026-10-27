@@ -15,9 +15,11 @@ spring:
     show-sql: false
 
 server:
-  # nginx 가 HTTPS 를 종료하고 Spring 에는 HTTP 로 전달합니다.
+  # nginx·ALB 가 HTTPS 를 종료하고 Spring 에는 HTTP 로 전달합니다.
   # 없으면 쿠키의 Secure 판정이나 redirect_uri 가 http:// 로 잘못 생성됩니다.
-  forward-headers-strategy: framework
+  # native(Tomcat RemoteIpValve)는 X-Forwarded-For 를 오른쪽부터 읽고 내부망 주소(ALB·nginx)를 건너뜁니다.
+  # framework 는 맨 앞 값을 써서, ALB 처럼 헤더 뒤에 덧붙이는 프록시 뒤에서는 클라이언트가 IP 를 위조할 수 있습니다.
+  forward-headers-strategy: native
 
 app:
   cookie:
