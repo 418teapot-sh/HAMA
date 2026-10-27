@@ -14,7 +14,8 @@ import org.springframework.stereotype.Component;
  * 비밀번호 재설정은 가입된 이메일일 때만 메일을 보내는데, 보내는 시간(SMTP 1~2초)만큼 응답이 늦어지면
  * 응답 시간으로 가입 여부가 드러나서 비동기가 필요합니다.
  *
- * <p>RESEND_API_KEY 가 없으면(로컬·테스트) 메일 대신 내용을 로그로 남깁니다. 로컬에선 로그의 링크로 재설정을 해볼 수 있습니다.
+ * <p>RESEND_API_KEY 가 없으면 메일을 보내지 않습니다. 본문(재설정 링크)은 그 링크만 있으면 누구나 비밀번호를 바꿀 수 있는 값이라
+ * 로컬({@code app.mail.log-body: true})에서만 로그에 남깁니다. 운영에서 키가 빠져도 링크가 로그로 새지 않습니다.
  */
 @Slf4j
 @Component
@@ -26,6 +27,9 @@ public class AccountMailSender {
 
     @Value("${spring.mail.password:}")
     private String smtpPassword;
+
+    @Value("${app.mail.log-body:false}")
+    private boolean logBody;
 
     @Async
     public void sendPasswordReset(String to, String rawToken) {
@@ -52,7 +56,11 @@ public class AccountMailSender {
 
     private void send(String to, String subject, String text) {
         if (smtpPassword == null || smtpPassword.isBlank()) {
-            log.warn("[Mail] RESEND_API_KEY 가 없어 메일을 보내지 않습니다. to={} subject={}\n{}", to, subject, text);
+            if (logBody) {
+                log.warn("[Mail] RESEND_API_KEY 가 없어 메일 대신 로그로 남깁니다(로컬). to={} subject={}\n{}", to, subject, text);
+            } else {
+                log.error("[Mail] RESEND_API_KEY 가 없어 메일을 보내지 못했습니다. subject={}", subject);
+            }
             return;
         }
         SimpleMailMessage message = new SimpleMailMessage();
