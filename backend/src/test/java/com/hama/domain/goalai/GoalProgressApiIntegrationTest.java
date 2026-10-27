@@ -9,13 +9,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import com.hama.domain.goalai.service.GoalProgressService;
 import com.hama.domain.todo.dto.UpdateTodoNoteRequest;
 import com.hama.domain.todo.service.TodoService;
+import jakarta.persistence.EntityManager;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import org.springframework.test.annotation.DirtiesContext;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 
@@ -28,6 +30,8 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
     private TodoService todoService;
     @Autowired
     private TransactionTemplate transaction;
+    @Autowired
+    private EntityManager entityManager;
 
     @BeforeEach
     void isolateDurableQueue() {
@@ -98,7 +102,14 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
         long goalId = goal(user);
         long newest = record(user, goalId, "최근 완료");
         long earlier = record(user, goalId, "이전 완료");
-        jdbc.update("update todo set completed_at = '2026-09-30 23:59:59' where todo_id = ?", earlier);
+        // 실제 완료 API도 JVM 시간대와 무관하게 고정 KST 시각(12:00)을 왕복해야 합니다.
+        assertThat(records(user, goalId).at("/content/0/completedAt").asString()).isEqualTo("2026-10-01T12:00:00");
+        // DATETIME 문자열 직접 주입은 UTC JVM에서 JDBC 시간대 변환 경로가 달라집니다.
+        // 실제 complete()와 같은 Hibernate LocalDateTime 바인딩으로 기록합니다.
+        transaction.executeWithoutResult(tx -> entityManager.createQuery(
+                "update Todo t set t.completedAt = :at where t.id = :id")
+                .setParameter("at", LocalDateTime.of(2026, 9, 30, 23, 59, 59))
+                .setParameter("id", earlier).executeUpdate());
         note(user, earlier, "지금 수정한 이전 완료 기록");
         JsonNode result = records(user, goalId);
         assertThat(result.at("/content/0/todoId").asLong()).isEqualTo(newest);
