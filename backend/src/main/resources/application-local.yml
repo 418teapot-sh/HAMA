@@ -32,6 +32,9 @@ app:
     # http://localhost 에서는 Secure 쿠키가 브라우저에 저장되지 않아 로그인이 막힙니다.
     secure: false
     same-site: Lax
+  mail:
+    # 로컬 프론트(Vite). RESEND_API_KEY 가 없으면 메일 대신 이 링크가 로그에 찍힙니다.
+    reset-password-url: http://localhost:5173/reset-password
 
 logging:
   level:
