@@ -51,6 +51,7 @@ public class AccountRecoveryService {
     /**
      * 링크의 토큰으로 비밀번호를 바꿉니다. 링크는 한 번만 쓸 수 있고, 바꾸면 모든 기기에서 로그아웃됩니다
      * (비밀번호를 잊은 게 아니라 털려서 바꾸는 경우, 남이 들고 있는 리프레시 토큰을 끊어야 해서).
+     * 리프레시 토큰을 지워 재발급을 막을 뿐, 이미 나간 액세스 토큰은 만료(30분)까지 통과합니다(회원탈퇴와 같은 한계).
      */
     @Transactional
     public void confirmPasswordReset(PasswordResetConfirmRequest request) {
