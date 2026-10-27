@@ -58,13 +58,15 @@ public class AccountRecoveryService {
         PasswordResetToken resetToken = resetTokenRepository
                 .findByTokenHashAndExpiresAtAfter(tokenHash, LocalDateTime.now())
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_PASSWORD_RESET_TOKEN));
+        // 탈퇴(UserService.withdraw)·로그인처럼 사용자 행을 기본키로 먼저 잠그고 나서 토큰 테이블을 건드립니다.
+        // 토큰부터 지우고 사용자를 나중에 고치면 탈퇴와 잠금 순서가 엇갈려 교착이 납니다.
+        // 링크를 받은 뒤 탈퇴했으면 사용자가 없습니다.
+        User user = userRepository.findByIdForUpdate(resetToken.getUserId())
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_PASSWORD_RESET_TOKEN));
         // 같은 링크로 동시에 두 번 오면 먼저 지운 쪽만 진행합니다.
         if (resetTokenRepository.deleteByTokenHash(tokenHash) == 0) {
             throw new BusinessException(AuthErrorCode.INVALID_PASSWORD_RESET_TOKEN);
         }
-        // 링크를 받은 뒤 탈퇴했으면 탈퇴가 토큰 행도 지우지만, 그 사이에 끼면 사용자가 없을 수 있습니다.
-        User user = userRepository.findById(resetToken.getUserId())
-                .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_PASSWORD_RESET_TOKEN));
         user.changePassword(passwordEncoder.encode(request.newPassword()));
         refreshTokenRepository.deleteAllByUserId(user.getId());
         log.info("[PasswordReset] 비밀번호 재설정 userId={}", user.getId());
