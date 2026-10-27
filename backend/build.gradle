@@ -25,6 +25,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 
+	// 비밀번호 재설정·이메일 찾기 문의 메일 (Resend SMTP)
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
+
 	// 라이너 API 호출 (WebClient)
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'
 

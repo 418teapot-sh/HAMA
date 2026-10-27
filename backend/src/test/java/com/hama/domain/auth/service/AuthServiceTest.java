@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.hama.domain.auth.dto.LoginRequest;
@@ -100,7 +101,7 @@ class AuthServiceTest {
         @Test
         void 비밀번호가_맞으면_토큰을_발급한다() {
             given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
-            given(userRepository.findByIdForShare(1L)).willReturn(Optional.of(savedUser()));
+            given(userRepository.findPasswordByIdForShare(1L)).willReturn(Optional.of("encoded"));
             given(passwordEncoder.matches("password1234!", "encoded")).willReturn(true);
 
             AuthTokens tokens = authService.login(new LoginRequest(EMAIL, "password1234!"), IP);
@@ -111,11 +112,22 @@ class AuthServiceTest {
         @Test
         void 비밀번호가_맞아도_그사이_탈퇴했으면_실패한다() {
             given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
-            given(userRepository.findByIdForShare(1L)).willReturn(Optional.empty());
+            given(userRepository.findPasswordByIdForShare(1L)).willReturn(Optional.empty());
             given(passwordEncoder.matches("password1234!", "encoded")).willReturn(true);
 
             assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "password1234!"), IP))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
+        }
+
+        @Test
+        void 비밀번호가_맞아도_그사이_비밀번호가_재설정됐으면_실패한다() {
+            given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
+            given(userRepository.findPasswordByIdForShare(1L)).willReturn(Optional.of("encoded-after-reset"));
+            given(passwordEncoder.matches("password1234!", "encoded")).willReturn(true);
+
+            assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "password1234!"), IP))
+                    .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
+            verify(refreshTokenRepository, never()).save(any());
         }
 
         @Test
@@ -149,7 +161,7 @@ class AuthServiceTest {
             given(userRepository.findByEmail(EMAIL)).willReturn(Optional.of(savedUser()));
             given(passwordEncoder.matches("wrong-password", "encoded")).willReturn(false);
             given(passwordEncoder.matches("password1234!", "encoded")).willReturn(true);
-            given(userRepository.findByIdForShare(1L)).willReturn(Optional.of(savedUser()));
+            given(userRepository.findPasswordByIdForShare(1L)).willReturn(Optional.of("encoded"));
 
             for (int i = 0; i <= PasswordAttemptLimiter.MAX_ATTEMPTS; i++) {
                 assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "wrong-password"), "198.51.100.9"))
@@ -167,14 +179,14 @@ class AuthServiceTest {
         void 저장된_토큰과_일치하면_새_토큰으로_교체한다() {
             String refreshToken = jwtTokenProvider.createRefreshToken(1L);
             given(userRepository.existsById(1L)).willReturn(true);
-            given(refreshTokenRepository.rotate(eq(1L), eq(RefreshTokenHasher.hash(refreshToken)), any(), any()))
+            given(refreshTokenRepository.rotate(eq(1L), eq(TokenHasher.hash(refreshToken)), any(), any()))
                     .willReturn(1);
 
             AuthTokens tokens = authService.reissue(refreshToken);
 
             assertThat(tokens.refreshToken()).isNotEqualTo(refreshToken);
-            verify(refreshTokenRepository).rotate(eq(1L), eq(RefreshTokenHasher.hash(refreshToken)),
-                    eq(RefreshTokenHasher.hash(tokens.refreshToken())), any());
+            verify(refreshTokenRepository).rotate(eq(1L), eq(TokenHasher.hash(refreshToken)),
+                    eq(TokenHasher.hash(tokens.refreshToken())), any());
         }
 
         @Test
@@ -212,7 +224,7 @@ class AuthServiceTest {
 
             authService.logout(refreshToken);
 
-            verify(refreshTokenRepository).deleteByUserIdAndTokenHash(1L, RefreshTokenHasher.hash(refreshToken));
+            verify(refreshTokenRepository).deleteByUserIdAndTokenHash(1L, TokenHasher.hash(refreshToken));
         }
 
         @Test

@@ -58,17 +58,20 @@ public class AuthService {
      */
     @Transactional
     public AuthTokens login(LoginRequest request, String clientIp) {
-        // 이메일만 키로 쓰면 남의 이메일로 5번 틀려서 그 계정을 잠글 수 있어서 접속 IP 를 함께 씁니다.
-        String attemptKey = request.email() + "|" + clientIp;
+        String attemptKey = PasswordAttemptLimiter.loginKey(request.email(), clientIp);
         attemptLimiter.check(attemptKey);
 
         User user = userRepository.findByEmail(request.email())
                 .filter(found -> passwordEncoder.matches(request.password(), found.getPassword()))
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_CREDENTIALS));
-        // 비밀번호 확인(bcrypt) 뒤에 사용자 행만 공유 락으로 다시 읽어 동시에 진행 중인 탈퇴와 순서를 맞춥니다.
+        // 비밀번호 확인(bcrypt) 뒤에 사용자 행만 공유 락으로 다시 읽어 동시에 진행 중인 탈퇴·비밀번호 재설정과 순서를 맞춥니다.
         // 탈퇴가 먼저면 행이 없어 실패하고, 로그인이 먼저면 탈퇴가 이 토큰까지 지웁니다.
+        // 재설정이 bcrypt 확인과 잠금 사이에 끝났으면 비밀번호가 바뀌어 있어 실패합니다. 확인하지 않으면 옛 비밀번호로
+        // 로그인한 사람이 재설정의 "모든 기기 로그아웃" 뒤에 새 토큰을 받아 갑니다.
         // 이메일 인덱스로 잠그면 탈퇴(기본키 → 이메일 인덱스)와 순서가 엇갈려 교착이 나므로 기본키로만 잠급니다.
-        userRepository.findByIdForShare(user.getId())
+        String checkedPassword = user.getPassword();
+        userRepository.findPasswordByIdForShare(user.getId())
+                .filter(checkedPassword::equals)
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_CREDENTIALS));
 
         attemptLimiter.onSuccess(attemptKey);
@@ -93,8 +96,8 @@ public class AuthService {
         // 저장된 해시가 지금 받은 토큰일 때만 교체합니다. 같은 토큰으로 동시에 재발급하면 하나만 성공하고
         // 나머지는 401 이라, DB 와 브라우저 쿠키가 서로 다른 토큰을 들고 어긋나지 않습니다.
         String newRefreshToken = jwtTokenProvider.createRefreshToken(userId);
-        int rotated = refreshTokenRepository.rotate(userId, RefreshTokenHasher.hash(refreshToken),
-                RefreshTokenHasher.hash(newRefreshToken), LocalDateTime.now());
+        int rotated = refreshTokenRepository.rotate(userId, TokenHasher.hash(refreshToken),
+                TokenHasher.hash(newRefreshToken), LocalDateTime.now());
         if (rotated == 0) {
             throw new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN);
         }
@@ -108,7 +111,7 @@ public class AuthService {
             return;
         }
         jwtTokenProvider.parseRefreshUserId(refreshToken).ifPresent(userId ->
-                refreshTokenRepository.deleteByUserIdAndTokenHash(userId, RefreshTokenHasher.hash(refreshToken)));
+                refreshTokenRepository.deleteByUserIdAndTokenHash(userId, TokenHasher.hash(refreshToken)));
     }
 
     /** 기기마다 새 행을 넣습니다. 새 행이라 같은 유저가 동시에 로그인해도 서로 충돌하지 않습니다. */
@@ -116,7 +119,7 @@ public class AuthService {
         String accessToken = jwtTokenProvider.createAccessToken(userId);
         String refreshToken = jwtTokenProvider.createRefreshToken(userId);
 
-        refreshTokenRepository.save(RefreshToken.create(userId, RefreshTokenHasher.hash(refreshToken)));
+        refreshTokenRepository.save(RefreshToken.create(userId, TokenHasher.hash(refreshToken)));
         return new AuthTokens(accessToken, refreshToken);
     }
 

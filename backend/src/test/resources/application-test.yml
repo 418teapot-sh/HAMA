@@ -30,6 +30,9 @@ paddle:
     12: pri_test_12
 
 spring:
+  # 로컬 .env 에 RESEND_API_KEY 가 있어도 테스트가 진짜 메일을 보내지 않도록 비웁니다(라이너·Paddle 키와 같은 이유).
+  mail:
+    password:
   # @DataJpaTest 는 기본적으로 데이터소스를 내장 DB로 바꿔치기합니다.
   # 그러면 아래 설정이 무시되므로 끕니다.
   test:
