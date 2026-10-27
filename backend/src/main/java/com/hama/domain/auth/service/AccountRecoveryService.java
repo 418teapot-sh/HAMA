@@ -11,10 +11,7 @@ import com.hama.domain.auth.repository.RefreshTokenRepository;
 import com.hama.domain.user.entity.User;
 import com.hama.domain.user.repository.UserRepository;
 import com.hama.global.exception.BusinessException;
-import java.security.SecureRandom;
-import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Base64;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,15 +24,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AccountRecoveryService {
 
-    static final Duration RESET_TOKEN_VALIDITY = Duration.ofMinutes(30);
-    private static final SecureRandom RANDOM = new SecureRandom();
-
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository resetTokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final EmailInquiryRepository inquiryRepository;
     private final PasswordEncoder passwordEncoder;
     private final PasswordAttemptLimiter limiter;
+    private final PasswordResetLinkIssuer linkIssuer;
     private final AccountMailSender mailSender;
 
     /**
@@ -44,20 +39,13 @@ public class AccountRecoveryService {
      *
      * <p>메일 폭탄과 Resend 하루 발송 한도 소진을 막으려고 받는 이메일·요청 IP 마다 15분에 5번까지 받습니다.
      * 이메일 키는 가입 여부와 상관없이 세므로 429 로 가입 여부가 드러나지 않습니다.
+     * 가입 여부 확인·토큰 저장·메일은 응답과 따로 돌려서(PasswordResetLinkIssuer) 응답 시간이 가입 여부와 상관없습니다.
      */
-    @Transactional
     public void requestPasswordReset(String email, String clientIp) {
         // IP 를 먼저 셉니다. 이메일을 먼저 세면 이미 막힌 IP 가 아무 이메일로나 요청해 남의 이메일 몫을 깎고, 카운터 맵에 키를 계속 쌓습니다.
         limiter.check("reset-ip:" + clientIp, AuthErrorCode.TOO_MANY_REQUESTS);
         limiter.check("reset-email:" + email, AuthErrorCode.TOO_MANY_REQUESTS);
-
-        userRepository.findByEmail(email).ifPresent(user -> {
-            String rawToken = newToken();
-            LocalDateTime now = LocalDateTime.now();
-            resetTokenRepository.upsert(user.getId(), RefreshTokenHasher.hash(rawToken),
-                    now.plus(RESET_TOKEN_VALIDITY), now);
-            mailSender.sendPasswordReset(email, rawToken);
-        });
+        linkIssuer.issue(email);
     }
 
     /**
@@ -82,18 +70,13 @@ public class AccountRecoveryService {
         log.info("[PasswordReset] 비밀번호 재설정 userId={}", user.getId());
     }
 
-    /** 이메일 찾기 문의를 저장하고 운영자에게 알림 메일을 보냅니다. 스팸을 막으려고 IP 마다 15분에 5번까지 받습니다. */
-    @Transactional
+    /**
+     * 이메일 찾기 문의를 저장하고 운영자에게 알림 메일을 보냅니다. 스팸을 막으려고 IP 마다 15분에 5번까지 받습니다.
+     * 트랜잭션을 걸지 않아 save 가 바로 커밋되고, 그 뒤에 알림을 보냅니다(저장에 실패한 문의로 알림이 가지 않게).
+     */
     public void submitEmailInquiry(EmailInquiryRequest request, String clientIp) {
         limiter.check("inquiry-ip:" + clientIp, AuthErrorCode.TOO_MANY_REQUESTS);
         inquiryRepository.save(EmailInquiry.create(request.name(), request.email()));
         mailSender.sendEmailInquiryNotice(request.name(), request.email());
-    }
-
-    /** 256비트 난수. URL 에 그대로 넣을 수 있게 URL-safe Base64(패딩 없음)로 만듭니다. */
-    private static String newToken() {
-        byte[] bytes = new byte[32];
-        RANDOM.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 }

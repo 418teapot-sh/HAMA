@@ -3,8 +3,10 @@ package com.hama.domain.auth.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -75,11 +77,12 @@ class AccountRecoveryApiIntegrationTest {
                 .content("{ \"email\": \"%s\" }".formatted(email)));
     }
 
-    /** 재설정을 요청하고 메일로 나간 토큰을 돌려줍니다. */
+    /** 재설정을 요청하고 메일로 나간 토큰을 돌려줍니다. 메일은 비동기라 이번 요청의 메일이 나갈 때까지 기다립니다. */
     private String resetTokenFor(String email) throws Exception {
+        clearInvocations(mailSender);
         requestReset(email).andExpect(status().isOk());
         ArgumentCaptor<String> token = ArgumentCaptor.forClass(String.class);
-        verify(mailSender, atLeastOnce()).sendPasswordReset(eq(email), token.capture());
+        verify(mailSender, timeout(5000)).sendPasswordReset(eq(email), token.capture());
         return token.getValue();
     }
 
@@ -156,7 +159,7 @@ class AccountRecoveryApiIntegrationTest {
 
         requestReset(email).andExpect(status().isOk());
 
-        verify(mailSender, never()).sendPasswordReset(eq(email), anyString());
+        verify(mailSender, after(1000).never()).sendPasswordReset(eq(email), anyString());
     }
 
     @Test
@@ -194,6 +197,6 @@ class AccountRecoveryApiIntegrationTest {
 
         assertThat(jdbcTemplate.queryForObject("SELECT name FROM email_inquiry WHERE reply_email = ?",
                 String.class, replyEmail)).isEqualTo("하마");
-        verify(mailSender).sendEmailInquiryNotice("하마", replyEmail);
+        verify(mailSender, timeout(5000)).sendEmailInquiryNotice("하마", replyEmail);
     }
 }

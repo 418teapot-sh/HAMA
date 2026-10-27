@@ -10,9 +10,9 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 /**
- * 계정 찾기 메일을 보냅니다. 응답을 기다리게 하지 않으려고 따로 스레드에서 보내고(@Async), 실패해도 요청은 성공으로 끝납니다.
- * 비밀번호 재설정은 가입된 이메일일 때만 메일을 보내는데, 보내는 시간(SMTP 1~2초)만큼 응답이 늦어지면
- * 응답 시간으로 가입 여부가 드러나서 비동기가 필요합니다.
+ * 계정 찾기 메일을 보냅니다. 실패해도 요청은 성공으로 끝납니다.
+ * 재설정 메일은 PasswordResetLinkIssuer 의 비동기 스레드에서, 문의 알림은 여기서 따로 스레드를 띄워(@Async) 보내서
+ * 응답이 SMTP(1~2초)를 기다리지 않습니다.
  *
  * <p>RESEND_API_KEY 가 없으면 메일을 보내지 않습니다. 본문(재설정 링크)은 그 링크만 있으면 누구나 비밀번호를 바꿀 수 있는 값이라
  * 로컬({@code app.mail.log-body: true})에서만 로그에 남깁니다. 운영에서 키가 빠져도 링크가 로그로 새지 않습니다.
@@ -31,7 +31,7 @@ public class AccountMailSender {
     @Value("${app.mail.log-body:false}")
     private boolean logBody;
 
-    @Async
+    /** PasswordResetLinkIssuer 가 이미 비동기 스레드에서 토큰을 커밋한 뒤 부르므로 여기선 바로 보냅니다. */
     public void sendPasswordReset(String to, String rawToken) {
         String link = properties.resetPasswordUrl() + "?token=" + rawToken;
         send(to, "[HAMA] 비밀번호 재설정 링크", """
