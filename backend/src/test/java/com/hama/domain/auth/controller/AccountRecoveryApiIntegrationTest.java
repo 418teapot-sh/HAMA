@@ -93,9 +93,13 @@ class AccountRecoveryApiIntegrationTest {
     }
 
     private ResultActions login(String email, String password) throws Exception {
+        return login(email, password, randomIp());
+    }
+
+    private ResultActions login(String email, String password, String ip) throws Exception {
         return mockMvc.perform(post("/api/v1/auth/login")
                 .with(request -> {
-                    request.setRemoteAddr(randomIp());
+                    request.setRemoteAddr(ip);
                     return request;
                 })
                 .contentType(MediaType.APPLICATION_JSON)
@@ -118,6 +122,20 @@ class AccountRecoveryApiIntegrationTest {
         login(email, NEW_PASSWORD).andExpect(status().isOk());
         // 남은 건 방금 새 비밀번호로 로그인한 1개뿐입니다.
         assertThat(refreshTokenRepository.findAll().stream().filter(t -> t.getUserId().equals(userId))).hasSize(1);
+    }
+
+    @Test
+    void 로그인을_5번_틀려_잠겨도_비밀번호를_재설정하면_바로_로그인된다() throws Exception {
+        String email = signup();
+        String ip = randomIp();
+        for (int i = 0; i < 5; i++) {
+            login(email, "wrong1234!", ip).andExpect(status().isUnauthorized());
+        }
+        login(email, PASSWORD, ip).andExpect(status().isTooManyRequests());
+
+        confirm(resetTokenFor(email), NEW_PASSWORD).andExpect(status().isOk());
+
+        login(email, NEW_PASSWORD, ip).andExpect(status().isOk());
     }
 
     @Test

@@ -63,6 +63,11 @@ public class PasswordAttemptLimiter {
         attempts.remove(key);
     }
 
+    /** {@code prefix} 로 시작하는 키를 모두 지웁니다. 비밀번호를 재설정하면 그 이메일의 로그인 잠금(이메일|IP)을 IP 와 상관없이 풉니다. */
+    void clearByPrefix(String prefix) {
+        attempts.keySet().removeIf(key -> key.startsWith(prefix));
+    }
+
     /** 틀리고 다시 오지 않은 키가 맵에 계속 쌓이지 않도록 주기적으로 비웁니다. */
     @Scheduled(fixedRate = 15, initialDelay = 15, timeUnit = TimeUnit.MINUTES)
     void evictExpired() {

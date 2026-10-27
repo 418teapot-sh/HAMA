@@ -69,6 +69,8 @@ public class AccountRecoveryService {
         }
         user.changePassword(passwordEncoder.encode(request.newPassword()));
         refreshTokenRepository.deleteAllByUserId(user.getId());
+        // 로그인을 5번 틀려 잠긴 사람이 주로 이 기능을 씁니다. 잠금이 남아 있으면 새 비밀번호로도 15분간 429 라서 풉니다.
+        limiter.clearByPrefix(user.getEmail() + "|");
         log.info("[PasswordReset] 비밀번호 재설정 userId={}", user.getId());
     }
 
