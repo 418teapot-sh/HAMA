@@ -16,8 +16,8 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     @Modifying
     @Query(value = """
             INSERT INTO password_reset_token (user_id, token_hash, expires_at, created_at, updated_at)
-            VALUES (:userId, :tokenHash, :expiresAt, :now, :now)
-            ON DUPLICATE KEY UPDATE token_hash = VALUES(token_hash), expires_at = VALUES(expires_at), updated_at = VALUES(updated_at)
+            VALUES (:userId, :tokenHash, :expiresAt, :now, :now) AS new
+            ON DUPLICATE KEY UPDATE token_hash = new.token_hash, expires_at = new.expires_at, updated_at = new.updated_at
             """, nativeQuery = true)
     void upsert(Long userId, String tokenHash, LocalDateTime expiresAt, LocalDateTime now);
 
