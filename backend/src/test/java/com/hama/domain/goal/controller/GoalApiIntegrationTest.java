@@ -8,11 +8,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.hama.domain.goal.entity.Milestone;
-import com.hama.domain.goal.entity.PeriodGoal;
-import com.hama.domain.goal.entity.PeriodType;
-import com.hama.domain.goal.repository.MilestoneRepository;
-import com.hama.domain.goal.repository.PeriodGoalRepository;
 import com.hama.domain.goal.service.GoalService;
 import com.hama.domain.todo.entity.Todo;
 import com.hama.domain.todo.repository.TodoRepository;
@@ -69,10 +64,6 @@ class GoalApiIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
     @Autowired
-    private MilestoneRepository milestones;
-    @Autowired
-    private PeriodGoalRepository periodGoals;
-    @Autowired
     private TodoRepository todos;
     @Autowired
     private GoalService goalService;
@@ -93,17 +84,21 @@ class GoalApiIntegrationTest {
                 body(result).at("/data/accessToken").asString());
     }
 
+    /**
+     * 직접 생성은 항상 PLANNING 으로 시작합니다(투두는 A/B 플랜 선택 후에만 생깁니다). 대부분의 테스트는
+     * 플랜을 고른 뒤의 진행 중 목표를 다루므로, 생성 뒤 바로 IN_PROGRESS 로 바꿔 둡니다.
+     */
     private long createGoal(Session user, String title, LocalDate start, LocalDate end) throws Exception {
         MvcResult result = mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"title":"%s","description":"체력 기르기","metricName":"체중","unit":"kg",
-                                 "startValue":80.0,"targetValue":74.0,"weeklyAvailableHours":5.0,
-                                 "startDate":"%s","endDate":"%s"}
+                                {"title":"%s","currentStatus":"체중 80kg","startDate":"%s","endDate":"%s"}
                                 """.formatted(title, start, end)), user))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.data.status").value("PLANNING"))
                 .andReturn();
-        return body(result).at("/data/goalId").asLong();
+        long goalId = body(result).at("/data/goalId").asLong();
+        jdbc.update("UPDATE goal SET status = 'IN_PROGRESS' WHERE goal_id = ?", goalId);
+        return goalId;
     }
 
     private long createGoal(Session user) throws Exception {
@@ -116,26 +111,20 @@ class GoalApiIntegrationTest {
                 Date.valueOf(TODAY.minusDays(30)), Date.valueOf(TODAY.minusDays(1)), goalId);
     }
 
-    /** PLANNING 목표는 AI 흐름에서만 만들어지므로 DB 를 직접 바꿉니다. */
-    private void makePlanning(long goalId) {
-        jdbc.update("UPDATE goal SET status = 'PLANNING' WHERE goal_id = ?", goalId);
-    }
-
     /** 투두 API 를 거치면 목표 상태·기간 검사까지 맞춰야 해서, AI_GOAL_TASK 는 SQL 로 바로 넣습니다. */
-    private long goalTask(Session user, long goalId, Long periodGoalId, boolean completed) {
+    private long goalTask(Session user, long goalId, boolean completed) {
         KeyHolder key = new GeneratedKeyHolder();
         jdbc.update(connection -> {
             PreparedStatement ps = connection.prepareStatement("""
-                    INSERT INTO todo (user_id, goal_id, period_goal_id, category, content, todo_date,
+                    INSERT INTO todo (user_id, goal_id, category, content, todo_date,
                                       status, postponed_count, completed_at, created_at, updated_at)
-                    VALUES (?, ?, ?, 'AI_GOAL_TASK', '단어 50개', ?, ?, 0, ?, NOW(6), NOW(6))
+                    VALUES (?, ?, 'AI_GOAL_TASK', '단어 50개', ?, ?, 0, ?, NOW(6), NOW(6))
                     """, Statement.RETURN_GENERATED_KEYS);
             ps.setLong(1, user.userId());
             ps.setLong(2, goalId);
-            ps.setObject(3, periodGoalId);
-            ps.setDate(4, Date.valueOf(TODAY));
-            ps.setString(5, completed ? "COMPLETED" : "PENDING");
-            ps.setTimestamp(6, completed ? Timestamp.valueOf(TODAY.atTime(9, 0)) : null);
+            ps.setDate(3, Date.valueOf(TODAY));
+            ps.setString(4, completed ? "COMPLETED" : "PENDING");
+            ps.setTimestamp(5, completed ? Timestamp.valueOf(TODAY.atTime(9, 0)) : null);
             return ps;
         }, key);
         return key.getKey().longValue();
@@ -155,8 +144,8 @@ class GoalApiIntegrationTest {
     void 로그인하지_않으면_모든_목표_API는_401() throws Exception {
         for (MockHttpServletRequestBuilder request : List.of(
                 get("/api/v1/goals"), post("/api/v1/goals").content("{}"),
-                get("/api/v1/goals/1"), get("/api/v1/goals/1/tree"),
-                patch("/api/v1/goals/1").content("{}"), delete("/api/v1/goals/1"))) {
+                get("/api/v1/goals/1"), patch("/api/v1/goals/1").content("{}"),
+                patch("/api/v1/goals/1/current-status").content("{}"), delete("/api/v1/goals/1"))) {
             mvc.perform(request.contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isUnauthorized())
                     .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
@@ -172,14 +161,13 @@ class GoalApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.goalId").value(goalId))
                 .andExpect(jsonPath("$.data.title").value("매일 러닝 30분"))
-                .andExpect(jsonPath("$.data.metricName").value("체중"))
-                .andExpect(jsonPath("$.data.unit").value("kg"))
-                .andExpect(jsonPath("$.data.startValue").value(80.0))
-                .andExpect(jsonPath("$.data.weeklyAvailableHours").value(5.0))
+                .andExpect(jsonPath("$.data.currentStatus").value("체중 80kg"))
                 .andExpect(jsonPath("$.data.startDate").value(TODAY.toString()))
                 .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
                 .andExpect(jsonPath("$.data.progressRate").value(0.0))
-                .andExpect(jsonPath("$.data.realityVerdict").isEmpty())
+                .andExpect(jsonPath("$.data.aiPlanApplied").value(false))
+                .andExpect(jsonPath("$.data.fixedSchedules.length()").value(0))
+                .andExpect(jsonPath("$.data.resultStatus").isEmpty())
                 .andExpect(jsonPath("$.data.createdAt").isNotEmpty());
     }
 
@@ -202,12 +190,6 @@ class GoalApiIntegrationTest {
                     .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_PERIOD"));
         }
 
-        mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON).content("""
-                        {"title":"목표","startDate":"2026-10-04","endDate":"2026-10-30","weeklyAvailableHours":200}
-                        """), owner))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.fields.weeklyAvailableHours").exists());
-
         // 종료일이 오늘이면 아직 진행 중이므로 만들 수 있습니다.
         createGoal(owner, "오늘까지", TODAY, TODAY);
 
@@ -220,20 +202,9 @@ class GoalApiIntegrationTest {
     }
 
     @Test
-    void DB_에_담을_수_없는_설명과_날짜는_500_대신_400() throws Exception {
+    void 저장할_수_없는_날짜는_500_대신_400() throws Exception {
         Session owner = signup();
         long goalId = createGoal(owner);
-        String longDescription = "a".repeat(70 * 1024);
-
-        mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON).content("""
-                        {"title":"목표","description":"%s","startDate":"2026-10-04","endDate":"2026-10-30"}
-                        """.formatted(longDescription)), owner))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.code").value("GOAL_DESCRIPTION_TOO_LONG"));
-        mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"description\":\"%s\"}".formatted(longDescription)), owner))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.code").value("GOAL_DESCRIPTION_TOO_LONG"));
 
         mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON).content("""
                         {"title":"목표","startDate":"2026-10-04","endDate":"+10000-01-01"}
@@ -269,14 +240,12 @@ class GoalApiIntegrationTest {
         long goalId = createGoal(owner);
 
         mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON).content("""
-                        {"title":"3개월 안에 토익 850점","endDate":"2026-12-31","targetValue":850,"weeklyAvailableHours":12.0}
+                        {"title":"3개월 안에 토익 850점","endDate":"2026-12-31"}
                         """), owner))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.title").value("3개월 안에 토익 850점"))
                 .andExpect(jsonPath("$.data.endDate").value("2026-12-31"))
-                .andExpect(jsonPath("$.data.targetValue").value(850))
-                .andExpect(jsonPath("$.data.weeklyAvailableHours").value(12.0))
-                .andExpect(jsonPath("$.data.metricName").value("체중"))
+                .andExpect(jsonPath("$.data.currentStatus").value("체중 80kg"))
                 .andExpect(jsonPath("$.data.startDate").value(TODAY.toString()));
 
         mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON)
@@ -290,20 +259,16 @@ class GoalApiIntegrationTest {
     }
 
     @Test
-    void 수정에서_null_은_값을_지우고_생략한_필드와_title_은_유지한다() throws Exception {
+    void 수정에서_title_을_null로_보내면_유지하고_currentStatus는_건드리지_않는다() throws Exception {
         Session owner = signup();
         long goalId = createGoal(owner);
 
-        mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON).content("""
-                        {"title":null,"metricName":null,"unit":null,"startValue":null}
-                        """), owner))
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":null}"), owner))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.title").value("매일 러닝 30분"))
-                .andExpect(jsonPath("$.data.metricName").isEmpty())
-                .andExpect(jsonPath("$.data.unit").isEmpty())
-                .andExpect(jsonPath("$.data.startValue").isEmpty())
-                .andExpect(jsonPath("$.data.targetValue").value(74.0))
-                .andExpect(jsonPath("$.data.description").value("체력 기르기"));
+                .andExpect(jsonPath("$.data.currentStatus").value("체중 80kg"))
+                .andExpect(jsonPath("$.data.endDate").value(TODAY.plusDays(60).toString()));
 
         mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"endDate\":null}"), owner))
@@ -329,16 +294,91 @@ class GoalApiIntegrationTest {
     void 진행률은_삭제되지_않은_AI_GOAL_TASK_만_센다() throws Exception {
         Session owner = signup();
         long goalId = createGoal(owner);
-        goalTask(owner, goalId, null, true);
-        goalTask(owner, goalId, null, false);
-        goalTask(owner, goalId, null, false);
-        long removed = goalTask(owner, goalId, null, true);
+        goalTask(owner, goalId, true);
+        goalTask(owner, goalId, false);
+        goalTask(owner, goalId, false);
+        long removed = goalTask(owner, goalId, true);
         jdbc.update("UPDATE todo SET deleted_at = NOW(6) WHERE todo_id = ?", removed);
 
         mvc.perform(auth(get("/api/v1/goals/" + goalId), owner))
                 .andExpect(jsonPath("$.data.progressRate").value(33.3));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM todo WHERE goal_id = ?", Long.class, goalId))
                 .isEqualTo(4L);
+    }
+
+    // ---- 현재 상태 수정 ----
+
+    @Test
+    void 현재_상태만_수정하고_다른_필드는_그대로다() throws Exception {
+        Session owner = signup();
+        long goalId = createGoal(owner);
+
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentStatus\":\"토익 700점\"}"), owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.goalId").value(goalId))
+                .andExpect(jsonPath("$.data.currentStatus").value("토익 700점"))
+                .andExpect(jsonPath("$.data.updatedAt").isNotEmpty());
+        mvc.perform(auth(get("/api/v1/goals/" + goalId), owner))
+                .andExpect(jsonPath("$.data.currentStatus").value("토익 700점"))
+                .andExpect(jsonPath("$.data.title").value("매일 러닝 30분"));
+
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentStatus\":null}"), owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.currentStatus").isEmpty());
+
+        makePast(goalId);
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentStatus\":\"바꿔보기\"}"), owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GOAL_NOT_EDITABLE"));
+    }
+
+    @Test
+    void 현재_상태_수정은_권한과_글자수를_검증한다() throws Exception {
+        Session owner = signup(), other = signup();
+        long goalId = createGoal(owner);
+
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentStatus\":\"침범\"}"), other))
+                .andExpect(status().isForbidden());
+        mvc.perform(auth(patch("/api/v1/goals/999999999/current-status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentStatus\":\"없음\"}"), owner))
+                .andExpect(status().isNotFound());
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentStatus\":\"%s\"}".formatted("가".repeat(201))), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields.currentStatus").exists());
+    }
+
+    // ---- 고정 일정 ----
+
+    @Test
+    void 고정_일정은_요일별로_하나씩만_허용하고_상세에_요일순으로_나온다() throws Exception {
+        Session owner = signup();
+        MvcResult result = mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"목표","startDate":"%s","endDate":"%s",
+                                 "fixedSchedules":[{"dayOfWeek":"WEDNESDAY","content":"야근"},
+                                                    {"dayOfWeek":"MONDAY","content":"한국사 공부"}]}
+                                """.formatted(TODAY, TODAY.plusDays(30))), owner))
+                .andExpect(status().isCreated()).andReturn();
+        long goalId = body(result).at("/data/goalId").asLong();
+
+        mvc.perform(auth(get("/api/v1/goals/" + goalId), owner))
+                .andExpect(jsonPath("$.data.fixedSchedules.length()").value(2))
+                .andExpect(jsonPath("$.data.fixedSchedules[0].dayOfWeek").value("MONDAY"))
+                .andExpect(jsonPath("$.data.fixedSchedules[0].content").value("한국사 공부"))
+                .andExpect(jsonPath("$.data.fixedSchedules[1].dayOfWeek").value("WEDNESDAY"));
+
+        mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"목표","startDate":"%s","endDate":"%s",
+                                 "fixedSchedules":[{"dayOfWeek":"MONDAY","content":"A"},{"dayOfWeek":"MONDAY","content":"B"}]}
+                                """.formatted(TODAY, TODAY.plusDays(30))), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_INPUT"));
     }
 
     // ---- 리스트 · 삭제 ----
@@ -351,8 +391,8 @@ class GoalApiIntegrationTest {
         long past = createGoal(owner, "지난 목표", TODAY, TODAY.plusDays(5));
         makePast(past);
         createGoal(signup());
-        goalTask(owner, sooner, null, true);
-        goalTask(owner, sooner, null, false);
+        goalTask(owner, sooner, true);
+        goalTask(owner, sooner, false);
 
         mvc.perform(auth(get("/api/v1/goals").param("status", "IN_PROGRESS"), owner))
                 .andExpect(status().isOk())
@@ -411,9 +451,15 @@ class GoalApiIntegrationTest {
     void PLANNING_목표는_전체_리스트에만_나오고_삭제할_수_있다() throws Exception {
         Session owner = signup();
         long inProgress = createGoal(owner);
-        long planning = createGoal(owner, "플랜 고르는 중", TODAY, TODAY.plusDays(30));
-        makePlanning(planning);
-        long task = goalTask(owner, planning, null, false);
+        MvcResult planningResult = mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"플랜 고르는 중","startDate":"%s","endDate":"%s"}
+                                """.formatted(TODAY, TODAY.plusDays(30))), owner))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.status").value("PLANNING"))
+                .andReturn();
+        long planning = body(planningResult).at("/data/goalId").asLong();
+        long task = goalTask(owner, planning, false);
 
         mvc.perform(auth(get("/api/v1/goals"), owner))
                 .andExpect(jsonPath("$.data.totalElements").value(2))
@@ -437,7 +483,7 @@ class GoalApiIntegrationTest {
     void 같은_트랜잭션에서_불러온_투두가_있어도_목표_삭제가_투두_삭제를_되돌리지_않는다() throws Exception {
         Session owner = signup();
         long goalId = createGoal(owner);
-        long task = goalTask(owner, goalId, null, false);
+        long task = goalTask(owner, goalId, false);
         makePast(goalId);
 
         transaction.executeWithoutResult(status -> {
@@ -457,7 +503,7 @@ class GoalApiIntegrationTest {
         Session owner = signup();
         Session other = signup();
         long goalId = createGoal(owner);
-        long task = goalTask(owner, goalId, null, false);
+        long task = goalTask(owner, goalId, false);
         makePast(goalId);
 
         mvc.perform(auth(delete("/api/v1/goals/" + goalId), other))
@@ -478,66 +524,5 @@ class GoalApiIntegrationTest {
                 Boolean.class, task)).isTrue();
         mvc.perform(auth(get("/api/v1/todos").param("date", TODAY.toString()), owner))
                 .andExpect(jsonPath("$.data.pending.length()").value(0));
-    }
-
-    // ---- 계층 트리 ----
-
-    @Test
-    void 플랜을_적용하지_않은_목표의_트리는_빈_배열() throws Exception {
-        Session owner = signup();
-        long goalId = createGoal(owner);
-
-        mvc.perform(auth(get("/api/v1/goals/" + goalId + "/tree"), owner))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.goalId").value(goalId))
-                .andExpect(jsonPath("$.data.milestones.length()").value(0));
-    }
-
-    @Test
-    void 트리는_순서대로_마일스톤과_기간_목표를_담고_투두를_집계한다() throws Exception {
-        Session owner = signup();
-        long goalId = createGoal(owner);
-        Milestone second = milestones.save(Milestone.create(goalId, 2, "실전", null,
-                TODAY.plusDays(31), TODAY.plusDays(60)));
-        Milestone first = milestones.save(Milestone.create(goalId, 1, "기초 다지기", null,
-                TODAY, TODAY.plusDays(30)));
-        PeriodGoal week2 = periodGoals.save(PeriodGoal.create(first, PeriodType.WEEKLY, 2, "2주차",
-                TODAY.plusDays(7), TODAY.plusDays(13)));
-        PeriodGoal week1 = periodGoals.save(PeriodGoal.create(first, PeriodType.WEEKLY, 1, "1주차",
-                TODAY, TODAY.plusDays(6)));
-        goalTask(owner, goalId, week1.getId(), true);
-        goalTask(owner, goalId, week1.getId(), true);
-        goalTask(owner, goalId, week1.getId(), false);
-        goalTask(owner, goalId, week2.getId(), false);
-
-        mvc.perform(auth(get("/api/v1/goals/" + goalId + "/tree"), owner))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.milestones.length()").value(2))
-                .andExpect(jsonPath("$.data.milestones[0].milestoneId").value(first.getId()))
-                .andExpect(jsonPath("$.data.milestones[0].seq").value(1))
-                .andExpect(jsonPath("$.data.milestones[0].status").value("PENDING"))
-                .andExpect(jsonPath("$.data.milestones[0].progressRate").value(50.0))
-                .andExpect(jsonPath("$.data.milestones[0].periodGoals[0].periodGoalId").value(week1.getId()))
-                .andExpect(jsonPath("$.data.milestones[0].periodGoals[0].periodType").value("WEEKLY"))
-                .andExpect(jsonPath("$.data.milestones[0].periodGoals[0].todoTotal").value(3))
-                .andExpect(jsonPath("$.data.milestones[0].periodGoals[0].todoCompleted").value(2))
-                .andExpect(jsonPath("$.data.milestones[0].periodGoals[1].periodGoalId").value(week2.getId()))
-                .andExpect(jsonPath("$.data.milestones[1].milestoneId").value(second.getId()))
-                .andExpect(jsonPath("$.data.milestones[1].periodGoals.length()").value(0));
-    }
-
-    @Test
-    void 남의_목표_트리는_403_삭제된_목표는_404() throws Exception {
-        Session owner = signup();
-        long goalId = createGoal(owner);
-
-        mvc.perform(auth(get("/api/v1/goals/" + goalId + "/tree"), signup()))
-                .andExpect(status().isForbidden());
-
-        makePast(goalId);
-        mvc.perform(auth(delete("/api/v1/goals/" + goalId), owner)).andExpect(status().isOk());
-        mvc.perform(auth(get("/api/v1/goals/" + goalId + "/tree"), owner))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error.code").value("GOAL_NOT_FOUND"));
     }
 }

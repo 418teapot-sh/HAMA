@@ -28,31 +28,28 @@ class GoalAiSelectApiIntegrationTest extends GoalAiTestSupport {
 
         assertThat(data.get("goalId").asLong()).isEqualTo(goalId);
         assertThat(data.get("status").asString()).isEqualTo("IN_PROGRESS");
-        assertThat(data.at("/created/milestones").asInt()).isEqualTo(2);
-        assertThat(data.at("/created/periodGoals").asInt()).isEqualTo(14);
-        assertThat(data.at("/created/todos").asInt()).isEqualTo(30);
-        assertThat(data.at("/placement/placed").asInt()).isEqualTo(29);
+        // 플랜 A 는 매일 1개(92일). 10/3(토)는 종일 개인 일정이라 그 하루만 빈 시간이 없습니다.
+        assertThat(data.at("/created/todos").asInt()).isEqualTo(92);
+        assertThat(data.at("/placement/placed").asInt()).isEqualTo(91);
         assertThat(data.at("/placement/unplaced").asInt()).isEqualTo(1);
-        assertThat(data.at("/placement/unplacedTodos/0/content").asString()).isEqualTo("LC 파트2 문제 풀이");
+        assertThat(data.at("/placement/unplacedTodos/0/content").asString()).isEqualTo("영어 단어 30개 외우기");
         assertThat(data.at("/placement/unplacedTodos/0/todoDate").asString()).isEqualTo("2026-10-03");
 
         List<Map<String, Object>> todos = jdbc.queryForList("""
-                select todo_date, start_time, end_time, period_goal_id from todo
+                select todo_date, start_time, end_time from todo
                 where goal_id = ? and category = 'AI_GOAL_TASK' and deleted_at is null
                 order by todo_date, todo_id limit 3
                 """, goalId);
         assertThat(todos).extracting(row -> String.valueOf(row.get("todo_date")))
-                .containsExactly("2026-10-01", "2026-10-03", "2026-10-05");
+                .containsExactly("2026-10-01", "2026-10-02", "2026-10-03");
+        // 10/1(목)은 회사(09~18) + 기존 투두(18~18:30) 다음 빈 시간, 10/2(금)은 회사(09~18) 다음 빈 시간.
         assertThat(String.valueOf(todos.get(0).get("start_time"))).startsWith("18:30");
         assertThat(String.valueOf(todos.get(0).get("end_time"))).startsWith("19:30");
-        assertThat(todos.get(1).get("start_time")).isNull();
-        assertThat(String.valueOf(todos.get(2).get("start_time"))).startsWith("18:00");
-        assertThat(todos.get(0).get("period_goal_id")).isNotNull();
+        assertThat(String.valueOf(todos.get(1).get("start_time"))).startsWith("18:00");
+        assertThat(todos.get(2).get("start_time")).isNull();
 
         assertThat(jdbc.queryForObject("select status from goal where goal_id = ?", String.class, goalId))
                 .isEqualTo("IN_PROGRESS");
-        JsonNode tree = call(get("/api/v1/goals/" + goalId + "/tree"), user, null, 200).get("data");
-        assertThat(tree.toString()).contains("기초 다지기 1주차");
         JsonNode plans = call(get("/api/v1/goals/ai/plans").param("goalId", String.valueOf(goalId)), user, null, 200)
                 .at("/data/plans");
         assertThat(plans.get(0).get("selected").asBoolean()).isTrue();
@@ -73,7 +70,7 @@ class GoalAiSelectApiIntegrationTest extends GoalAiTestSupport {
         JsonNode other = call(post("/api/v1/goals/ai/plans/" + planB + "/select"), user, null, 409);
         assertThat(other.at("/error/code").asString()).isEqualTo("GOAL_NOT_PLANNING");
         assertThat(jdbc.queryForObject("select count(*) from todo where goal_id = ?", Integer.class, goalId))
-                .isEqualTo(30);
+                .isEqualTo(92);
     }
 
     @Test

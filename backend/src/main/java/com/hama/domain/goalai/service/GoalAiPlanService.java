@@ -1,8 +1,10 @@
 package com.hama.domain.goalai.service;
 
 import com.hama.domain.goal.entity.Goal;
+import com.hama.domain.goal.entity.GoalFixedSchedule;
 import com.hama.domain.goal.entity.GoalStatus;
 import com.hama.domain.goal.exception.GoalErrorCode;
+import com.hama.domain.goal.repository.GoalFixedScheduleRepository;
 import com.hama.domain.goal.repository.GoalRepository;
 import com.hama.domain.goalai.dto.PlanDetail;
 import com.hama.domain.goalai.dto.PlanResponses;
@@ -28,7 +30,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** PLANNING 목표의 A(여유형)/B(집중형) 플랜 생성과 조회. */
+/** PLANNING 목표의 A(여유형)/B(집중형) 플랜 생성과 조회. 마일스톤 없이 반복 할 일(tasks)만 만듭니다. */
 @Service
 public class GoalAiPlanService {
 
@@ -38,26 +40,29 @@ public class GoalAiPlanService {
     private static final String PLAN_PROMPT = """
             너는 목표를 실행 계획으로 쪼개는 플래너야. 오늘은 %s(KST)야.
             목표 정보(JSON)를 보고 성격이 다른 플랜 두 개를 만들어. A 는 여유형(적은 횟수·짧은 시간), B 는 집중형(많은 횟수·긴 시간).
-            사용자 선호: %s.
-            마일스톤 2~5개가 planStartDate ~ planEndDate 를 순서대로 나눠야 해. 매주 할 일의 총 시간이 weeklyAvailableHours 를 넘지 않게 해.
+            각 플랜은 마일스톤 없이 반복할 일(tasks) 2~5개로만 구성해.
+            예) 여유형 - "매일 영어 단어 30개씩 외우기"(timesPerWeek 7) / "일주일에 모의고사 1번 보기"(timesPerWeek 1),
+                집중형 - "매일 영어 단어 50개씩 외우기"(timesPerWeek 7) / "일주일에 모의고사 1번 보기"(timesPerWeek 1).
+            사용자 선호: %s. fixedSchedules(이미 바쁜 요일)가 있으면 그 요일에는 되도록 적게 배정한다고 생각하고 횟수를 정해.
             반드시 아래 모양의 JSON 객체 하나로만, 짧게 답해.
-            {"plans":[{"variant":"A","title":10자 이하,"summary":"주 5일, 하루 1.5시간." 같은 한 문장,
-              "milestones":[{"title":마일스톤 이름,"startDate":"yyyy-MM-dd","endDate":"yyyy-MM-dd",
-                "weeklyTasks":[{"content":투두 한 줄,"sessionsPerWeek":1~7,"minutes":10~240}]}]},
+            {"plans":[{"variant":"A","title":10자 이하,"summary":"매일 영어 단어 30개씩 외우기 / 일주일에 모의고사 1번 보기" 같은 한 문장,
+              "tasks":[{"content":할 일 한 줄,"timesPerWeek":1~7,"minutes":10~240}]},
              {"variant":"B", ...}]}
-            마일스톤마다 weeklyTasks 는 1~3개야.
             """;
 
     private final GoalRepository goals;
+    private final GoalFixedScheduleRepository fixedSchedules;
     private final GoalPlanRepository plans;
     private final AiClient aiClient;
     private final GoalAiJson json;
     private final TransactionTemplate transaction;
     private final Clock clock;
 
-    public GoalAiPlanService(GoalRepository goals, GoalPlanRepository plans, AiClient aiClient, GoalAiJson json,
-            TransactionTemplate transaction, @Qualifier("be3Clock") Clock clock) {
+    public GoalAiPlanService(GoalRepository goals, GoalFixedScheduleRepository fixedSchedules,
+            GoalPlanRepository plans, AiClient aiClient, GoalAiJson json, TransactionTemplate transaction,
+            @Qualifier("be3Clock") Clock clock) {
         this.goals = goals;
+        this.fixedSchedules = fixedSchedules;
         this.plans = plans;
         this.aiClient = aiClient;
         this.json = json;
@@ -77,10 +82,12 @@ public class GoalAiPlanService {
         if (planStart.isAfter(goal.getEndDate())) {
             throw new BusinessException(GoalErrorCode.GOAL_INVALID_PERIOD);
         }
+        List<GoalFixedSchedule> goalFixedSchedules = fixedSchedules.findByGoalIdOrderByDayOfWeekAsc(goalId);
 
         PlanExpander.AiPlans answer = aiClient.chatForJson(AiRequest.of("goal-plan",
                 PLAN_PROMPT.formatted(today, preference.prompt()),
-                List.of(AiMessage.user(json.write(goalInfo(goal, planStart))))), PlanExpander.AiPlans.class);
+                List.of(AiMessage.user(json.write(goalInfo(goal, planStart, goalFixedSchedules))))),
+                PlanExpander.AiPlans.class);
         List<PlanExpander.Expanded> expanded = expandBoth(answer, goal.getStartDate(), planStart, goal.getEndDate());
 
         return transaction.execute(status -> {
@@ -125,15 +132,13 @@ public class GoalAiPlanService {
         return goal;
     }
 
-    private static Map<String, Object> goalInfo(Goal goal, LocalDate planStart) {
+    private static Map<String, Object> goalInfo(Goal goal, LocalDate planStart, List<GoalFixedSchedule> fixedSchedules) {
         Map<String, Object> info = new LinkedHashMap<>();
         info.put("title", goal.getTitle());
-        info.put("metricName", goal.getMetricName());
-        info.put("unit", goal.getUnit());
-        info.put("startValue", goal.getStartValue());
-        info.put("targetValue", goal.getTargetValue());
-        info.put("currentLevel", goal.getCurrentLevel());
-        info.put("weeklyAvailableHours", goal.getWeeklyAvailableHours());
+        info.put("currentStatus", goal.getCurrentStatus());
+        info.put("fixedSchedules", fixedSchedules.stream()
+                .map(f -> Map.of("dayOfWeek", f.getDayOfWeek().toString(), "content", f.getContent()))
+                .toList());
         info.put("planStartDate", planStart.toString());
         info.put("planEndDate", goal.getEndDate().toString());
         return info;

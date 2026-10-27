@@ -20,7 +20,7 @@ class GoalAiReplanServiceTest {
     private static final LocalDate END = LocalDate.of(2026, 10, 10);
 
     private static Todo todo(LocalDate date, String start, String end) {
-        return Todo.createGoalTask(1L, 1L, null, "LC 파트2", date,
+        return Todo.createGoalTask(1L, 1L, "LC 파트2", date,
                 start == null ? null : LocalTime.parse(start), end == null ? null : LocalTime.parse(end));
     }
 

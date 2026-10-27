@@ -47,8 +47,6 @@ class GoalTodoCheckinIntegrationTest {
     @Autowired JsonMapper json;
     @Autowired JdbcTemplate jdbc;
     @Autowired GoalRepository goals;
-    @Autowired MilestoneRepository milestones;
-    @Autowired PeriodGoalRepository periods;
     @Autowired TodoService todos;
     @Autowired GoalService goalService;
     @Autowired PlatformTransactionManager transactions;
@@ -73,16 +71,12 @@ class GoalTodoCheckinIntegrationTest {
         return json.readTree(response.getContentAsString());
     }
     long goal(User u) throws Exception {
-        return call(post("/api/v1/goals"), u, Map.of("title", "운동", "unit", "kg", "startDate", "2026-10-01", "endDate", "2026-10-31"), 201).at("/data/goalId").asLong();
+        return call(post("/api/v1/goals"), u, Map.of("title", "운동", "startDate", "2026-10-01", "endDate", "2026-10-31"), 201).at("/data/goalId").asLong();
     }
     Map<String,Object> input(long goal, String date) {
         return new HashMap<>(Map.of("category", "AI_GOAL_TASK", "content", "목표 할 일", "todoDate", date, "goalId", goal));
     }
     long todo(User u, long goal) throws Exception { return call(post("/api/v1/todos"), u, input(goal, "2026-10-08"), 201).at("/data/todoId").asLong(); }
-    long period(long goal) {
-        var m = milestones.saveAndFlush(Milestone.create(goal, 1, "단계", null, LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-31")));
-        return periods.saveAndFlush(PeriodGoal.create(m, PeriodType.WEEKLY, 1, "주간", LocalDate.parse("2026-10-05"), LocalDate.parse("2026-10-11"))).getId();
-    }
     JsonNode checkin(User u, long g, String type, int status) throws Exception {
         return call(post("/api/v1/todos/state/checkins"), u, Map.of("goalId",g,"type",type), status);
     }
@@ -107,14 +101,9 @@ class GoalTodoCheckinIntegrationTest {
         assertThat(file).contains("UID:hama-AI_GOAL-"+a+"@hama.app", "DTSTART;VALUE=DATE:20261008").doesNotContain("hama-AI_GOAL-"+c+"@");
     }
 
-    @Test void 생성은_본인_진행중_목표와_선택한_기간_목표_범위를_검증한다() throws Exception {
-        User u=user(), other=user(); long g=goal(u), otherGoal=goal(other), p=period(g);
-        var body=input(g,"2026-10-05");body.put("periodGoalId",p);call(post("/api/v1/todos"),u,body,201);
-        body.put("todoDate","2026-10-11");call(post("/api/v1/todos"),u,body,201);
-        body.put("todoDate","2026-10-12");call(post("/api/v1/todos"),u,body,400);
-        body.put("todoDate","2026-10-08");body.put("periodGoalId",period(otherGoal));call(post("/api/v1/todos"),u,body,403);
-        body.put("periodGoalId",period(goal(u)));call(post("/api/v1/todos"),u,body,400);
-        body.put("periodGoalId",Long.MAX_VALUE);call(post("/api/v1/todos"),u,body,404);
+    @Test void 생성은_본인_진행중_목표와_목표_기간을_검증한다() throws Exception {
+        User u=user(), other=user(); long g=goal(u), otherGoal=goal(other);
+        call(post("/api/v1/todos"),u,input(g,"2026-10-05"),201);
         call(post("/api/v1/todos"),u,input(otherGoal,"2026-10-08"),403);
         call(post("/api/v1/todos"),u,input(Long.MAX_VALUE,"2026-10-08"),404);
         for(String date:List.of("2026-09-30","2026-11-01"))call(post("/api/v1/todos"),u,input(g,date),400);
@@ -140,7 +129,7 @@ class GoalTodoCheckinIntegrationTest {
         call(post("/api/v1/todos/state/checkins"),u,Map.of("goalId",g,"type","END","achieved",true,"value",-12.34),201);
         checkin(u,g,"START",201);checkin(u,g,"MID",201);checkin(u,g,"MID",201);
         checkin(u,g,"START",409);checkin(u,g,"END",409);
-        JsonNode h=history(u,g);assertThat(h.get("unit").asString()).isEqualTo("kg");
+        JsonNode h=history(u,g);
         assertThat(h.at("/checkins/totalElements").asInt()).isEqualTo(4);
         assertThat(h.at("/checkins/content/0/checkedAt").asString()).isEqualTo("2026-10-08T12:00:00");
         assertThat(h.at("/checkins/content/3/achieved").asBoolean()).isTrue();

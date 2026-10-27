@@ -7,7 +7,7 @@ import java.util.List;
 
 public record SelectResponse(Long goalId, GoalStatus status, Created created, Placement placement) {
 
-    public record Created(int milestones, int periodGoals, int todos) {
+    public record Created(int todos) {
     }
 
     @Schema(description = "placed 는 빈 시간에 넣은 투두 수, unplaced 는 빈 시간이 없어 날짜만 둔(시간 없는) 투두 수")

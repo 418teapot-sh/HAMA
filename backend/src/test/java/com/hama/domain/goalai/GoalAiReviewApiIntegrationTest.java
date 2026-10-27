@@ -172,7 +172,7 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
         checkin(user, goalId, "END", 860, true);
         int before = credits(user);
 
-        AI.onNextAnswer(() -> jdbc.update("update goal set target_value = '950.00' where goal_id = ?", goalId));
+        AI.onNextAnswer(() -> jdbc.update("update goal set current_status = '950점' where goal_id = ?", goalId));
         AI.answer(ACHIEVED_ANSWER);
         JsonNode error = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 409);
 

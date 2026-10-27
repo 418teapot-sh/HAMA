@@ -83,7 +83,7 @@ class TodoApiIntegrationTest {
         MvcResult result = mvc.perform(auth(post("/api/v1/todos")
                         .contentType(MediaType.APPLICATION_JSON).content("""
                                 {"category":"TASK","content":"책 읽기","todoDate":"2026-10-04",
-                                 "startTime":"19:00","endTime":"20:00","goalId":null,"periodGoalId":null}
+                                 "startTime":"19:00","endTime":"20:00","goalId":null}
                                 """), user))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true)).andReturn();
@@ -107,15 +107,13 @@ class TodoApiIntegrationTest {
                 .andExpect(jsonPath("$.error.fields.category").exists())
                 .andExpect(jsonPath("$.error.fields.content").exists())
                 .andExpect(jsonPath("$.error.fields.todoDate").exists());
-        for (String field : List.of("goalId", "periodGoalId")) {
-            mvc.perform(auth(post("/api/v1/todos").contentType(MediaType.APPLICATION_JSON)
-                            .content("""
-                                    {"category":"TASK","content":"책","todoDate":"2026-10-04","%s":1}
-                                    """.formatted(field)), owner))
-                    .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
-                    .andExpect(jsonPath("$.error.fields." + field).exists());
-        }
+        mvc.perform(auth(post("/api/v1/todos").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"category":"TASK","content":"책","todoDate":"2026-10-04","goalId":1}
+                                """), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.fields.goalId").exists());
         mvc.perform(auth(post("/api/v1/todos").contentType(MediaType.APPLICATION_JSON).content("""
                         {"category":"AI_GOAL_TASK","content":"책","todoDate":"2026-10-04"}
                         """), owner))

@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 public final class CheckinResponses {
     private CheckinResponses() {}
     public record Created(Long checkinId) {}
-    public record History(String unit, PageResponse<Item> checkins) {}
+    public record History(PageResponse<Item> checkins) {}
     public record Item(Long checkinId, CheckinType type, BigDecimal value, String note, Boolean achieved,
             @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime checkedAt) {
         public static Item from(GoalCheckin checkin) {

@@ -27,9 +27,6 @@ public @interface ValidTodoGoalLink {
                 if (request.goalId() != null) {
                     error(context, "goalId", "일반 TASK에는 목표를 연결할 수 없습니다."); valid = false;
                 }
-                if (request.periodGoalId() != null) {
-                    error(context, "periodGoalId", "일반 TASK에는 기간 목표를 연결할 수 없습니다."); valid = false;
-                }
             } else if ("AI_GOAL_TASK".equals(request.category()) && request.goalId() == null) {
                 error(context, "goalId", "목표 투두에는 goalId가 필요합니다."); valid = false;
             }

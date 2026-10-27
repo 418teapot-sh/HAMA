@@ -64,8 +64,8 @@ public class CheckinService {
     }
 
     public CheckinResponses.History list(Long userId, Long goalId, Pageable pageable) {
-        Goal goal = owned(goals.findActive(goalId), userId, GoalErrorCode.GOAL_NOT_FOUND);
-        return new CheckinResponses.History(goal.getUnit(), PageResponse.from(
+        owned(goals.findActive(goalId), userId, GoalErrorCode.GOAL_NOT_FOUND);
+        return new CheckinResponses.History(PageResponse.from(
                 checkins.findByGoalIdOrderByCheckedAtDescIdDesc(goalId, pageable), CheckinResponses.Item::from));
     }
 

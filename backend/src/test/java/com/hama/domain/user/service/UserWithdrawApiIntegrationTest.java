@@ -50,10 +50,10 @@ class UserWithdrawApiIntegrationTest {
     private static final Pattern REFRESH_COOKIE = Pattern.compile("refreshToken=([^;]*)");
     private static final String PASSWORD = "password1234!";
 
-    /** 사용자 데이터를 직접(user_id) 또는 목표·세션을 거쳐(goal_id, session_id) 들고 있는 테이블입니다. */
+    /** 사용자 데이터를 직접(user_id) 또는 목표를 거쳐(goal_id) 들고 있는 테이블입니다. */
     private static final String USER_DATA_TABLES = """
             SELECT DISTINCT table_name FROM information_schema.columns
-            WHERE table_schema = DATABASE() AND column_name IN ('user_id', 'goal_id', 'session_id')
+            WHERE table_schema = DATABASE() AND column_name IN ('user_id', 'goal_id')
             """;
 
     @Autowired
@@ -74,7 +74,7 @@ class UserWithdrawApiIntegrationTest {
     private record Session(Long userId, String email, String accessToken, String refreshToken) {
     }
 
-    private record Seeded(Long goalId, Long sessionId) {
+    private record Seeded(Long goalId) {
     }
 
     @Test
@@ -208,10 +208,9 @@ class UserWithdrawApiIntegrationTest {
     void 사용자_데이터_테이블은_모두_탈퇴_때_지운다() {
         Set<String> deleted = new HashSet<>(UserService.USER_TABLES);
         deleted.addAll(UserService.GOAL_CHILD_TABLES);
-        deleted.addAll(UserService.SESSION_CHILD_TABLES);
 
         List<String> tables = jdbcTemplate.queryForList(USER_DATA_TABLES, String.class);
-        assertThat(tables).contains("todo", "goal_checkin", "goal_ai_message");
+        assertThat(tables).contains("todo", "goal_checkin", "goal_fixed_schedule");
 
         List<String> missing = tables.stream()
                 .filter(table -> !table.equals("payment"))
@@ -273,14 +272,9 @@ class UserWithdrawApiIntegrationTest {
         createGoal(session);
         Long goalId = jdbcTemplate.queryForObject("SELECT goal_id FROM goal WHERE user_id = ?", Long.class,
                 session.userId());
-        Long milestoneId = insert("""
-                INSERT INTO milestone (goal_id, seq, title, start_date, end_date, status, created_at, updated_at)
-                VALUES (?, 1, '1단계', '2026-10-10', '2026-10-31', 'PENDING', NOW(6), NOW(6))""", goalId);
         insert("""
-                INSERT INTO period_goal (goal_id, milestone_id, period_type, seq, title, start_date, end_date, status,
-                                         created_at, updated_at)
-                VALUES (?, ?, 'WEEKLY', 1, '1주차', '2026-10-10', '2026-10-16', 'PENDING', NOW(6), NOW(6))""",
-                goalId, milestoneId);
+                INSERT INTO goal_fixed_schedule (goal_id, day_of_week, content)
+                VALUES (?, 'MONDAY', '한국사 공부')""", goalId);
         insert("""
                 INSERT INTO goal_checkin (goal_id, type, checked_at, created_at, updated_at)
                 VALUES (?, 'START', NOW(6), NOW(6), NOW(6))""", goalId);
@@ -296,13 +290,7 @@ class UserWithdrawApiIntegrationTest {
                 INSERT INTO schedule (user_id, type, title, start_at, end_at, all_day, created_at, updated_at)
                 VALUES (?, 'FIXED', '학원 아르바이트', '2026-10-10 18:00:00', '2026-10-10 21:00:00', 0, NOW(6), NOW(6))""",
                 session.userId());
-        Long sessionId = insert("""
-                INSERT INTO goal_ai_session (user_id, raw_goal, status, created_at, updated_at)
-                VALUES (?, '토익 850점', 'COLLECTING', NOW(6), NOW(6))""", session.userId());
-        insert("""
-                INSERT INTO goal_ai_message (session_id, role, content, created_at, updated_at)
-                VALUES (?, 'USER', '토익 850점', NOW(6), NOW(6))""", sessionId);
-        return new Seeded(goalId, sessionId);
+        return new Seeded(goalId);
     }
 
     /** LAST_INSERT_ID 는 커넥션마다 따로라, 풀에서 다른 커넥션을 받으면 틀린 값이 나와서 INSERT 결과의 키를 씁니다. */
@@ -318,17 +306,15 @@ class UserWithdrawApiIntegrationTest {
         return key.getKey().longValue();
     }
 
-    /** 목표·세션이 지워진 뒤에도 셀 수 있도록 자식 테이블은 미리 받아 둔 goal_id·session_id 로 셉니다. */
+    /** 목표가 지워진 뒤에도 셀 수 있도록 자식 테이블은 미리 받아 둔 goal_id 로 셉니다. */
     private Map<String, Long> remainingRows(Session session, Seeded seeded) {
         Map<String, Long> rows = new LinkedHashMap<>();
-        for (String table : List.of("todo", "schedule", "goal", "goal_ai_session", "refresh_token")) {
+        for (String table : List.of("todo", "schedule", "goal", "refresh_token")) {
             rows.put(table, count("SELECT COUNT(*) FROM " + table + " WHERE user_id = ?", session.userId()));
         }
-        for (String table : List.of("milestone", "period_goal", "goal_checkin", "goal_plan", "goal_review_generation")) {
+        for (String table : List.of("goal_fixed_schedule", "goal_checkin", "goal_plan", "goal_review_generation")) {
             rows.put(table, count("SELECT COUNT(*) FROM " + table + " WHERE goal_id = ?", seeded.goalId()));
         }
-        rows.put("goal_ai_message", count("SELECT COUNT(*) FROM goal_ai_message WHERE session_id = ?",
-                seeded.sessionId()));
         return rows;
     }
 

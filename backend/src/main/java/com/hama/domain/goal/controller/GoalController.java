@@ -1,12 +1,13 @@
 package com.hama.domain.goal.controller;
 
 import com.hama.domain.goal.dto.CreateGoalRequest;
+import com.hama.domain.goal.dto.CurrentStatusResponse;
 import com.hama.domain.goal.dto.GoalResponses;
-import com.hama.domain.goal.dto.GoalTreeResponse;
+import com.hama.domain.goal.dto.UpdateCurrentStatusRequest;
 import com.hama.domain.goal.dto.UpdateGoalRequest;
+import com.hama.domain.goal.entity.GoalListFilter;
 import com.hama.domain.goal.service.GoalService;
 import com.hama.global.auth.AuthUser;
-import com.hama.domain.goal.entity.GoalListFilter;
 import com.hama.global.response.ApiResponse;
 import com.hama.global.response.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "목표", description = """
         목표 직접 생성·조회·수정·삭제. 종료일이 오늘(KST)보다 이전이면 status 는 PAST(지난 목표)입니다.
         진행률(progressRate) = 완료된 AI_GOAL_TASK ÷ 전체 AI_GOAL_TASK × 100, 투두가 없으면 0.0.
+        aiPlanApplied 는 goals/ai/plans 로 만든 플랜을 선택해 투두가 생긴 목표인지 여부입니다.
         """)
 @RestController
 @RequestMapping("/api/v1/goals")
@@ -55,7 +57,8 @@ public class GoalController {
 
     @Operation(summary = "목표 직접 생성",
             description = """
-                    AI 없이 직접 입력한 목표를 IN_PROGRESS 로 생성합니다.
+                    목표(title)·현재 상태(currentStatus, 직접 입력)·기간·고정 일정을 받아 AI 없이 바로 만듭니다.
+                    투두는 아직 없어 PLANNING 으로 시작하며, goals/ai/plans 로 A/B 플랜을 만들고 선택해야 투두가 생기고 IN_PROGRESS 가 됩니다.
                     시작일 > 종료일이거나 종료일이 오늘 이전이면 400(GOAL_INVALID_PERIOD), 필드 검증 실패는 400(VALIDATION_FAILED).
                     기간은 시작일 포함 최대 365일이고, 넘으면 400(GOAL_PERIOD_TOO_LONG).
                     """)
@@ -76,22 +79,10 @@ public class GoalController {
         return ApiResponse.success(goalService.get(authUser.userId(), goalId));
     }
 
-    @Operation(summary = "목표 계층 트리 조회",
-            description = """
-                    목표 → 마일스톤(seq 순) → 기간 목표(월/주, seq 순). 기간 목표마다 AI_GOAL_TASK 전체·완료 개수,
-                    마일스톤마다 소속 기간 목표 기준 진행률을 담습니다. 플랜을 적용하지 않은 목표는 milestones 가 빈 배열입니다.
-                    404 / 403 은 상세와 같습니다.
-                    """)
-    @GetMapping("/{goalId}/tree")
-    public ApiResponse<GoalTreeResponse> tree(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
-            @PathVariable Long goalId) {
-        return ApiResponse.success(goalService.tree(authUser.userId(), goalId));
-    }
-
     @Operation(summary = "목표 수정",
             description = """
-                    변경할 필드만 보냅니다. 생략한 필드는 기존 값을 유지하고, null 을 보내면 지웁니다(title 은 null 이어도 유지).
+                    제목·기간만 바꿉니다(currentStatus 는 현재 상태 수정 API를 쓰세요).
+                    생략한 필드는 기존 값을 유지하고, null 을 보내면 지웁니다(title 은 null 이어도 유지).
                     진행 중인 목표의 startDate·endDate 를 null 로 보내면 400(GOAL_INVALID_INPUT). 응답은 상세 조회와 같습니다.
                     지난 목표(PAST)는 409(GOAL_NOT_EDITABLE), 기간이 잘못되면 400(GOAL_INVALID_PERIOD), 404 / 403 은 상세와 같습니다.
                     기간이 365일(시작일 포함)을 넘으면 400(GOAL_PERIOD_TOO_LONG).
@@ -101,6 +92,18 @@ public class GoalController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long goalId, @Valid @RequestBody UpdateGoalRequest request) {
         return ApiResponse.success(goalService.update(authUser.userId(), goalId, request));
+    }
+
+    @Operation(summary = "현재 상태 수정",
+            description = """
+                    currentStatus 만 바꿉니다. 다른 필드는 건드리지 않습니다. null 이면 지웁니다.
+                    지난 목표(PAST)는 409(GOAL_NOT_EDITABLE), 404 / 403 은 상세와 같습니다.
+                    """)
+    @PatchMapping("/{goalId}/current-status")
+    public ApiResponse<CurrentStatusResponse> updateCurrentStatus(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long goalId, @Valid @RequestBody UpdateCurrentStatusRequest request) {
+        return ApiResponse.success(goalService.updateCurrentStatus(authUser.userId(), goalId, request.currentStatus()));
     }
 
     @Operation(summary = "목표 삭제",

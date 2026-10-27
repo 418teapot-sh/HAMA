@@ -12,8 +12,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -46,32 +44,9 @@ public class Goal extends BaseTimeEntity {
     @Column(nullable = false, length = 100)
     private String title;
 
-    @Column(columnDefinition = "TEXT")
-    private String description;
-
-    @Column(name = "metric_name", length = 50)
-    private String metricName;
-
-    @Column(length = 20)
-    private String unit;
-
-    @Column(name = "start_value", precision = 10, scale = 2)
-    private BigDecimal startValue;
-
-    @Column(name = "target_value", precision = 10, scale = 2)
-    private BigDecimal targetValue;
-
-    @Column(name = "weekly_available_hours", precision = 4, scale = 1)
-    private BigDecimal weeklyAvailableHours;
-
-    @Column(name = "current_level", columnDefinition = "TEXT")
-    private String currentLevel;
-
-    @Column(name = "reality_verdict", length = 20)
-    private String realityVerdict;
-
-    @Column(name = "reality_comment", columnDefinition = "TEXT")
-    private String realityComment;
+    /** 사용자가 직접 입력한 현재 상태(예: "토익 600점"). AI 없이 생성하므로 자유 텍스트로 받습니다. */
+    @Column(name = "current_status", length = 200)
+    private String currentStatus;
 
     @Column(name = "result_status", length = 20)
     private String resultStatus;
@@ -91,22 +66,11 @@ public class Goal extends BaseTimeEntity {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    /** AI 없이 직접 입력한 목표. 바로 진행 중으로 시작합니다. */
-    public static Goal createDirect(Long userId, GoalContent content, LocalDate today) {
-        if (userId == null) {
-            throw new BusinessException(GoalErrorCode.GOAL_INVALID_INPUT);
-        }
-        validate(content, true, today);
-        Goal goal = new Goal();
-        goal.userId = userId;
-        goal.status = GoalStatus.IN_PROGRESS;
-        goal.apply(content);
-        return goal;
-    }
-
-    /** AI 대화로 확정한 목표. 플랜을 고르기 전까지 PLANNING 입니다. */
-    public static Goal createPlanning(Long userId, GoalContent content, String currentLevel,
-            String realityVerdict, String realityComment, LocalDate today) {
+    /**
+     * 목표를 직접 입력해 만듭니다. AI(goals/ai/plans)는 쓰지 않지만, 투두는 A/B 플랜을 골라야 생기므로
+     * 플랜을 고르기 전까지는 PLANNING 입니다.
+     */
+    public static Goal create(Long userId, GoalContent content, LocalDate today) {
         if (userId == null) {
             throw new BusinessException(GoalErrorCode.GOAL_INVALID_INPUT);
         }
@@ -115,15 +79,7 @@ public class Goal extends BaseTimeEntity {
         goal.userId = userId;
         goal.status = GoalStatus.PLANNING;
         goal.apply(content);
-        goal.currentLevel = currentLevel;
-        goal.realityVerdict = realityVerdict;
-        goal.realityComment = realityComment;
         return goal;
-    }
-
-    /** 저장하기 전 값(AI 초안 등)을 목표와 같은 규칙으로 검사합니다. 기간은 필수입니다. */
-    public static void validateContent(GoalContent content, LocalDate today) {
-        validate(content, true, today);
     }
 
     /** 수정 결과(기존 값과 병합한 전체 값)를 받습니다. 지난 목표는 409 입니다. */
@@ -133,6 +89,14 @@ public class Goal extends BaseTimeEntity {
         }
         validate(content, status == GoalStatus.IN_PROGRESS, today);
         apply(content);
+    }
+
+    /** currentStatus 만 바꿉니다. 지난 목표는 revise() 와 같은 이유로 막습니다. */
+    public void updateCurrentStatus(String currentStatus, LocalDate today) {
+        if (isPast(today)) {
+            throw new BusinessException(GoalErrorCode.GOAL_NOT_EDITABLE);
+        }
+        this.currentStatus = currentStatus == null ? null : currentStatus.strip();
     }
 
     /** 플랜을 적용해 진행 중으로 바꿉니다. 호출하는 쪽이 PLANNING 이고 기간이 있는지 먼저 확인합니다. */
@@ -161,7 +125,7 @@ public class Goal extends BaseTimeEntity {
         return status == GoalStatus.IN_PROGRESS && endDate != null && endDate.isBefore(today);
     }
 
-    /** 진행 중인 목표만 삭제할 수 없습니다. PLANNING 은 AI 흐름을 중간에 그만둔 목표라 지울 수 있어야 합니다. */
+    /** 진행 중인 목표만 삭제할 수 없습니다. PLANNING 은 플랜을 아직 고르지 않은 목표라 지울 수 있어야 합니다. */
     public boolean isDeletable(LocalDate today) {
         return status == GoalStatus.PLANNING || isPast(today);
     }
@@ -171,18 +135,12 @@ public class Goal extends BaseTimeEntity {
     }
 
     public GoalContent content() {
-        return new GoalContent(title, description, metricName, unit, startValue, targetValue,
-                weeklyAvailableHours, startDate, endDate);
+        return new GoalContent(title, currentStatus, startDate, endDate);
     }
 
     private void apply(GoalContent content) {
         this.title = content.title().strip();
-        this.description = content.description();
-        this.metricName = content.metricName();
-        this.unit = content.unit();
-        this.startValue = content.startValue();
-        this.targetValue = content.targetValue();
-        this.weeklyAvailableHours = content.weeklyAvailableHours();
+        this.currentStatus = content.currentStatus() == null ? null : content.currentStatus().strip();
         this.startDate = content.startDate();
         this.endDate = content.endDate();
     }
@@ -191,10 +149,6 @@ public class Goal extends BaseTimeEntity {
         if (content == null || content.title() == null || content.title().isBlank()
                 || content.title().strip().length() > 100) {
             throw new BusinessException(GoalErrorCode.GOAL_INVALID_INPUT);
-        }
-        if (content.description() != null
-                && content.description().getBytes(StandardCharsets.UTF_8).length > 65535) {
-            throw new BusinessException(GoalErrorCode.GOAL_DESCRIPTION_TOO_LONG);
         }
         LocalDate start = content.startDate();
         LocalDate end = content.endDate();
