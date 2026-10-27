@@ -30,7 +30,7 @@ public class UserService {
      */
     /** goal_id 로 지우는 목표의 자식 테이블 */
     static final List<String> GOAL_CHILD_TABLES =
-            List.of("goal_checkin", "goal_review", "goal_plan", "period_goal", "milestone");
+            List.of("goal_checkin", "goal_review_generation", "goal_review", "goal_plan", "period_goal", "milestone");
     /** session_id 로 지우는 AI 세션의 자식 테이블 */
     static final List<String> SESSION_CHILD_TABLES = List.of("goal_ai_message");
     /** user_id 로 지우는 테이블. 자식을 다 지운 뒤 이 순서대로 지웁니다. */

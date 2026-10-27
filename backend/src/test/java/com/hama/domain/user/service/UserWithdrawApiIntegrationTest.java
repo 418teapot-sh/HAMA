@@ -285,6 +285,10 @@ class UserWithdrawApiIntegrationTest {
                 INSERT INTO goal_checkin (goal_id, type, checked_at, created_at, updated_at)
                 VALUES (?, 'START', NOW(6), NOW(6), NOW(6))""", goalId);
         insert("""
+                INSERT INTO goal_review_generation
+                    (goal_id, request_token, request_input_hash, lease_until, charged, created_at, updated_at)
+                VALUES (?, 'withdraw-test', 'input', NOW(6), 1, NOW(6), NOW(6))""", goalId);
+        insert("""
                 INSERT INTO goal_plan (goal_id, variant, title, summary, preference, detail_json, total_todos,
                                        avg_daily_minutes, selected, created_at, updated_at)
                 VALUES (?, 'A', '여유형', '주 3일', 'BALANCED', '{}', 0, 0, 0, NOW(6), NOW(6))""", goalId);
@@ -320,7 +324,7 @@ class UserWithdrawApiIntegrationTest {
         for (String table : List.of("todo", "schedule", "goal", "goal_ai_session", "refresh_token")) {
             rows.put(table, count("SELECT COUNT(*) FROM " + table + " WHERE user_id = ?", session.userId()));
         }
-        for (String table : List.of("milestone", "period_goal", "goal_checkin", "goal_plan")) {
+        for (String table : List.of("milestone", "period_goal", "goal_checkin", "goal_plan", "goal_review_generation")) {
             rows.put(table, count("SELECT COUNT(*) FROM " + table + " WHERE goal_id = ?", seeded.goalId()));
         }
         rows.put("goal_ai_message", count("SELECT COUNT(*) FROM goal_ai_message WHERE session_id = ?",

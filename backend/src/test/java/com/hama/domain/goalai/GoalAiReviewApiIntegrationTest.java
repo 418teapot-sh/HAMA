@@ -1,15 +1,30 @@
 package com.hama.domain.goalai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.reset;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import com.hama.domain.payment.service.CreditService;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import tools.jackson.databind.JsonNode;
 
 class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
+
+    @MockitoSpyBean
+    private CreditService creditService;
+
+    @Autowired
+    private TransactionTemplate testTransaction;
 
     private static final String ACHIEVED_ANSWER = """
             {"achieved":true,"comparison":"700점에서 860점으로, 목표 850점을 넘었어요.",
@@ -78,7 +93,7 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
     }
 
     @Test
-    void 다시_리뷰하면_기존_행을_덮어쓴다() throws Exception {
+    void 입력이_바뀌어_다시_리뷰하면_기존_행을_덮어쓴다() throws Exception {
         User user = user();
         long goalId = inProgressGoal(user);
         endGoal(goalId);
@@ -88,7 +103,8 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
         call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201);
 
         AI.answer(MISSED_ANSWER);
-        JsonNode data = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201).get("data");
+        JsonNode data = call(post("/api/v1/goals/ai/reviews"), user,
+                Map.of("goalId", goalId, "currentStatus", "변경한 최종 상태"), 201).get("data");
 
         assertThat(data.get("achieved").asBoolean()).isFalse();
         assertThat(data.get("resultStatus").asString()).isEqualTo("MISSED");
@@ -221,5 +237,237 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
 
         assertThat(error.at("/error/code").asString()).isEqualTo("AI_UPSTREAM_ERROR");
         assertThat(credits(user)).isEqualTo(before);
+    }
+
+    @Test
+    void 동일_입력은_잔액이_0이어도_200으로_재사용하고_AI를_다시_부르지_않는다() throws Exception {
+        User user = user();
+        long goalId = reviewableGoal(user);
+        AI.answer(ACHIEVED_ANSWER);
+        JsonNode first = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201).get("data");
+        long calls = reviewCalls();
+        jdbc.update("update users set credits = 0 where user_id = ?", user.id());
+
+        JsonNode cached = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 200).get("data");
+
+        assertThat(cached).isEqualTo(first);
+        assertThat(credits(user)).isZero();
+        assertThat(reviewCalls()).isEqualTo(calls);
+    }
+
+    @Test
+    void 기존_결과와_같은_AI_응답이어도_동시_요청은_호출과_차감_전에_409() throws Exception {
+        User user = user();
+        long goalId = reviewableGoal(user);
+        // 배포 전 생성된 레거시 리뷰: 입력 지문이 없어 첫 POST는 정상 1회 재생성합니다.
+        jdbc.update("""
+                insert into goal_review (goal_id, achieved, comparison, message, created_at, updated_at)
+                values (?, true, '700점에서 860점으로, 목표 850점을 넘었어요.',
+                        '목표를 달성했어요! 정말 잘하셨어요.', now(6), now(6))
+                """, goalId);
+        jdbc.update("update users set credits = 1 where user_id = ?", user.id());
+        long calls = reviewCalls();
+        AtomicInteger concurrentStatus = new AtomicInteger();
+        AI.onNextAnswer(() -> {
+            try (var executor = Executors.newSingleThreadExecutor()) {
+                var competing = executor.submit(() -> {
+                    JsonNode error = call(post("/api/v1/goals/ai/reviews"), user,
+                            Map.of("goalId", goalId), 409);
+                    assertThat(error.at("/error/code").asString()).isEqualTo("AI_REVIEW_GENERATING");
+                    concurrentStatus.set(409);
+                    return null;
+                });
+                competing.get(10, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        AI.answer(ACHIEVED_ANSWER);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 200);
+
+        assertThat(concurrentStatus.get()).isEqualTo(409);
+        assertThat(credits(user)).isZero();
+        assertThat(reviewCalls()).isEqualTo(calls + 1);
+    }
+
+    @Test
+    void 새_입력_실패는_기존_리뷰와_무료_재사용_정보를_보존한다() throws Exception {
+        User user = user();
+        long goalId = reviewableGoal(user);
+        AI.answer(ACHIEVED_ANSWER);
+        JsonNode first = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201).get("data");
+        int before = credits(user);
+        AI.answer("{}");
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId, "currentStatus", "다른 입력"), 502);
+        JsonNode cached = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 200).get("data");
+        assertThat(cached).isEqualTo(first);
+        assertThat(credits(user)).isEqualTo(before);
+    }
+
+    @Test
+    void 서버_중단으로_남은_만료_예약은_환급한_뒤_한_번만_새로_차감한다() throws Exception {
+        User user = user();
+        long goalId = reviewableGoal(user);
+        crashReservation(user, goalId);
+        int before = credits(user);
+        AI.answer(ACHIEVED_ANSWER);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 200);
+        assertThat(credits(user)).isEqualTo(before);
+        assertReleased(goalId);
+    }
+
+    @Test
+    void 만료_환급은_뒤따르는_자격_오류에도_롤백되지_않는다() throws Exception {
+        User user = user();
+        long goalId = reviewableGoal(user);
+        crashReservation(user, goalId);
+        int before = credits(user);
+        jdbc.update("update goal set end_date = '2026-12-31' where goal_id = ?", goalId);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 409);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 409);
+        assertThat(credits(user)).isEqualTo(before + 1);
+        assertReleased(goalId);
+    }
+
+    @Test
+    void 삭제된_목표의_만료_예약도_환급하고_리뷰를_새로_만들지_않는다() throws Exception {
+        User user = user();
+        long goalId = reviewableGoal(user);
+        crashReservation(user, goalId);
+        int before = credits(user);
+        jdbc.update("update goal set deleted_at = now(6) where goal_id = ?", goalId);
+        call(post("/api/v1/goals/ai/reviews"), user(), Map.of("goalId", goalId), 404);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 404);
+        assertThat(credits(user)).isEqualTo(before + 1);
+        assertReleased(goalId);
+    }
+
+    @Test
+    void 만료_회수_후_새_작업이_성공하면_늦은_이전_응답은_덮어쓰거나_환급하지_못한다() throws Exception {
+        User user = user();
+        long goalId = reviewableGoal(user);
+        int before = credits(user);
+        AI.onNextAnswer(() -> {
+            jdbc.update("update goal_review_generation set lease_until = '2026-09-30' where goal_id = ?", goalId);
+            try {
+                call(post("/api/v1/goals/ai/reviews"), user,
+                        Map.of("goalId", goalId, "currentStatus", "최신 입력"), 201);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        // 내부 새 요청이 첫 답변을, 늦은 외부 요청이 두 번째 답변을 받습니다.
+        AI.answer(MISSED_ANSWER);
+        AI.answer(ACHIEVED_ANSWER);
+        JsonNode error = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 409);
+        assertThat(error.at("/error/code").asString()).isEqualTo("AI_REVIEW_OUTDATED");
+        assertThat(credits(user)).isEqualTo(before - 1);
+        JsonNode saved = call(get("/api/v1/goals/ai/reviews").param("goalId", "" + goalId), user, null, 200);
+        assertThat(saved.at("/data/achieved").asBoolean()).isFalse();
+        assertThat(saved.at("/data/currentStatus").asString()).isEqualTo("최신 입력");
+        assertReleased(goalId);
+    }
+
+    @Test
+    void AI_대기_중_탈퇴하면_늦은_응답이_사용자나_예약을_복원하지_않는다() throws Exception {
+        User user = user();
+        long goalId = reviewableGoal(user);
+        AI.onNextAnswer(() -> {
+            try {
+                call(post("/api/v1/users/me/withdraw"), user, Map.of("password", "password1234!"), 200);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        AI.answer(ACHIEVED_ANSWER);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 404);
+        assertThat(users.existsById(user.id())).isFalse();
+        assertThat(jdbc.queryForObject("select count(*) from goal_review_generation where goal_id = ?",
+                Integer.class, goalId)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from goal_review where goal_id = ?",
+                Integer.class, goalId)).isZero();
+    }
+
+    @Test
+    void 성공_지문이_있어도_실제_리뷰가_없으면_재사용하지_않는다() throws Exception {
+        User user = user();
+        long goalId = reviewableGoal(user);
+        AI.answer(ACHIEVED_ANSWER);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201);
+        int before = credits(user);
+        jdbc.update("delete from goal_review where goal_id = ?", goalId);
+        AI.answer(MISSED_ANSWER);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201);
+        assertThat(credits(user)).isEqualTo(before - 1);
+    }
+
+    @Test
+    void 환급이_실패해도_원래_AI_오류와_예약을_보존하고_만료_후_한_번_회수한다() throws Exception {
+        User user = user();
+        long goalId = reviewableGoal(user);
+        int before = credits(user);
+        testTransaction.executeWithoutResult(tx -> doAnswer(invocation -> {
+            invocation.callRealMethod();
+            throw new IllegalStateException("환급 UPDATE 후 커밋 실패 대역");
+        }).when(creditService).giveBack(user.id()));
+        AI.answer("{}");
+        JsonNode error = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 502);
+        assertThat(error.at("/error/code").asString()).isEqualTo("AI_UPSTREAM_ERROR");
+        assertThat(credits(user)).isEqualTo(before - 1);
+        assertThat(jdbc.queryForObject("select charged from goal_review_generation where goal_id = ?",
+                Boolean.class, goalId)).isTrue();
+        assertThat(jdbc.queryForObject("select request_token from goal_review_generation where goal_id = ?",
+                String.class, goalId)).isNotBlank();
+
+        reset(creditService);
+        jdbc.update("update goal_review_generation set lease_until = '2026-09-30' where goal_id = ?", goalId);
+        AI.answer(ACHIEVED_ANSWER);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 200);
+        assertThat(credits(user)).isEqualTo(before - 1);
+        assertReleased(goalId);
+    }
+
+    @Test
+    void 저장된_리뷰_본문이_외부에서_변경되면_성공_입력_지문만으로_재사용하지_않는다() throws Exception {
+        User user = user();
+        long goalId = reviewableGoal(user);
+        AI.answer(ACHIEVED_ANSWER);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201);
+        int before = credits(user);
+        jdbc.update("update goal_review set message = '외부 변경' where goal_id = ?", goalId);
+        AI.answer(MISSED_ANSWER);
+        JsonNode response = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201);
+        assertThat(response.at("/data/achieved").asBoolean()).isFalse();
+        assertThat(credits(user)).isEqualTo(before - 1);
+    }
+
+    private long reviewableGoal(User user) throws Exception {
+        long goalId = inProgressGoal(user);
+        endGoal(goalId);
+        checkin(user, goalId, "END", 860, true);
+        return goalId;
+    }
+
+    private long reviewCalls() {
+        return AI.requests().stream().filter(r -> r.purpose().equals("goal-review")).count();
+    }
+
+    private void crashReservation(User user, long goalId) {
+        jdbc.update("update users set credits = credits - 1 where user_id = ?", user.id());
+        jdbc.update("""
+                insert into goal_review_generation
+                    (goal_id, request_token, request_input_hash, lease_until, charged, created_at, updated_at)
+                values (?, 'crashed-process', 'input', '2026-09-30', true, now(6), now(6))
+                """, goalId);
+    }
+
+    private void assertReleased(long goalId) {
+        assertThat(jdbc.queryForObject("select charged from goal_review_generation where goal_id = ?",
+                Boolean.class, goalId)).isFalse();
+        assertThat(jdbc.queryForObject("select request_token from goal_review_generation where goal_id = ?",
+                String.class, goalId)).isNull();
     }
 }
