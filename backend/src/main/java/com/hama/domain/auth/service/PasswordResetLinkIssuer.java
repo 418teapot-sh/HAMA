@@ -41,7 +41,7 @@ class PasswordResetLinkIssuer {
         String to = transactionTemplate.execute(status -> userRepository.findByEmail(email)
                 .map(user -> {
                     LocalDateTime now = LocalDateTime.now();
-                    resetTokenRepository.upsert(user.getId(), RefreshTokenHasher.hash(rawToken), now.plus(VALIDITY), now);
+                    resetTokenRepository.upsert(user.getId(), TokenHasher.hash(rawToken), now.plus(VALIDITY), now);
                     return user.getEmail();
                 })
                 .orElse(null));

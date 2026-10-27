@@ -93,8 +93,8 @@ public class AuthService {
         // 저장된 해시가 지금 받은 토큰일 때만 교체합니다. 같은 토큰으로 동시에 재발급하면 하나만 성공하고
         // 나머지는 401 이라, DB 와 브라우저 쿠키가 서로 다른 토큰을 들고 어긋나지 않습니다.
         String newRefreshToken = jwtTokenProvider.createRefreshToken(userId);
-        int rotated = refreshTokenRepository.rotate(userId, RefreshTokenHasher.hash(refreshToken),
-                RefreshTokenHasher.hash(newRefreshToken), LocalDateTime.now());
+        int rotated = refreshTokenRepository.rotate(userId, TokenHasher.hash(refreshToken),
+                TokenHasher.hash(newRefreshToken), LocalDateTime.now());
         if (rotated == 0) {
             throw new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN);
         }
@@ -108,7 +108,7 @@ public class AuthService {
             return;
         }
         jwtTokenProvider.parseRefreshUserId(refreshToken).ifPresent(userId ->
-                refreshTokenRepository.deleteByUserIdAndTokenHash(userId, RefreshTokenHasher.hash(refreshToken)));
+                refreshTokenRepository.deleteByUserIdAndTokenHash(userId, TokenHasher.hash(refreshToken)));
     }
 
     /** 기기마다 새 행을 넣습니다. 새 행이라 같은 유저가 동시에 로그인해도 서로 충돌하지 않습니다. */
@@ -116,7 +116,7 @@ public class AuthService {
         String accessToken = jwtTokenProvider.createAccessToken(userId);
         String refreshToken = jwtTokenProvider.createRefreshToken(userId);
 
-        refreshTokenRepository.save(RefreshToken.create(userId, RefreshTokenHasher.hash(refreshToken)));
+        refreshTokenRepository.save(RefreshToken.create(userId, TokenHasher.hash(refreshToken)));
         return new AuthTokens(accessToken, refreshToken);
     }
 

@@ -167,14 +167,14 @@ class AuthServiceTest {
         void 저장된_토큰과_일치하면_새_토큰으로_교체한다() {
             String refreshToken = jwtTokenProvider.createRefreshToken(1L);
             given(userRepository.existsById(1L)).willReturn(true);
-            given(refreshTokenRepository.rotate(eq(1L), eq(RefreshTokenHasher.hash(refreshToken)), any(), any()))
+            given(refreshTokenRepository.rotate(eq(1L), eq(TokenHasher.hash(refreshToken)), any(), any()))
                     .willReturn(1);
 
             AuthTokens tokens = authService.reissue(refreshToken);
 
             assertThat(tokens.refreshToken()).isNotEqualTo(refreshToken);
-            verify(refreshTokenRepository).rotate(eq(1L), eq(RefreshTokenHasher.hash(refreshToken)),
-                    eq(RefreshTokenHasher.hash(tokens.refreshToken())), any());
+            verify(refreshTokenRepository).rotate(eq(1L), eq(TokenHasher.hash(refreshToken)),
+                    eq(TokenHasher.hash(tokens.refreshToken())), any());
         }
 
         @Test
@@ -212,7 +212,7 @@ class AuthServiceTest {
 
             authService.logout(refreshToken);
 
-            verify(refreshTokenRepository).deleteByUserIdAndTokenHash(1L, RefreshTokenHasher.hash(refreshToken));
+            verify(refreshTokenRepository).deleteByUserIdAndTokenHash(1L, TokenHasher.hash(refreshToken));
         }
 
         @Test

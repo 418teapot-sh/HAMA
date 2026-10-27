@@ -55,7 +55,7 @@ public class AccountRecoveryService {
      */
     @Transactional
     public void confirmPasswordReset(PasswordResetConfirmRequest request) {
-        String tokenHash = RefreshTokenHasher.hash(request.token());
+        String tokenHash = TokenHasher.hash(request.token());
         PasswordResetToken resetToken = resetTokenRepository
                 .findByTokenHashAndExpiresAtAfter(tokenHash, LocalDateTime.now())
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_PASSWORD_RESET_TOKEN));
