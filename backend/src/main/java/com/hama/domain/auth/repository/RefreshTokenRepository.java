@@ -30,6 +30,11 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Query("DELETE FROM RefreshToken r WHERE r.userId = :userId AND r.tokenHash = :tokenHash")
     void deleteByUserIdAndTokenHash(Long userId, String tokenHash);
 
+    /** 모든 기기에서 로그아웃합니다(비밀번호 재설정 후). */
+    @Modifying
+    @Query("DELETE FROM RefreshToken r WHERE r.userId = :userId")
+    void deleteAllByUserId(Long userId);
+
     /**
      * 마지막 발급·재발급이 {@code cutoff} 이전인 행, 즉 이미 만료된 토큰의 행을 최대 1000개 지우고 지운 수를 돌려줍니다.
      * 한 번에 다 지우면 그 트랜잭션이 끝날 때까지 넓은 범위에 락이 걸려 로그인·재발급이 기다리므로,

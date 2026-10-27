@@ -72,4 +72,9 @@ public class User extends BaseTimeEntity {
                 .marketingAgreed(marketingAgreed)
                 .build();
     }
+
+    /** @param encodedPassword 반드시 인코딩된 비밀번호. 원문을 넘기지 마세요. */
+    public void changePassword(String encodedPassword) {
+        this.password = encodedPassword;
+    }
 }
