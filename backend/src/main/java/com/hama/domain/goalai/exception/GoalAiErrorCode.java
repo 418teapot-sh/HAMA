@@ -21,6 +21,7 @@ public enum GoalAiErrorCode implements BaseErrorCode {
     AI_REVIEW_GOAL_NOT_STARTED(HttpStatus.CONFLICT, "계획 중인 목표는 아직 리뷰할 수 없습니다."),
     AI_REVIEW_GOAL_NOT_ENDED(HttpStatus.CONFLICT, "목표 종료일이 지난 뒤에 리뷰할 수 있습니다."),
     AI_REVIEW_END_REQUIRED(HttpStatus.CONFLICT, "종료(END) 체크인 이후에 리뷰할 수 있습니다."),
+    AI_REVIEW_GENERATING(HttpStatus.CONFLICT, "리뷰를 생성 중입니다. 잠시 후 다시 확인해주세요."),
     AI_REVIEW_OUTDATED(HttpStatus.CONFLICT, "목표나 체크인이 리뷰 중에 바뀌어 반영할 수 없습니다. 다시 시도해주세요."),
     AI_REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "목표 리뷰를 찾을 수 없습니다.");
 
