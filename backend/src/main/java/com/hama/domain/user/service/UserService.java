@@ -29,7 +29,8 @@ public class UserService {
      * 컬럼이 있는 테이블만 검사하므로, 다른 키(todo_id 등)로만 이어지는 테이블은 직접 챙겨야 합니다.
      */
     /** goal_id 로 지우는 목표의 자식 테이블 */
-    static final List<String> GOAL_CHILD_TABLES = List.of("goal_checkin", "goal_plan", "period_goal", "milestone");
+    static final List<String> GOAL_CHILD_TABLES =
+            List.of("goal_checkin", "goal_review", "goal_plan", "period_goal", "milestone");
     /** session_id 로 지우는 AI 세션의 자식 테이블 */
     static final List<String> SESSION_CHILD_TABLES = List.of("goal_ai_message");
     /** user_id 로 지우는 테이블. 자식을 다 지운 뒤 이 순서대로 지웁니다. */
