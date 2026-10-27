@@ -63,8 +63,17 @@ public class PasswordAttemptLimiter {
         attempts.remove(key);
     }
 
-    /** {@code prefix} 로 시작하는 키를 모두 지웁니다. 비밀번호를 재설정하면 그 이메일의 로그인 잠금(이메일|IP)을 IP 와 상관없이 풉니다. */
-    void clearByPrefix(String prefix) {
+    /**
+     * 로그인 시도 키. 이메일만 키로 쓰면 남의 이메일로 5번 틀려서 그 계정을 잠글 수 있어서 접속 IP 를 함께 씁니다.
+     * 형식을 바꾸면 {@link #clearLoginLocks} 도 같이 바뀌도록 여기 한 곳에서만 만듭니다.
+     */
+    static String loginKey(String email, String clientIp) {
+        return email + "|" + clientIp;
+    }
+
+    /** 이 이메일의 로그인 잠금을 IP 와 상관없이 모두 풉니다(비밀번호 재설정 후). */
+    void clearLoginLocks(String email) {
+        String prefix = loginKey(email, "");
         attempts.keySet().removeIf(key -> key.startsWith(prefix));
     }
 

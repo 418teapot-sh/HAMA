@@ -17,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** 로그인하지 못하는 사용자를 위한 비밀번호 재설정과 이메일 찾기 문의입니다. */
 @Slf4j
@@ -71,7 +73,15 @@ public class AccountRecoveryService {
         user.changePassword(passwordEncoder.encode(request.newPassword()));
         refreshTokenRepository.deleteAllByUserId(user.getId());
         // 로그인을 5번 틀려 잠긴 사람이 주로 이 기능을 씁니다. 잠금이 남아 있으면 새 비밀번호로도 15분간 429 라서 풉니다.
-        limiter.clearByPrefix(user.getEmail() + "|");
+        // 비밀번호 변경이 커밋된 뒤에 풀어서, 롤백되면 잠금도 그대로 둡니다.
+        // ponytail: 잠금은 서버 메모리에 있어서 이 요청을 받은 서버만 풉니다. ASG 최대 1대라 지금은 충분하고, 서버를 늘리면 Redis 로 옮기세요.
+        String email = user.getEmail();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                limiter.clearLoginLocks(email);
+            }
+        });
         log.info("[PasswordReset] 비밀번호 재설정 userId={}", user.getId());
     }
 

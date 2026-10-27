@@ -58,8 +58,7 @@ public class AuthService {
      */
     @Transactional
     public AuthTokens login(LoginRequest request, String clientIp) {
-        // 이메일만 키로 쓰면 남의 이메일로 5번 틀려서 그 계정을 잠글 수 있어서 접속 IP 를 함께 씁니다.
-        String attemptKey = request.email() + "|" + clientIp;
+        String attemptKey = PasswordAttemptLimiter.loginKey(request.email(), clientIp);
         attemptLimiter.check(attemptKey);
 
         User user = userRepository.findByEmail(request.email())
