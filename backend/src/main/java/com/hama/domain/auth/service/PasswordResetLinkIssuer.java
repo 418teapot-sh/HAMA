@@ -38,7 +38,10 @@ class PasswordResetLinkIssuer {
     @Async
     public void issue(String email) {
         String rawToken = newToken();
+        // 사용자 행을 공유 락으로 다시 읽습니다(로그인과 같은 방식). 탈퇴가 진행 중이면 끝날 때까지 기다렸다가 행이 없어
+        // 건너뛰므로, 탈퇴한 사람에게 메일이 가거나 주인 없는 토큰 행이 남지 않습니다.
         String to = transactionTemplate.execute(status -> userRepository.findByEmail(email)
+                .flatMap(found -> userRepository.findByIdForShare(found.getId()))
                 .map(user -> {
                     LocalDateTime now = LocalDateTime.now();
                     resetTokenRepository.upsert(user.getId(), TokenHasher.hash(rawToken), now.plus(VALIDITY), now);
