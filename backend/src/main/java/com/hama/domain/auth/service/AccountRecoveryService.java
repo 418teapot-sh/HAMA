@@ -47,8 +47,9 @@ public class AccountRecoveryService {
      */
     @Transactional
     public void requestPasswordReset(String email, String clientIp) {
-        limiter.check("reset-email:" + email, AuthErrorCode.TOO_MANY_REQUESTS);
+        // IP 를 먼저 셉니다. 이메일을 먼저 세면 이미 막힌 IP 가 아무 이메일로나 요청해 남의 이메일 몫을 깎고, 카운터 맵에 키를 계속 쌓습니다.
         limiter.check("reset-ip:" + clientIp, AuthErrorCode.TOO_MANY_REQUESTS);
+        limiter.check("reset-email:" + email, AuthErrorCode.TOO_MANY_REQUESTS);
 
         userRepository.findByEmail(email).ifPresent(user -> {
             String rawToken = newToken();
