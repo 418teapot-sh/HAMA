@@ -64,10 +64,14 @@ public class AuthService {
         User user = userRepository.findByEmail(request.email())
                 .filter(found -> passwordEncoder.matches(request.password(), found.getPassword()))
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_CREDENTIALS));
-        // 비밀번호 확인(bcrypt) 뒤에 사용자 행만 공유 락으로 다시 읽어 동시에 진행 중인 탈퇴와 순서를 맞춥니다.
+        // 비밀번호 확인(bcrypt) 뒤에 사용자 행만 공유 락으로 다시 읽어 동시에 진행 중인 탈퇴·비밀번호 재설정과 순서를 맞춥니다.
         // 탈퇴가 먼저면 행이 없어 실패하고, 로그인이 먼저면 탈퇴가 이 토큰까지 지웁니다.
+        // 재설정이 bcrypt 확인과 잠금 사이에 끝났으면 비밀번호가 바뀌어 있어 실패합니다. 확인하지 않으면 옛 비밀번호로
+        // 로그인한 사람이 재설정의 "모든 기기 로그아웃" 뒤에 새 토큰을 받아 갑니다.
         // 이메일 인덱스로 잠그면 탈퇴(기본키 → 이메일 인덱스)와 순서가 엇갈려 교착이 나므로 기본키로만 잠급니다.
-        userRepository.findByIdForShare(user.getId())
+        String checkedPassword = user.getPassword();
+        userRepository.findPasswordByIdForShare(user.getId())
+                .filter(checkedPassword::equals)
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_CREDENTIALS));
 
         attemptLimiter.onSuccess(attemptKey);

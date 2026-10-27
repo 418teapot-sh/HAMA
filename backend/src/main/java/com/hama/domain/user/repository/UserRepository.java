@@ -12,10 +12,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByEmail(String email);
 
-    /** 로그인용. 탈퇴와 겹치지 않도록 기본키로 공유 락(FOR SHARE)을 잡습니다. */
+    /** 재설정 링크 발급용. 탈퇴와 겹치지 않도록 기본키로 공유 락(FOR SHARE)을 잡습니다. */
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("SELECT u FROM User u WHERE u.id = :id")
     Optional<User> findByIdForShare(Long id);
+
+    /**
+     * 로그인용. 기본키로 공유 락(FOR SHARE)을 잡고 그 순간의 비밀번호 해시를 읽습니다.
+     * 엔티티로 다시 읽으면 같은 트랜잭션에서 먼저 읽은 User 를 그대로 돌려줘서(1차 캐시) 그사이 바뀐 비밀번호를 볼 수 없어
+     * 컬럼만 읽습니다. 잠금 읽기라 트랜잭션 시작 시점이 아니라 가장 최근에 커밋된 값을 봅니다. 행이 없으면(탈퇴) 비어 있습니다.
+     */
+    @Query(value = "SELECT password FROM users WHERE user_id = :id FOR SHARE", nativeQuery = true)
+    Optional<String> findPasswordByIdForShare(Long id);
 
     /** 탈퇴용. 같은 사용자의 탈퇴·로그인을 한 줄로 세웁니다. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
