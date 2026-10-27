@@ -1,13 +1,14 @@
 name: Deploy Backend
 
-# main 에 머지되면 EC2 에 배포합니다. PR 리뷰 없이 develop 에 머지하는 팀이라
+# main 에 머지되면 배포합니다. PR 리뷰 없이 develop 에 머지하는 팀이라
 # develop → main PR 을 "배포해도 되는 상태" 확인 관문으로 씁니다.
 #
-# 레지스트리(GHCR)를 쓰지 않고 이미지를 파일로 보내서 EC2 에서 docker load 합니다.
-# private 레포의 GHCR 는 무료 저장·전송량이 작고, EC2 에 레지스트리 로그인도 필요 없어집니다.
+# 이미지를 ECR 에 올리고 ASG(hama-asg) 인스턴스 새로 고침으로 서버를 갈아끼웁니다.
+# 새 서버는 시작 템플릿(hama-lt)의 user data(backend/deploy/user-data.sh)로 부팅하면서
+# ECR 의 latest 이미지와 SSM /hama/* 환경변수를 받아 앱을 띄웁니다.
+# 새 서버를 먼저 띄우고 ALB 상태 검사를 통과해야 옛 서버를 내리므로(최소 정상 100%), 새 이미지가 안 뜨면 옛 서버가 그대로 남습니다.
 #
-# 필요한 Secrets: EC2_HOST(api.todohama.site), EC2_SSH_KEY(배포 전용 키, EC2 authorized_keys 에 등록),
-#   EC2_KNOWN_HOSTS(서버 호스트 공개키. EC2 를 새로 만들면 `ssh-keyscan api.todohama.site` 로 다시 등록)
+# AWS 인증은 액세스 키 없이 OIDC 로 역할(hama-github-deploy)을 잠깐 빌립니다. main 브랜치에서만 빌릴 수 있습니다.
 on:
   push:
     branches: [ main ]
@@ -17,76 +18,70 @@ on:
   # Actions 탭에서 수동으로 다시 배포할 때 씁니다.
   workflow_dispatch:
 
-# 배포가 겹치면 뒤의 것이 앞의 것이 끝날 때까지 기다립니다(중간에 끊으면 서버가 어중간해집니다).
+# 배포가 겹치면 뒤의 것이 앞의 것이 끝날 때까지 기다립니다(인스턴스 새로 고침은 동시에 하나만 됩니다).
 concurrency:
   group: deploy-backend
   cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: hama-backend
+  ASG_NAME: hama-asg
 
 jobs:
   deploy:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build image
-        run: docker build -t hama-backend:latest backend
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::511634956382:role/hama-github-deploy
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Save image
-        run: docker save hama-backend:latest | gzip > hama-backend.tar.gz
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set up SSH
+      # 새 이미지가 안 뜨면 latest 를 되돌리려고, 올리기 전에 지금 latest 의 매니페스트를 받아 둡니다.
+      - name: Remember current image
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          # 매번 ssh-keyscan 으로 받은 키를 믿으면, DNS 가 엉뚱한 서버를 가리켜도 그대로 배포합니다.
-          echo "${{ secrets.EC2_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          aws ecr batch-get-image --repository-name $ECR_REPOSITORY --image-ids imageTag=latest \
+            --query 'images[0].imageManifest' --output text > previous-manifest.json
 
-      - name: Upload image and compose file
+      - name: Build and push image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
-          scp -i ~/.ssh/deploy_key hama-backend.tar.gz backend/deploy/docker-compose.yml \
-            ubuntu@${{ secrets.EC2_HOST }}:~/hama/
+          docker build -t $REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA -t $REGISTRY/$ECR_REPOSITORY:latest backend
+          docker push --all-tags $REGISTRY/$ECR_REPOSITORY
 
-      # 헬스체크가 실패하면 직전 이미지(hama-backend:previous)로 자동으로 되돌리고 배포를 실패로 표시합니다.
-      # latest 에 항상 정상 이미지가 남아서, 다음 배포 때 previous 가 깨진 이미지로 덮이지 않습니다.
-      - name: Deploy
+      # 부팅(약 3분) + 앱 기동 + ALB 상태 검사 2회라 보통 5분 안팎입니다. 20분 넘으면 실패로 봅니다.
+      - name: Refresh instances
         run: |
-          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.EC2_HOST }} 'bash -s' <<'EOF'
-          set -e
-          cd ~/hama
-
-          # 환경변수는 SSM Parameter Store /hama/* 에서 받아 .env 를 새로 만듭니다(EC2 역할 hama-ec2-role, 읽기 전용).
-          # 값을 바꾸려면 SSM 에서 고치고 다시 배포합니다. 못 받아 오면 기존 .env 를 그대로 두고 배포를 멈춥니다.
-          set -o pipefail
-          umask 077
-          aws ssm get-parameters-by-path --path /hama --with-decryption --region ap-northeast-2 \
-            --query "Parameters[].[Name,Value]" --output text | sed 's#^/hama/##; s/\t/=/' > .env.tmp
-          test -s .env.tmp
-          mv .env.tmp .env
-
-          docker tag hama-backend:latest hama-backend:previous 2>/dev/null || true
-          gunzip -c hama-backend.tar.gz | docker load
-          rm hama-backend.tar.gz
-          docker compose up -d
-
-          # 앱이 뜨는 데 20초 정도 걸립니다. 2분 안에 UP 이 안 되면 배포 실패로 처리합니다.
-          for i in $(seq 1 40); do
-            if curl -sf localhost:8080/actuator/health > /dev/null; then
-              echo "배포 완료"
-              docker image prune -f > /dev/null
-              exit 0
-            fi
-            sleep 3
+          ID=$(aws autoscaling start-instance-refresh --auto-scaling-group-name $ASG_NAME \
+            --preferences '{"MinHealthyPercentage":100,"MaxHealthyPercentage":200,"InstanceWarmup":60}' \
+            --query InstanceRefreshId --output text)
+          for i in $(seq 1 80); do
+            STATUS=$(aws autoscaling describe-instance-refreshes --auto-scaling-group-name $ASG_NAME \
+              --instance-refresh-ids $ID --query 'InstanceRefreshes[0].Status' --output text)
+            echo "$STATUS"
+            case $STATUS in
+              Successful) exit 0 ;;
+              Failed|Cancelled|RollbackSuccessful|RollbackFailed) exit 1 ;;
+            esac
+            sleep 15
           done
-          echo "헬스체크 실패. 새 이미지 로그:"
-          docker logs --tail 50 hama-app
-          if docker image inspect hama-backend:previous > /dev/null 2>&1; then
-            echo "직전 이미지로 되돌립니다."
-            docker tag hama-backend:previous hama-backend:latest
-            docker compose up -d
-          fi
           exit 1
-          EOF
+
+      # 새 서버가 안 떠서 실패했으면 옛 서버는 살아 있습니다. 나중에 ASG 가 서버를 새로 띄울 때
+      # 깨진 이미지를 받지 않도록 latest 만 직전 이미지로 되돌립니다.
+      - name: Restore previous image tag
+        if: failure() && hashFiles('previous-manifest.json') != ''
+        run: |
+          aws ecr put-image --repository-name $ECR_REPOSITORY --image-tag latest \
+            --image-manifest file://previous-manifest.json > /dev/null
+          echo "latest 를 직전 이미지로 되돌렸습니다."
