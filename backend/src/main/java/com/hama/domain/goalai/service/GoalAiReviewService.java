@@ -24,6 +24,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -78,11 +80,12 @@ public class GoalAiReviewService {
     public ReviewResponse create(Long userId, Long goalId, String currentStatus) {
         LocalDate today = LocalDate.now(clock);
         // 자격 확인 뒤 바로 크레딧을 쓴다. 검증에서 던지면 트랜잭션이 롤백되어 차감도 같이 취소된다(실패 요청은 공짜).
-        ReviewPayload payload = transaction.execute(status -> {
+        ReadSnapshot snapshot = transaction.execute(status -> {
             Goal goal = requireReviewable(GoalAiPlanService.owned(goals.findActive(goalId), userId), today);
             credits.use(userId);
-            return payload(goal, currentStatus);
+            return new ReadSnapshot(payload(goal, currentStatus), ReviewVersion.of(reviews.findByGoalId(goalId)));
         });
+        ReviewPayload payload = snapshot.payload();
 
         try {
             ReviewAnswer answer = aiClient.chatForJson(AiRequest.of("goal-review", REVIEW_PROMPT.formatted(today),
@@ -98,10 +101,16 @@ public class GoalAiReviewService {
                 if (!payload(goal, currentStatus).equals(payload)) {
                     throw new BusinessException(GoalAiErrorCode.AI_REVIEW_OUTDATED);
                 }
-                GoalReview review = reviews.findByGoalId(goalId)
-                        .map(existing -> {
-                            existing.overwrite(achieved, comparison, message, currentStatus);
-                            return existing;
+                Optional<GoalReview> existing = reviews.findByGoalId(goalId);
+                // 동시에 두 번 요청하면 goal 락은 순서만 정해줄 뿐 둘 다 통과할 수 있다. 읽을 때 본 리뷰 버전과
+                // (락을 잡고) 다시 읽은 버전이 다르면 그 사이 다른 요청이 먼저 저장한 것이니 여기서 멈춘다.
+                if (!Objects.equals(ReviewVersion.of(existing), snapshot.version())) {
+                    throw new BusinessException(GoalAiErrorCode.AI_REVIEW_OUTDATED);
+                }
+                GoalReview review = existing
+                        .map(found -> {
+                            found.overwrite(achieved, comparison, message, currentStatus);
+                            return found;
                         })
                         .orElseGet(() -> reviews.save(GoalReview.create(goalId, achieved, comparison, message,
                                 currentStatus)));
@@ -177,6 +186,17 @@ public class GoalAiReviewService {
 
     record ReviewPayload(String title, String metricName, String unit, BigDecimal startValue, BigDecimal targetValue,
             BigDecimal progressRate, List<CheckinSnapshot> checkins, String currentStatus) {
+    }
+
+    /** 읽기 트랜잭션에서 본 목표 데이터(payload)와 그 시점의 기존 리뷰 버전을 함께 들고 다닙니다. */
+    record ReadSnapshot(ReviewPayload payload, ReviewVersion version) {
+    }
+
+    /** 기존 리뷰의 식별자+수정시각. 쓰기 시점에 다시 읽은 값과 비교해 그 사이 다른 요청이 먼저 썼는지 판정합니다. */
+    record ReviewVersion(Long id, LocalDateTime updatedAt) {
+        static ReviewVersion of(Optional<GoalReview> review) {
+            return review.map(r -> new ReviewVersion(r.getId(), r.getUpdatedAt())).orElse(null);
+        }
     }
 
     record CheckinSnapshot(String type, BigDecimal value, String note, Boolean achieved, LocalDateTime checkedAt) {

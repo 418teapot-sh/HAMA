@@ -42,7 +42,7 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
     }
 
     private int credits(User user) {
-        return jdbc.queryForObject("select credits from user where user_id = ?", Integer.class, user.id());
+        return jdbc.queryForObject("select credits from users where user_id = ?", Integer.class, user.id());
     }
 
     @Test
@@ -87,8 +87,6 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
         AI.answer(ACHIEVED_ANSWER);
         call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201);
 
-        // 가입 시 무료 크레딧은 1개뿐이라 두 번째 호출을 위해 보충합니다.
-        jdbc.update("update user set credits = credits + 1 where user_id = ?", user.id());
         AI.answer(MISSED_ANSWER);
         JsonNode data = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201).get("data");
 
@@ -109,6 +107,7 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
 
         long planA = generatePlans(user, planning).at("/plans/0/planId").asLong();
         call(post("/api/v1/goals/ai/plans/" + planA + "/select"), user, null, 200);
+        int before = credits(user);
         JsonNode notEnded = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", planning), 409);
         assertThat(notEnded.at("/error/code").asString()).isEqualTo("AI_REVIEW_GOAL_NOT_ENDED");
 
@@ -124,7 +123,7 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
         call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", 999999999), 404);
 
         // 위 실패들은 모두 자격 검증 단계에서 막혀 크레딧을 쓰지 않습니다.
-        assertThat(credits(user)).isEqualTo(1);
+        assertThat(credits(user)).isEqualTo(before);
     }
 
     @Test
@@ -170,12 +169,38 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
     }
 
     @Test
+    void 리뷰_도중_다른_요청이_먼저_저장하면_409_하고_크레딧을_돌려준다() throws Exception {
+        User user = user();
+        long goalId = inProgressGoal(user);
+        endGoal(goalId);
+        checkin(user, goalId, "END", 860, true);
+        int before = credits(user);
+
+        // 목표/체크인은 그대로지만, AI 가 답하기 직전에 다른 요청이 리뷰를 먼저 저장해버린 상황을 흉내냅니다.
+        AI.onNextAnswer(() -> jdbc.update(
+                "insert into goal_review (goal_id, achieved, comparison, message, current_status, created_at, updated_at) "
+                        + "values (?, true, '먼저 저장됨', '먼저 저장됨', '먼저 저장됨', now(), now())",
+                goalId));
+        AI.answer(ACHIEVED_ANSWER);
+        JsonNode error = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 409);
+
+        assertThat(error.at("/error/code").asString()).isEqualTo("AI_REVIEW_OUTDATED");
+        assertThat(credits(user)).isEqualTo(before);
+        assertThat(jdbc.queryForObject("select count(*) from goal_review where goal_id = ?", Integer.class, goalId))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject("select comparison from goal_review where goal_id = ?", String.class, goalId))
+                .isEqualTo("먼저 저장됨");
+        assertThat(jdbc.queryForObject("select result_status from goal where goal_id = ?", String.class, goalId))
+                .isNull();
+    }
+
+    @Test
     void 크레딧이_없으면_402_이고_AI를_부르지_않는다() throws Exception {
         User user = user();
         long goalId = inProgressGoal(user);
         endGoal(goalId);
         checkin(user, goalId, "END", 860, true);
-        jdbc.update("update user set credits = 0 where user_id = ?", user.id());
+        jdbc.update("update users set credits = 0 where user_id = ?", user.id());
 
         call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 402);
 
