@@ -12,6 +12,7 @@ import com.hama.domain.goal.repository.GoalTodoCount;
 import com.hama.domain.goal.repository.GoalTodoRepository;
 import com.hama.domain.goal.repository.MilestoneRepository;
 import com.hama.domain.goal.repository.PeriodGoalRepository;
+import com.hama.domain.goalai.service.GoalProgressChanged;
 import com.hama.domain.todo.repository.TodoRepository;
 import com.hama.global.exception.BusinessException;
 import com.hama.global.exception.GlobalErrorCode;
@@ -23,6 +24,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -38,16 +40,18 @@ public class GoalService {
     private final GoalTodoRepository goalTodoRepository;
     private final TodoRepository todoRepository;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     public GoalService(GoalRepository goalRepository, MilestoneRepository milestoneRepository,
             PeriodGoalRepository periodGoalRepository, GoalTodoRepository goalTodoRepository,
-            TodoRepository todoRepository, @Qualifier("be3Clock") Clock clock) {
+            TodoRepository todoRepository, @Qualifier("be3Clock") Clock clock, ApplicationEventPublisher events) {
         this.goalRepository = goalRepository;
         this.milestoneRepository = milestoneRepository;
         this.periodGoalRepository = periodGoalRepository;
         this.goalTodoRepository = goalTodoRepository;
         this.todoRepository = todoRepository;
         this.clock = clock;
+        this.events = events;
     }
 
     @Transactional
@@ -87,6 +91,7 @@ public class GoalService {
     public GoalResponses.Detail update(Long userId, Long goalId, UpdateGoalRequest request) {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
         goal.revise(request.mergeInto(goal.content()), today());
+        events.publishEvent(new GoalProgressChanged(goalId));
         return detail(goal);
     }
 
@@ -101,6 +106,7 @@ public class GoalService {
         goal.delete(now);
         // SQL UPDATE 로 지우면 같은 트랜잭션에서 이미 불러온 Todo 가 flush 때 deleted_at 을 되돌립니다.
         todoRepository.findByGoalIdAndDeletedAtIsNull(goal.getId()).forEach(todo -> todo.delete(now));
+        events.publishEvent(new GoalProgressChanged(goalId));
     }
 
     private GoalResponses.Detail detail(Goal goal) {

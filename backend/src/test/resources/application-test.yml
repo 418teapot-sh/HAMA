@@ -10,6 +10,8 @@ jwt:
   secret: test-only-secret-key-do-not-use-in-production-0123456789
 
 app:
+  goal-progress:
+    worker-enabled: false
   cookie:
     path: /api/v1/auth
     secure: false
