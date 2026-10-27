@@ -2,7 +2,7 @@ package com.hama.domain.auth.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.mail.autoconfigure.MailProperties;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -24,12 +24,8 @@ public class AccountMailSender {
 
     private final JavaMailSender mailSender;
     private final AppMailProperties properties;
-
-    @Value("${spring.mail.password:}")
-    private String smtpPassword;
-
-    @Value("${app.mail.log-body:false}")
-    private boolean logBody;
+    /** spring.mail.* (SMTP 접속 정보). 비밀번호 칸이 Resend API 키입니다. */
+    private final MailProperties smtp;
 
     /** PasswordResetLinkIssuer 가 이미 비동기 스레드에서 토큰을 커밋한 뒤 부르므로 여기선 바로 보냅니다. */
     public void sendPasswordReset(String to, String rawToken) {
@@ -55,8 +51,9 @@ public class AccountMailSender {
     }
 
     private void send(String to, String subject, String text) {
-        if (smtpPassword == null || smtpPassword.isBlank()) {
-            if (logBody) {
+        String apiKey = smtp.getPassword();
+        if (apiKey == null || apiKey.isBlank()) {
+            if (properties.logBody()) {
                 log.warn("[Mail] RESEND_API_KEY 가 없어 메일 대신 로그로 남깁니다(로컬). to={} subject={}\n{}", to, subject, text);
             } else {
                 log.error("[Mail] RESEND_API_KEY 가 없어 메일을 보내지 못했습니다. subject={}", subject);
