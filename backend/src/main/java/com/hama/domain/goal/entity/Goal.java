@@ -28,6 +28,8 @@ import org.hibernate.type.SqlTypes;
 public class Goal extends BaseTimeEntity {
 
     public static final int MAX_PERIOD_DAYS = 365;
+    /** A/B 플랜 생성은 크레딧을 쓰지 않아 목표당 횟수로 AI 호출을 막습니다. */
+    public static final int MAX_PLAN_GENERATIONS = 3;
 
     /** {@link #resultStatus} 에 저장하는 값. goals/ai 종료 리뷰(GoalAiReviewService)만 씁니다. */
     public static final String RESULT_ACHIEVED = "ACHIEVED";
@@ -43,6 +45,13 @@ public class Goal extends BaseTimeEntity {
 
     @Column(nullable = false, length = 100)
     private String title;
+
+    /**
+     * 목표를 만들 때의 상태(예: "토익 600점"). 생성 때 currentStatus 와 같은 값으로 저장하고 이후로 바꾸지 않습니다.
+     * 종료 리뷰는 이 값을 시작점으로 비교합니다.
+     */
+    @Column(name = "initial_status", length = 200)
+    private String initialStatus;
 
     /** 사용자가 직접 입력한 현재 상태(예: "토익 600점"). AI 없이 생성하므로 자유 텍스트로 받습니다. */
     @Column(name = "current_status", length = 200)
@@ -63,6 +72,10 @@ public class Goal extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private GoalStatus status;
 
+    /** 성공한 A/B 플랜 생성 횟수. {@link #MAX_PLAN_GENERATIONS} 에 닿으면 더 만들 수 없습니다. */
+    @Column(name = "plan_generation_count", nullable = false)
+    private int planGenerationCount;
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
@@ -79,6 +92,7 @@ public class Goal extends BaseTimeEntity {
         goal.userId = userId;
         goal.status = GoalStatus.PLANNING;
         goal.apply(content);
+        goal.initialStatus = goal.currentStatus;
         return goal;
     }
 
@@ -92,7 +106,7 @@ public class Goal extends BaseTimeEntity {
     /** currentStatus 만 바꿉니다. 지난 목표와 완료한 목표는 revise() 와 같은 이유로 막습니다. */
     public void updateCurrentStatus(String currentStatus, LocalDate today) {
         requireEditable(today);
-        this.currentStatus = currentStatus == null ? null : currentStatus.strip();
+        this.currentStatus = normalizeStatus(currentStatus);
     }
 
     /** 진행 중(종료일 전)인 목표만 완료할 수 있습니다. 남은 AI 투두는 그대로 둡니다. */
@@ -119,6 +133,19 @@ public class Goal extends BaseTimeEntity {
             throw new IllegalStateException("PLANNING 이 아니거나 기간이 없는 목표는 플랜을 적용할 수 없습니다.");
         }
         this.status = GoalStatus.IN_PROGRESS;
+    }
+
+    public boolean canGeneratePlan() {
+        return planGenerationCount < MAX_PLAN_GENERATIONS;
+    }
+
+    public int remainingPlanGenerations() {
+        return Math.max(MAX_PLAN_GENERATIONS - planGenerationCount, 0);
+    }
+
+    /** 플랜 생성이 성공해 저장할 때만 셉니다. AI 실패는 세지 않습니다. */
+    public void countPlanGeneration() {
+        this.planGenerationCount++;
     }
 
     public void delete(LocalDateTime now) {
@@ -154,9 +181,18 @@ public class Goal extends BaseTimeEntity {
 
     private void apply(GoalContent content) {
         this.title = content.title().strip();
-        this.currentStatus = content.currentStatus() == null ? null : content.currentStatus().strip();
+        this.currentStatus = normalizeStatus(content.currentStatus());
         this.startDate = content.startDate();
         this.endDate = content.endDate();
+    }
+
+    /** 공백만 보내면 "" 가 아니라 값이 없는 것(null)으로 저장합니다. */
+    private static String normalizeStatus(String status) {
+        if (status == null) {
+            return null;
+        }
+        String stripped = status.strip();
+        return stripped.isEmpty() ? null : stripped;
     }
 
     private static void validate(GoalContent content, boolean datesRequired, LocalDate today) {

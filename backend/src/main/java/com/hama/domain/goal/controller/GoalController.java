@@ -64,6 +64,8 @@ public class GoalController {
                     투두는 아직 없어 PLANNING 으로 시작하며, goals/ai/plans 로 A/B 플랜을 만들고 선택해야 투두가 생기고 IN_PROGRESS 가 됩니다.
                     시작일 > 종료일이거나 종료일이 오늘 이전이면 400(GOAL_INVALID_PERIOD), 필드 검증 실패는 400(VALIDATION_FAILED).
                     기간은 시작일 포함 최대 365일이고, 넘으면 400(GOAL_PERIOD_TOO_LONG).
+                    남은 크레딧이 0이면 플랜을 선택할 수 없으므로 402(INSUFFICIENT_CREDITS)이고 목표를 만들지 않습니다.
+                    여기서는 확인만 하고 차감하지 않습니다(차감은 플랜 선택 때). 필드 검증(400 VALIDATION_FAILED)이 먼저입니다.
                     """)
     @PostMapping
     public ResponseEntity<ApiResponse<GoalResponses.Created>> create(

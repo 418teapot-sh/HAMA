@@ -161,6 +161,32 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
     }
 
     @Test
+    void 현재_상태를_바꿔도_리뷰는_생성_때의_시작_상태와_비교하고_다시_차감하지_않는다() throws Exception {
+        User user = user();
+        long goalId = inProgressGoal(user);
+        call(patch("/api/v1/goals/" + goalId + "/current-status"), user, Map.of("currentStatus", "750점"), 200);
+        endGoal(goalId);
+        checkin(user, goalId, "END", 860, true);
+
+        AI.answer(ACHIEVED_ANSWER);
+        JsonNode first = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 201).get("data");
+
+        String sent = AI.requests().getLast().messages().getFirst().content();
+        assertThat(sent).contains("\"initialStatus\":\"700점\"").contains("\"currentStatus\":\"750점\"");
+        assertThat(first.get("currentStatus").asString()).isEqualTo("750점");
+
+        AI.answer(ACHIEVED_ANSWER);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId, "currentStatus", "토익 860점"), 201);
+        int before = credits(user);
+        long calls = reviewCalls();
+        jdbc.update("update goal set current_status = '바뀐 현재 상태' where goal_id = ?", goalId);
+
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId, "currentStatus", "토익 860점"), 200);
+        assertThat(credits(user)).isEqualTo(before);
+        assertThat(reviewCalls()).isEqualTo(calls);
+    }
+
+    @Test
     void 멘트는_줄바꿈_없는_한_줄씩_두_줄로_저장한다() throws Exception {
         User user = user();
         long goalId = reviewableGoal(user);

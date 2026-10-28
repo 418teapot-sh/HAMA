@@ -19,7 +19,10 @@ public final class GoalResponses {
     public record Created(Long goalId, GoalStatus status) {
     }
 
-    public record Detail(Long goalId, String title, String currentStatus, LocalDate startDate, LocalDate endDate,
+    public record Detail(Long goalId, String title,
+            @Schema(description = "목표를 만들 때의 상태. 이후 바뀌지 않으며 종료 리뷰의 비교 시작점입니다")
+            String initialStatus,
+            String currentStatus, LocalDate startDate, LocalDate endDate,
             GoalStatus status, BigDecimal progressRate, String resultStatus,
             @Schema(description = "A/B 플랜 생성·선택으로 만들어진 목표인지 여부")
             boolean aiPlanApplied,
@@ -28,7 +31,8 @@ public final class GoalResponses {
 
         public static Detail from(Goal goal, LocalDate today, BigDecimal progressRate, boolean aiPlanApplied,
                 List<GoalFixedSchedule> fixedSchedules) {
-            return new Detail(goal.getId(), goal.getTitle(), goal.getCurrentStatus(), goal.getStartDate(),
+            return new Detail(goal.getId(), goal.getTitle(), goal.getInitialStatus(), goal.getCurrentStatus(),
+                    goal.getStartDate(),
                     goal.getEndDate(), goal.effectiveStatus(today), progressRate, goal.getResultStatus(),
                     aiPlanApplied, fixedSchedules.stream().map(FixedScheduleView::from).toList(),
                     goal.getCreatedAt());

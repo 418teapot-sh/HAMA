@@ -1,5 +1,6 @@
 package com.hama.domain.goal.repository;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -46,5 +47,32 @@ public class GoalTodoRepository {
 
     public GoalTodoCount countByGoal(Long goalId) {
         return countByGoals(List.of(goalId)).getOrDefault(goalId, GoalTodoCount.EMPTY);
+    }
+
+    /**
+     * 한 목표의 AI 투두를 내용(content)별로 셉니다. 플랜 선택이 할 일 내용을 그대로 투두 내용으로 쓰므로 할 일별 진행이 됩니다.
+     * from·to 를 주면 그 기간(양끝 포함)의 투두만 셉니다. 둘 다 null 이면 전체입니다.
+     */
+    public Map<String, GoalTodoCount> countByContent(Long goalId, LocalDate from, LocalDate to) {
+        Map<String, GoalTodoCount> counts = new HashMap<>();
+        MapSqlParameterSource params = new MapSqlParameterSource("goalId", goalId);
+        String period = "";
+        if (from != null && to != null) {
+            period = " AND todo_date BETWEEN :from AND :to";
+            params.addValue("from", from).addValue("to", to);
+        }
+        jdbc.query("""
+                        SELECT content, COUNT(*) AS total,
+                               SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed
+                        FROM todo
+                        WHERE goal_id = :goalId AND %s%s
+                        GROUP BY content
+                        """.formatted(ACTIVE_GOAL_TASK, period),
+                params,
+                rs -> {
+                    counts.put(rs.getString("content"),
+                            new GoalTodoCount(rs.getLong("total"), rs.getLong("completed")));
+                });
+        return counts;
     }
 }

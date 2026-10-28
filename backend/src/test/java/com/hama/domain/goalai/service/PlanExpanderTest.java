@@ -5,8 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.hama.domain.goalai.dto.PlanDetail;
 import com.hama.domain.goalai.service.PlanExpander.AiPlan;
 import com.hama.domain.goalai.service.PlanExpander.AiTask;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class PlanExpanderTest {
@@ -65,6 +68,30 @@ class PlanExpanderTest {
         assertThat(first.minutes()).isEqualTo(PlanExpander.MAX_MINUTES);
         assertThat(first.timesPerWeek()).isEqualTo(7); // 30 -> 7로 클램프
         assertThat(expanded.totalTodos()).isEqualTo(PlanExpander.MAX_TODOS);
+    }
+
+    @Test
+    void 바쁜_요일에는_투두를_두지_않고_횟수는_남은_날_수를_넘지_않는다() {
+        LocalDate weekEnd = START.plusDays(6); // 10/1(목) ~ 10/7(수), 10/5 가 월요일
+        PlanExpander.Expanded expanded = PlanExpander.expand(
+                plan(new AiTask("단어", 7, 30), new AiTask("모의고사", 2, 60)),
+                "여유형", START, START, weekEnd, Set.of(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY));
+
+        List<LocalDate> dates = expanded.detail().todos().stream().map(PlanDetail.TodoPlan::date).toList();
+        assertThat(dates).noneMatch(d -> d.getDayOfWeek() == DayOfWeek.MONDAY || d.getDayOfWeek() == DayOfWeek.WEDNESDAY);
+        assertThat(expanded.detail().todos()).filteredOn(t -> t.content().equals("단어")).hasSize(5);
+        assertThat(expanded.detail().todos()).filteredOn(t -> t.content().equals("모의고사")).hasSize(2);
+    }
+
+    @Test
+    void 모든_요일이_바쁘면_그_주는_원래대로_모든_날을_쓴다() {
+        LocalDate weekEnd = START.plusDays(6);
+        PlanExpander.Expanded busy = PlanExpander.expand(plan(new AiTask("단어", 7, 30)),
+                "여유형", START, START, weekEnd, EnumSet.allOf(DayOfWeek.class));
+        PlanExpander.Expanded free = PlanExpander.expand(plan(new AiTask("단어", 7, 30)),
+                "여유형", START, START, weekEnd);
+
+        assertThat(busy.detail().todos()).isEqualTo(free.detail().todos()).hasSize(7);
     }
 
     @Test

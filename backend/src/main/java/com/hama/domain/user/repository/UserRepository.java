@@ -32,6 +32,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmail(String email);
 
+    boolean existsByIdAndCreditsGreaterThan(Long id, int credits);
+
     /*
      * 크레딧은 아래 세 UPDATE 로만 바꿉니다. 호출한 쪽 트랜잭션(플랜 선택·replan)이 들고 있는 목표·투두를 떼어 내지 않도록
      * clearAutomatically 는 쓰지 않습니다. 그래서 같은 트랜잭션에서 이미 읽은 User 의 credits 는 옛값이니 다시 읽지 마세요.

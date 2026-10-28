@@ -15,6 +15,7 @@ import com.hama.domain.goal.repository.GoalTodoCount;
 import com.hama.domain.goal.repository.GoalTodoRepository;
 import com.hama.domain.goalai.repository.GoalPlanRepository;
 import com.hama.domain.goalai.service.GoalProgressChanged;
+import com.hama.domain.payment.service.CreditService;
 import com.hama.domain.todo.repository.TodoRepository;
 import com.hama.global.exception.BusinessException;
 import com.hama.global.exception.GlobalErrorCode;
@@ -51,10 +52,12 @@ public class GoalService {
     private final TodoRepository todoRepository;
     private final Clock clock;
     private final ApplicationEventPublisher events;
+    private final CreditService credits;
 
     public GoalService(GoalRepository goalRepository, GoalFixedScheduleRepository fixedScheduleRepository,
             GoalPlanRepository goalPlanRepository, GoalTodoRepository goalTodoRepository,
-            TodoRepository todoRepository, @Qualifier("be3Clock") Clock clock, ApplicationEventPublisher events) {
+            TodoRepository todoRepository, @Qualifier("be3Clock") Clock clock, ApplicationEventPublisher events,
+            CreditService credits) {
         this.goalRepository = goalRepository;
         this.fixedScheduleRepository = fixedScheduleRepository;
         this.goalPlanRepository = goalPlanRepository;
@@ -62,10 +65,13 @@ public class GoalService {
         this.todoRepository = todoRepository;
         this.clock = clock;
         this.events = events;
+        this.credits = credits;
     }
 
+    /** 크레딧은 플랜 선택 때 쓰지만, 0이면 플랜을 고를 수 없는 PLANNING 목표만 남으므로 생성 단계에서 막습니다. */
     @Transactional
     public GoalResponses.Created create(Long userId, CreateGoalRequest request) {
+        credits.requireAvailable(userId);
         Goal goal = goalRepository.save(Goal.create(userId, request.toContent(), today()));
         if (request.fixedSchedules() != null && !request.fixedSchedules().isEmpty()) {
             requireDistinctDays(request.fixedSchedules());
@@ -86,7 +92,8 @@ public class GoalService {
                 };
         List<Long> goalIds = goals.getContent().stream().map(Goal::getId).toList();
         Map<Long, GoalTodoCount> counts = goalTodoRepository.countByGoals(goalIds);
-        Set<Long> aiApplied = goalPlanRepository.findGoalIdsBySelectedTrueAndGoalIdIn(goalIds);
+        Set<Long> aiApplied = goalIds.isEmpty() ? Set.of()
+                : goalPlanRepository.findGoalIdsBySelectedTrueAndGoalIdIn(goalIds);
         return PageResponse.from(goals, goal -> GoalResponses.Summary.from(goal, today,
                 counts.getOrDefault(goal.getId(), GoalTodoCount.EMPTY).progressRate(),
                 aiApplied.contains(goal.getId())));
@@ -140,6 +147,8 @@ public class GoalService {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
         requireAiPlanApplied(goalId);
         goal.updateCurrentStatus(currentStatus, today());
+        // @LastModifiedDate 는 flush 때 채워지므로, 먼저 flush 해야 바뀐 시각을 돌려줄 수 있습니다.
+        goalRepository.flush();
         return new CurrentStatusResponse(goal.getId(), goal.getCurrentStatus(), goal.getUpdatedAt());
     }
 
