@@ -317,7 +317,8 @@ class UserWithdrawApiIntegrationTest {
         for (String table : List.of("todo", "schedule", "goal", "refresh_token")) {
             rows.put(table, count("SELECT COUNT(*) FROM " + table + " WHERE user_id = ?", session.userId()));
         }
-        for (String table : List.of("goal_fixed_schedule", "goal_checkin", "goal_plan", "goal_review_generation")) {
+        for (String table : List.of("goal_fixed_schedule", "goal_checkin", "goal_plan", "goal_review_generation",
+                "goal_progress_summary")) {
             rows.put(table, count("SELECT COUNT(*) FROM " + table + " WHERE goal_id = ?", seeded.goalId()));
         }
         return rows;

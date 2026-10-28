@@ -13,6 +13,7 @@ import com.hama.domain.goal.repository.GoalRepository;
 import com.hama.domain.goal.repository.GoalTodoCount;
 import com.hama.domain.goal.repository.GoalTodoRepository;
 import com.hama.domain.goalai.repository.GoalPlanRepository;
+import com.hama.domain.goalai.service.GoalProgressChanged;
 import com.hama.domain.todo.repository.TodoRepository;
 import com.hama.global.exception.BusinessException;
 import com.hama.global.exception.GlobalErrorCode;
@@ -48,7 +49,7 @@ public class GoalService {
 
     public GoalService(GoalRepository goalRepository, GoalFixedScheduleRepository fixedScheduleRepository,
             GoalPlanRepository goalPlanRepository, GoalTodoRepository goalTodoRepository,
-            TodoRepository todoRepository, @Qualifier("be3Clock") Clock clock) {
+            TodoRepository todoRepository, @Qualifier("be3Clock") Clock clock, ApplicationEventPublisher events) {
         this.goalRepository = goalRepository;
         this.fixedScheduleRepository = fixedScheduleRepository;
         this.goalPlanRepository = goalPlanRepository;

@@ -38,8 +38,7 @@ public class GoalProgressSource {
         var recent = todos.findProgressRecords(goal.getUserId(), goal.getId(), PageRequest.of(0, MAX_RECORDS));
         var notes = recent.getContent().stream().map(t -> new Note(t.getId(), t.getContent(), t.getTodoDate(),
                 t.getCompletedAt(), limit(t.getStatusNote(), MAX_NOTE_CHARACTERS))).toList();
-        var payload = new Payload(goal.getTitle(), goal.getMetricName(), goal.getUnit(), goal.getStartValue(),
-                goal.getTargetValue(), goal.getStartDate(), goal.getEndDate(),
+        var payload = new Payload(goal.getTitle(), goal.getCurrentStatus(), goal.getStartDate(), goal.getEndDate(),
                 counts.countByGoal(goal.getId()).progressRate(), recent.getTotalElements(), notes);
         String body = json.write(payload);
         return new Input(body, hash(PROMPT + "\n" + body), notes.size(), recent.getTotalElements());
@@ -62,7 +61,7 @@ public class GoalProgressSource {
     record Note(Long todoId, String content, LocalDate todoDate, LocalDateTime completedAt, String statusNote) {
     }
 
-    record Payload(String title, String metricName, String unit, BigDecimal startValue, BigDecimal targetValue,
+    record Payload(String title, String currentStatus,
             LocalDate startDate, LocalDate endDate, BigDecimal progressRate, long totalRecordCount, List<Note> records) {
     }
 

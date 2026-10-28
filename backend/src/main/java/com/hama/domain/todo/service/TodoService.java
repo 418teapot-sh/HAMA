@@ -5,7 +5,6 @@ import com.hama.domain.goal.entity.GoalStatus;
 import com.hama.domain.goal.exception.GoalErrorCode;
 import com.hama.domain.goal.repository.GoalRepository;
 import com.hama.domain.goal.repository.GoalTodoRepository;
-import com.hama.domain.goal.repository.PeriodGoalRepository;
 import com.hama.domain.goalai.service.GoalProgressChanged;
 import com.hama.domain.todo.dto.CreateTodoRequest;
 import com.hama.domain.todo.dto.PostponeTodoRequest;
@@ -46,7 +45,7 @@ public class TodoService {
 
     public TodoService(TodoRepository todoRepository, @Qualifier("be3Clock") Clock clock,
             GoalRepository goals, GoalTodoRepository counts,
-            AiTodoPostponeService aiPostpone) {
+            AiTodoPostponeService aiPostpone, ApplicationEventPublisher events) {
         this.todoRepository = todoRepository;
         this.clock = clock;
         this.goals = goals;
