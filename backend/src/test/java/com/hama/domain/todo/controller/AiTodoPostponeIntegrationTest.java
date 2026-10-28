@@ -36,9 +36,12 @@ class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
     long goal(User u, String end) throws Exception {
         return goal(u, "2026-09-20", end);
     }
+    /** 직접 생성은 PLANNING 으로 시작하므로, 플랜을 고른 뒤의 진행 중 목표로 바꿔 둡니다. */
     long goal(User u, String start, String end) throws Exception {
-        return call(post("/api/v1/goals"), u, Map.of("title", "미루기 검증", "startDate", start, "endDate", end), 201)
+        long id = call(post("/api/v1/goals"), u, Map.of("title", "미루기 검증", "startDate", start, "endDate", end), 201)
                 .at("/data/goalId").asLong();
+        jdbc.update("update goal set status='IN_PROGRESS' where goal_id=?", id);
+        return id;
     }
     long todo(User u, long goal, String date, String start, String end) throws Exception {
         var body = new HashMap<String,Object>(Map.of("category", "AI_GOAL_TASK", "content", "할 일", "goalId", goal, "todoDate", date));

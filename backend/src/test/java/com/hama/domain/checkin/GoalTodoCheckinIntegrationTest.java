@@ -70,8 +70,11 @@ class GoalTodoCheckinIntegrationTest {
         var response = mvc.perform(req).andExpect(status().is(status)).andReturn().getResponse();
         return json.readTree(response.getContentAsString());
     }
+    /** 직접 생성은 PLANNING 으로 시작하므로, 플랜을 고른 뒤의 진행 중 목표로 바꿔 둡니다. */
     long goal(User u) throws Exception {
-        return call(post("/api/v1/goals"), u, Map.of("title", "운동", "startDate", "2026-10-01", "endDate", "2026-10-31"), 201).at("/data/goalId").asLong();
+        long id = call(post("/api/v1/goals"), u, Map.of("title", "운동", "startDate", "2026-10-01", "endDate", "2026-10-31"), 201).at("/data/goalId").asLong();
+        jdbc.update("update goal set status='IN_PROGRESS' where goal_id=?", id);
+        return id;
     }
     Map<String,Object> input(long goal, String date) {
         return new HashMap<>(Map.of("category", "AI_GOAL_TASK", "content", "목표 할 일", "todoDate", date, "goalId", goal));
