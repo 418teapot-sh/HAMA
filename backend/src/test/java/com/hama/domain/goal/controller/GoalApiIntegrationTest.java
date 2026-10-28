@@ -1,6 +1,7 @@
 package com.hama.domain.goal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -328,7 +329,8 @@ class GoalApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.goalId").value(goalId))
                 .andExpect(jsonPath("$.data.currentStatus").value("토익 700점"))
-                .andExpect(jsonPath("$.data.updatedAt").isNotEmpty());
+                .andExpect(jsonPath("$.data.updatedAt").value(
+                        matchesPattern("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}")));
         mvc.perform(auth(get("/api/v1/goals/" + goalId), owner))
                 .andExpect(jsonPath("$.data.currentStatus").value("토익 700점"))
                 .andExpect(jsonPath("$.data.title").value("매일 러닝 30분"));
@@ -429,6 +431,20 @@ class GoalApiIntegrationTest {
                                 """.formatted(TODAY, TODAY.plusDays(30))), owner))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_INPUT"));
+    }
+
+    @Test
+    void 고정_일정에_null_항목이_있으면_500이_아니라_400이다() throws Exception {
+        Session owner = signup();
+        mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"목표","startDate":"%s","endDate":"%s","fixedSchedules":[null]}
+                                """.formatted(TODAY, TODAY.plusDays(30))), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
+
+        mvc.perform(auth(get("/api/v1/goals"), owner))
+                .andExpect(jsonPath("$.data.content.length()").value(0));
     }
 
     private long goalWithFixedSchedules(Session user, String title, LocalDate start, LocalDate end,

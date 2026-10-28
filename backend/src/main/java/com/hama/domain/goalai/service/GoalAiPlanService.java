@@ -19,13 +19,17 @@ import com.hama.global.ai.AiRequest;
 import com.hama.global.exception.BusinessException;
 import com.hama.global.exception.GlobalErrorCode;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -43,7 +47,7 @@ public class GoalAiPlanService {
             각 플랜은 마일스톤 없이 반복할 일(tasks) 2~5개로만 구성해.
             예) 여유형 - "매일 영어 단어 30개씩 외우기"(timesPerWeek 7) / "일주일에 모의고사 1번 보기"(timesPerWeek 1),
                 집중형 - "매일 영어 단어 50개씩 외우기"(timesPerWeek 7) / "일주일에 모의고사 1번 보기"(timesPerWeek 1).
-            사용자 선호: %s. fixedSchedules(이미 바쁜 요일)가 있으면 그 요일에는 되도록 적게 배정한다고 생각하고 횟수를 정해.
+            사용자 선호: %s. fixedSchedules(이미 바쁜 요일)가 있으면 그 요일에는 할 일을 두지 않으니, 남은 요일 수 안에서 timesPerWeek 를 정해.
             반드시 아래 모양의 JSON 객체 하나로만, 짧게 답해.
             {"plans":[{"variant":"A","title":10자 이하,"summary":"매일 영어 단어 30개씩 외우기 / 일주일에 모의고사 1번 보기" 같은 한 문장,
               "tasks":[{"content":할 일 한 줄,"timesPerWeek":1~7,"minutes":10~240}]},
@@ -73,7 +77,8 @@ public class GoalAiPlanService {
     public PlanResponses.PlanList generate(Long userId, Long goalId, PlanPreference requested) {
         PlanPreference preference = requested == null ? PlanPreference.BALANCED : requested;
         LocalDate today = LocalDate.now(clock);
-        Goal goal = transaction.execute(status -> requirePlanning(owned(goals.findActive(goalId), userId)));
+        Goal goal = transaction.execute(status -> requireGenerationLeft(
+                requirePlanning(owned(goals.findActive(goalId), userId))));
         // PLANNING 목표는 수정에서 기간을 지울 수 있습니다. 기간이 없거나 이미 끝났으면 투두를 둘 날이 없습니다.
         if (goal.getStartDate() == null || goal.getEndDate() == null) {
             throw new BusinessException(GoalErrorCode.GOAL_INVALID_PERIOD);
@@ -88,14 +93,19 @@ public class GoalAiPlanService {
                 PLAN_PROMPT.formatted(today, preference.prompt()),
                 List.of(AiMessage.user(json.write(goalInfo(goal, planStart, goalFixedSchedules))))),
                 PlanExpander.AiPlans.class);
-        List<PlanExpander.Expanded> expanded = expandBoth(answer, goal.getStartDate(), planStart, goal.getEndDate());
+        Set<DayOfWeek> busyDays = goalFixedSchedules.stream().map(GoalFixedSchedule::getDayOfWeek)
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(DayOfWeek.class)));
+        List<PlanExpander.Expanded> expanded = expandBoth(answer, goal.getStartDate(), planStart, goal.getEndDate(),
+                busyDays);
 
         return transaction.execute(status -> {
-            Goal locked = requirePlanning(owned(goals.findActiveForUpdate(goalId), userId));
+            // AI 를 기다리는 사이 다른 요청이 횟수를 다 썼을 수 있어 잠근 뒤 다시 봅니다.
+            Goal locked = requireGenerationLeft(requirePlanning(owned(goals.findActiveForUpdate(goalId), userId)));
             if (!Objects.equals(locked.getStartDate(), goal.getStartDate())
                     || !Objects.equals(locked.getEndDate(), goal.getEndDate())) {
                 throw new BusinessException(GoalAiErrorCode.AI_PLAN_OUTDATED);
             }
+            locked.countPlanGeneration();
             plans.deleteUnselected(goalId);
             List<PlanResponses.PlanView> views = new ArrayList<>();
             for (int i = 0; i < VARIANTS.size(); i++) {
@@ -104,17 +114,26 @@ public class GoalAiPlanService {
                         preference, json.write(plan.detail()), plan.totalTodos(), plan.avgDailyMinutes()));
                 views.add(PlanResponses.PlanView.of(saved, plan.detail()));
             }
-            return new PlanResponses.PlanList(views);
+            return new PlanResponses.PlanList(locked.remainingPlanGenerations(), views);
         });
     }
 
     public PlanResponses.PlanList list(Long userId, Long goalId) {
         return transaction.execute(status -> {
-            owned(goals.findActive(goalId), userId);
-            return new PlanResponses.PlanList(plans.findByGoalIdOrderByIdAsc(goalId).stream()
-                    .map(plan -> PlanResponses.PlanView.of(plan, json.read(plan.getDetailJson(), PlanDetail.class)))
-                    .toList());
+            Goal goal = owned(goals.findActive(goalId), userId);
+            return new PlanResponses.PlanList(goal.remainingPlanGenerations(),
+                    plans.findByGoalIdOrderByIdAsc(goalId).stream()
+                            .map(plan -> PlanResponses.PlanView.of(plan,
+                                    json.read(plan.getDetailJson(), PlanDetail.class)))
+                            .toList());
         });
+    }
+
+    private static Goal requireGenerationLeft(Goal goal) {
+        if (!goal.canGeneratePlan()) {
+            throw new BusinessException(GoalAiErrorCode.AI_PLAN_GENERATION_LIMIT);
+        }
+        return goal;
     }
 
     static Goal owned(Optional<Goal> found, Long userId) {
@@ -146,7 +165,7 @@ public class GoalAiPlanService {
 
     /** A·B 둘 다 펼칠 수 있어야 합니다. variant 를 안 주거나 순서가 바뀌어도 받고, 없으면 순서대로 A·B 로 봅니다. */
     private static List<PlanExpander.Expanded> expandBoth(PlanExpander.AiPlans answer, LocalDate goalStart,
-            LocalDate planStart, LocalDate planEnd) {
+            LocalDate planStart, LocalDate planEnd, Set<DayOfWeek> busyDays) {
         List<PlanExpander.AiPlan> source = answer == null || answer.plans() == null ? List.of() : answer.plans();
         List<PlanExpander.Expanded> result = new ArrayList<>();
         for (int i = 0; i < VARIANTS.size(); i++) {
@@ -157,7 +176,7 @@ public class GoalAiPlanService {
                     .findFirst()
                     .orElse(index < source.size() ? source.get(index) : null);
             PlanExpander.Expanded expanded = PlanExpander.expand(plan, DEFAULT_TITLES.get(i), goalStart,
-                    planStart, planEnd);
+                    planStart, planEnd, busyDays);
             if (expanded == null || expanded.totalTodos() == 0) {
                 throw new BusinessException(AiErrorCode.AI_UPSTREAM_ERROR,
                         new IllegalStateException("[goal-plan] 플랜 " + variant + " 를 펼칠 수 없습니다."));

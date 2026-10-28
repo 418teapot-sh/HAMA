@@ -2,6 +2,7 @@ package com.hama.domain.goalai.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.hama.domain.goalai.dto.PlanDetail;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -34,6 +35,15 @@ final class PlanExpander {
      */
     static Expanded expand(AiPlan plan, String defaultTitle, LocalDate goalStart, LocalDate planStart,
             LocalDate planEnd) {
+        return expand(plan, defaultTitle, goalStart, planStart, planEnd, Set.of());
+    }
+
+    /**
+     * @param busyDays 고정 일정이 있는 요일. 그 요일에는 투두를 두지 않고, 횟수도 남은 날 수를 넘지 않습니다.
+     *                 한 주의 모든 날이 바쁘면 그 주만 예외로 모든 날을 씁니다(투두가 아예 사라지지 않도록).
+     */
+    static Expanded expand(AiPlan plan, String defaultTitle, LocalDate goalStart, LocalDate planStart,
+            LocalDate planEnd, Set<DayOfWeek> busyDays) {
         if (plan == null || plan.tasks() == null) {
             return null;
         }
@@ -54,15 +64,17 @@ final class PlanExpander {
         for (LocalDate weekStart = planStart; !weekStart.isAfter(planEnd) && budget[0] > 0;
                 weekStart = weekStart.plusDays(7)) {
             LocalDate weekEnd = weekStart.plusDays(6).isAfter(planEnd) ? planEnd : weekStart.plusDays(6);
-            int length = (int) ChronoUnit.DAYS.between(weekStart, weekEnd) + 1;
+            int weekLength = (int) ChronoUnit.DAYS.between(weekStart, weekEnd) + 1;
+            List<LocalDate> free = freeDays(weekStart, weekLength, busyDays);
+            int length = free.size();
             for (int t = 0; t < templates.size(); t++) {
                 PlanDetail.TaskTemplate task = templates.get(t);
                 // 7일보다 짧은 주(목표 끝)는 길이에 비례해 횟수를 줄입니다.
-                int sessions = Math.clamp(Math.round(task.timesPerWeek() * length / 7f), 1, length);
+                int sessions = Math.clamp(Math.round(task.timesPerWeek() * weekLength / 7f), 1, length);
                 for (int s = 0; s < sessions && budget[0] > 0; s++, budget[0]--) {
                     // 할 일마다 시작 요일을 하나씩 밀어서 모든 할 일이 첫날에 몰리지 않게 합니다.
                     int day = (s * length / sessions + t) % length;
-                    todos.add(new PlanDetail.TodoPlan(task.content(), weekStart.plusDays(day), task.minutes()));
+                    todos.add(new PlanDetail.TodoPlan(task.content(), free.get(day), task.minutes()));
                 }
             }
         }
@@ -79,6 +91,15 @@ final class PlanExpander {
         return new Expanded(text(plan.title(), 50, defaultTitle), text(plan.summary(), 255, defaultTitle),
                 new PlanDetail(goalStart, planEnd, planStart, templates, todos), total,
                 days.isEmpty() ? 0 : Math.round((float) minutesSum / days.size()));
+    }
+
+    private static List<LocalDate> freeDays(LocalDate weekStart, int weekLength, Set<DayOfWeek> busyDays) {
+        List<LocalDate> all = new ArrayList<>();
+        for (int i = 0; i < weekLength; i++) {
+            all.add(weekStart.plusDays(i));
+        }
+        List<LocalDate> free = all.stream().filter(date -> !busyDays.contains(date.getDayOfWeek())).toList();
+        return free.isEmpty() ? all : free;
     }
 
     private static String text(String value, int max, String fallback) {

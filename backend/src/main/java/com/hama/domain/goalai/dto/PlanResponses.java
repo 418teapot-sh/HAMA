@@ -9,7 +9,10 @@ public final class PlanResponses {
     private PlanResponses() {
     }
 
-    public record PlanList(List<PlanView> plans) {
+    public record PlanList(
+            @Schema(description = "이 목표에서 플랜을 더 만들 수 있는 횟수(목표당 3번). 0 이면 생성 요청은 429", example = "2")
+            int remainingGenerations,
+            List<PlanView> plans) {
     }
 
     public record PlanView(

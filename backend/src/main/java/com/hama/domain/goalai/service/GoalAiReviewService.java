@@ -131,9 +131,10 @@ public class GoalAiReviewService {
                 if (!Objects.equals(ReviewVersion.of(existing), snapshot.version())) {
                     throw new BusinessException(GoalAiErrorCode.AI_REVIEW_OUTDATED);
                 }
+                String compared = snapshot.payload().currentStatus();
                 GoalReview review = existing.orElseGet(() -> GoalReview.create(goalId, achieved, comparison,
-                        message, currentStatus));
-                review.overwrite(achieved, comparison, message, currentStatus);
+                        message, compared));
+                review.overwrite(achieved, comparison, message, compared);
                 reviews.saveAndFlush(review);
                 goal.recordResult(achieved);
                 generation.complete(snapshot.inputHash(), resultFingerprint(review));
@@ -266,12 +267,18 @@ public class GoalAiReviewService {
         return goal;
     }
 
+    /**
+     * initialStatus 는 생성 때 저장한 시작 상태라 PATCH current-status 로 바뀌지 않습니다.
+     * 요청에 currentStatus 가 없으면 마지막으로 저장한 현재 상태를 지금 상태로 씁니다.
+     */
     private ReviewPayload payload(Goal goal, String currentStatus) {
         List<GoalCheckin> all = checkins.findByGoalIdOrderByCheckedAtAscIdAsc(goal.getId());
         List<CheckinSnapshot> snapshots = limitMid(all, MAX_MID_CHECKINS).stream().map(CheckinSnapshot::from)
                 .toList();
         BigDecimal progressRate = goalTodos.countByGoal(goal.getId()).progressRate();
-        return new ReviewPayload(goal.getTitle(), goal.getCurrentStatus(), progressRate, snapshots, currentStatus);
+        String current = currentStatus == null || currentStatus.isBlank() ? goal.getCurrentStatus()
+                : currentStatus.strip();
+        return new ReviewPayload(goal.getTitle(), goal.getInitialStatus(), progressRate, snapshots, current);
     }
 
     /** MID 는 개수 제한이 없어 토큰 한도를 넘길 수 있습니다. 최근 maxMid 개만 남기고, START/END 는 항상 남깁니다. 순서는 그대로입니다. */

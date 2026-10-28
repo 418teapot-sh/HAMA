@@ -92,7 +92,8 @@ public class GoalService {
                 };
         List<Long> goalIds = goals.getContent().stream().map(Goal::getId).toList();
         Map<Long, GoalTodoCount> counts = goalTodoRepository.countByGoals(goalIds);
-        Set<Long> aiApplied = goalPlanRepository.findGoalIdsBySelectedTrueAndGoalIdIn(goalIds);
+        Set<Long> aiApplied = goalIds.isEmpty() ? Set.of()
+                : goalPlanRepository.findGoalIdsBySelectedTrueAndGoalIdIn(goalIds);
         return PageResponse.from(goals, goal -> GoalResponses.Summary.from(goal, today,
                 counts.getOrDefault(goal.getId(), GoalTodoCount.EMPTY).progressRate(),
                 aiApplied.contains(goal.getId())));
@@ -146,6 +147,8 @@ public class GoalService {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
         requireAiPlanApplied(goalId);
         goal.updateCurrentStatus(currentStatus, today());
+        // @LastModifiedDate 는 flush 때 채워지므로, 먼저 flush 해야 바뀐 시각을 돌려줄 수 있습니다.
+        goalRepository.flush();
         return new CurrentStatusResponse(goal.getId(), goal.getCurrentStatus(), goal.getUpdatedAt());
     }
 

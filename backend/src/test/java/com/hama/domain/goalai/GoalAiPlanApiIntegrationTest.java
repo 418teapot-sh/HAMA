@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -52,6 +53,56 @@ class GoalAiPlanApiIntegrationTest extends GoalAiTestSupport {
                 200).at("/data/plans");
         assertThat(replaced).hasSize(2);
         assertThat(replaced.get(0).get("planId").asLong()).isEqualTo(second).isNotEqualTo(first);
+    }
+
+    @Test
+    void 플랜은_목표당_3번까지_만들고_4번째는_AI_를_부르지_않고_429() throws Exception {
+        User user = user();
+        long goalId = planningGoal(user);
+        assertThat(call(get("/api/v1/goals/ai/plans").param("goalId", String.valueOf(goalId)), user, null, 200)
+                .at("/data/remainingGenerations").asInt()).isEqualTo(3);
+
+        assertThat(generatePlans(user, goalId).get("remainingGenerations").asInt()).isEqualTo(2);
+        assertThat(generatePlans(user, goalId).get("remainingGenerations").asInt()).isEqualTo(1);
+        assertThat(generatePlans(user, goalId).get("remainingGenerations").asInt()).isZero();
+        long aiCalls = AI.requests().size();
+
+        AI.answer(PLAN_ANSWER);
+        JsonNode error = call(post("/api/v1/goals/ai/plans"), user, Map.of("goalId", goalId), 429);
+
+        assertThat(error.at("/error/code").asString()).isEqualTo("AI_PLAN_GENERATION_LIMIT");
+        assertThat(AI.requests()).hasSize((int) aiCalls);
+        JsonNode listed = call(get("/api/v1/goals/ai/plans").param("goalId", String.valueOf(goalId)), user, null, 200)
+                .get("data");
+        assertThat(listed.get("remainingGenerations").asInt()).isZero();
+        assertThat(listed.get("plans")).hasSize(2);
+    }
+
+    @Test
+    void 실패한_생성은_횟수에_넣지_않는다() throws Exception {
+        User user = user();
+        long goalId = planningGoal(user);
+        AI.answer("""
+                {"plans":[{"variant":"A","title":"여유형","summary":"-","tasks":[]}]}
+                """);
+        call(post("/api/v1/goals/ai/plans"), user, Map.of("goalId", goalId), 502);
+
+        assertThat(generatePlans(user, goalId).get("remainingGenerations").asInt()).isEqualTo(2);
+    }
+
+    @Test
+    void 고정_일정_요일에는_투두를_두지_않는다() throws Exception {
+        User user = user();
+        long goalId = call(post("/api/v1/goals"), user,
+                Map.of("title", "3개월 안에 토익 850점", "currentStatus", "700점", "startDate", "2026-10-01",
+                        "endDate", "2026-12-31", "fixedSchedules",
+                        List.of(Map.of("dayOfWeek", "MONDAY", "content", "야근"))),
+                201).at("/data/goalId").asLong();
+
+        JsonNode plans = generatePlans(user, goalId).get("plans");
+
+        // 92일 중 월요일 13일을 빼면 79일. 매일 하는 할 일도 월요일은 건너뜁니다.
+        assertThat(plans.at("/0/stats/totalTodos").asInt()).isEqualTo(79);
     }
 
     @Test

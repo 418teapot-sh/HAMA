@@ -34,8 +34,8 @@ public record CreateGoalRequest(
 
         @Valid
         @Size(max = 7, message = "고정 일정은 요일마다 하나씩, 최대 7개입니다.")
-        @Schema(description = "요일마다 이미 바쁜 일정(예: 월요일 - 한국사 공부). A/B 플랜 생성 때 참고만 합니다. 생략 가능.")
-        List<FixedSchedule> fixedSchedules
+        @Schema(description = "요일마다 이미 바쁜 일정(예: 월요일 - 한국사 공부). A/B 플랜 생성 때 그 요일에는 투두를 두지 않습니다. 생략 가능.")
+        List<@NotNull(message = "고정 일정 항목이 비어 있습니다.") FixedSchedule> fixedSchedules
 ) {
 
     @Schema(description = "요일 하나와 그 요일에 이미 하는 일.")

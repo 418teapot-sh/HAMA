@@ -155,6 +155,27 @@ class GoalTest {
     }
 
     @Test
+    void 시작_상태는_생성_때_값으로_남고_현재_상태를_바꿔도_그대로다() {
+        Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+
+        goal.updateCurrentStatus("체중 75kg", TODAY);
+        goal.revise(new GoalContent("새 제목", "체중 70kg", TODAY, TODAY.plusDays(40)), TODAY);
+
+        assertThat(goal.getInitialStatus()).isEqualTo("체중 80kg");
+        assertThat(goal.getCurrentStatus()).isEqualTo("체중 70kg");
+    }
+
+    @Test
+    void 공백만_보낸_상태는_null로_저장한다() {
+        Goal goal = Goal.create(1L, new GoalContent("목표", "   ", TODAY, TODAY.plusDays(30)), TODAY);
+        assertThat(goal.getCurrentStatus()).isNull();
+        assertThat(goal.getInitialStatus()).isNull();
+
+        goal.updateCurrentStatus("  \t ", TODAY);
+        assertThat(goal.getCurrentStatus()).isNull();
+    }
+
+    @Test
     void 수정은_전체_값을_바꾸고_제목_앞뒤_공백을_지운다() {
         Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
 
