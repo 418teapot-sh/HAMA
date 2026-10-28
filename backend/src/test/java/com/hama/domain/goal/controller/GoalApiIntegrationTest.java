@@ -105,6 +105,15 @@ class GoalApiIntegrationTest {
         return createGoal(user, "매일 러닝 30분", TODAY, TODAY.plusDays(60));
     }
 
+    /** 플랜 선택(AI 호출)을 거치지 않고 선택된 A 플랜 행을 넣어 aiPlanApplied 목표로 만듭니다. */
+    private void applyAiPlan(long goalId) {
+        jdbc.update("""
+                INSERT INTO goal_plan (goal_id, variant, title, summary, preference, detail_json, total_todos,
+                                       avg_daily_minutes, selected, created_at, updated_at)
+                VALUES (?, 'A', '플랜', '요약', 'BALANCED', '{}', 0, 0, b'1', NOW(6), NOW(6))
+                """, goalId);
+    }
+
     /** API 로는 과거 종료일을 넣을 수 없으므로 DB 를 직접 바꿔 지난 목표를 만듭니다. */
     private void makePast(long goalId) {
         jdbc.update("UPDATE goal SET start_date = ?, end_date = ? WHERE goal_id = ?",
@@ -312,6 +321,7 @@ class GoalApiIntegrationTest {
     void 현재_상태만_수정하고_다른_필드는_그대로다() throws Exception {
         Session owner = signup();
         long goalId = createGoal(owner);
+        applyAiPlan(goalId);
 
         mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currentStatus\":\"토익 700점\"}"), owner))
@@ -339,6 +349,7 @@ class GoalApiIntegrationTest {
     void 현재_상태_수정은_권한과_글자수를_검증한다() throws Exception {
         Session owner = signup(), other = signup();
         long goalId = createGoal(owner);
+        applyAiPlan(goalId);
 
         mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currentStatus\":\"침범\"}"), other))
@@ -350,6 +361,25 @@ class GoalApiIntegrationTest {
                         .content("{\"currentStatus\":\"%s\"}".formatted("가".repeat(201))), owner))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.fields.currentStatus").exists());
+    }
+
+    @Test
+    void AI_플랜을_적용하지_않은_목표는_현재_상태를_수정할_수_없다() throws Exception {
+        Session owner = signup();
+        long inProgress = createGoal(owner);
+        MvcResult planning = mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"플랜 전","startDate":"%s","endDate":"%s"}
+                                """.formatted(TODAY, TODAY.plusDays(30))), owner))
+                .andExpect(status().isCreated()).andReturn();
+        long planningId = body(planning).at("/data/goalId").asLong();
+
+        for (long goalId : List.of(inProgress, planningId)) {
+            mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"currentStatus\":\"토익 700점\"}"), owner))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.error.code").value("GOAL_AI_PLAN_NOT_APPLIED"));
+        }
     }
 
     // ---- 고정 일정 ----

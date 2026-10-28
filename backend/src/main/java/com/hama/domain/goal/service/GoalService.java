@@ -102,6 +102,7 @@ public class GoalService {
     @Transactional
     public CurrentStatusResponse updateCurrentStatus(Long userId, Long goalId, String currentStatus) {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
+        requireAiPlanApplied(goalId);
         goal.updateCurrentStatus(currentStatus, today());
         return new CurrentStatusResponse(goal.getId(), goal.getCurrentStatus(), goal.getUpdatedAt());
     }
@@ -126,6 +127,12 @@ public class GoalService {
             if (!seen.add(fixed.dayOfWeek())) {
                 throw new BusinessException(GoalErrorCode.GOAL_INVALID_INPUT);
             }
+        }
+    }
+
+    private void requireAiPlanApplied(Long goalId) {
+        if (!goalPlanRepository.existsByGoalIdAndSelectedTrue(goalId)) {
+            throw new BusinessException(GoalErrorCode.GOAL_AI_PLAN_NOT_APPLIED);
         }
     }
 

@@ -96,7 +96,8 @@ public class GoalController {
 
     @Operation(summary = "현재 상태 수정",
             description = """
-                    currentStatus 만 바꿉니다. 다른 필드는 건드리지 않습니다. null 이면 지웁니다.
+                    AI 플랜을 적용한(aiPlanApplied) 목표의 currentStatus 만 바꿉니다. 다른 필드는 건드리지 않습니다. null 이면 지웁니다.
+                    플랜을 선택하지 않은 목표는 409(GOAL_AI_PLAN_NOT_APPLIED),
                     지난 목표(PAST)는 409(GOAL_NOT_EDITABLE), 404 / 403 은 상세와 같습니다.
                     """)
     @PatchMapping("/{goalId}/current-status")
