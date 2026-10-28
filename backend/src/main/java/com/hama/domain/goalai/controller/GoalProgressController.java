@@ -46,8 +46,11 @@ public class GoalProgressController {
             usedRecordCount/sourceRecordCount는 저장 요약의 사용/전체 기록 수, currentRecordCount는 현재 기록 수입니다.
             PENDING/GENERATING/READY/EMPTY/FAILED/INACTIVE 상태와 stale·generatedAt을 확인하세요.
             오류에도 원문/이전 요약을 보존합니다. GET은 누락·입력 변경을 감지해 갱신을 예약할 수 있으나 AI를 동기 호출하지 않습니다.
-            배치 처리 후 기본5초 간격으로 DB 대기를 확인하고 같은 입력은 재사용합니다. 한 변경당 최대3회, 실패 간격30/60초입니다.
-            서버 중단 예약은 max(120초, AI timeout+60초) 후 회수합니다. 종료/PLANNING은 새 생성 없이 기존 요약/이력만 조회합니다.
+            배치 처리 후 기본5초 간격으로 DB 대기를 확인하고 같은 입력은 재사용합니다.
+            목표별 AI 호출 시작은 최소60초 간격이며 연속 변경은 최신 내용으로 합칩니다. 명시 재시도로 우회할 수 없습니다.
+            한 변경당 최대3회이며 실패 간격30/60초와 최소 호출 간격 중 늦은 시각에 재시도합니다.
+            서버 중단 예약은 max(120초, AI timeout+60초) 후 회수합니다.
+            만료되어도 아직 같은 토큰을 보유한 유효 응답은 저장하며, 만료만으로 시도 횟수를 초기화하지 않습니다. 종료/PLANNING은 새 생성 없이 기존 요약/이력만 조회합니다.
             종료 후 상태 글 수정은 보존하며 stale로 표시합니다. END achieved/목표 resultStatus를 변경하지 않습니다.
             없는/삭제 목표404, 타인403.
             """)
@@ -59,7 +62,8 @@ public class GoalProgressController {
 
     @Operation(summary = "진행 요약 재시도 예약", description = """
             FAILED 상태의 명시적 무료 재시도. 원문을 다시 저장할 필요가 없습니다.
-            동일 입력 READY/EMPTY는200재사용, PENDING/GENERATING은202로 병합하여 추가 호출하지 않습니다.
+            동일 입력 READY/EMPTY는200재사용, PENDING/유효한 GENERATING은202로 병합하여 추가 호출하지 않습니다.
+            만료 예약은 남은 시도에 따라 대기/실패로 회수하며, 명시 재시도도 목표별 최소60초 호출 간격을 지킵니다.
             진행 중 아닌 목표409 GOAL_NOT_IN_PROGRESS. 없는/삭제 목표404, 타인403.
             """)
     @io.swagger.v3.oas.annotations.responses.ApiResponses({

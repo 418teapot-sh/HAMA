@@ -12,6 +12,8 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface GoalProgressSummaryRepository extends JpaRepository<GoalProgressSummary, Long> {
 
+    Optional<GoalProgressSummary> findByGoalId(Long goalId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from GoalProgressSummary s where s.goalId = :goalId")
     Optional<GoalProgressSummary> findForUpdate(Long goalId);
