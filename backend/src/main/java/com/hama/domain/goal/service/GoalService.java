@@ -2,6 +2,7 @@ package com.hama.domain.goal.service;
 
 import com.hama.domain.goal.dto.CreateGoalRequest;
 import com.hama.domain.goal.dto.CurrentStatusResponse;
+import com.hama.domain.goal.dto.FixedScheduleResponses;
 import com.hama.domain.goal.dto.GoalResponses;
 import com.hama.domain.goal.dto.UpdateGoalRequest;
 import com.hama.domain.goal.entity.Goal;
@@ -23,7 +24,11 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -91,6 +96,36 @@ public class GoalService {
         return detail(goal);
     }
 
+    /** 기간이 [from, to] 와 겹치는 목표의 요일별 고정 일정을 실제 날짜로 펼쳐, 일정이 있는 날짜만 돌려줍니다. */
+    public FixedScheduleResponses.Days fixedSchedules(Long userId, LocalDate from, LocalDate to) {
+        if (from == null || to == null || from.isAfter(to) || ChronoUnit.DAYS.between(from, to) >= 366) {
+            throw new BusinessException(GoalErrorCode.GOAL_INVALID_RANGE);
+        }
+        Map<Long, Goal> goals = new LinkedHashMap<>();
+        goalRepository.findOverlapping(userId, from, to).forEach(goal -> goals.put(goal.getId(), goal));
+        if (goals.isEmpty()) {
+            return new FixedScheduleResponses.Days(List.of());
+        }
+        Map<DayOfWeek, List<GoalFixedSchedule>> byDay = new EnumMap<>(DayOfWeek.class);
+        fixedScheduleRepository.findByGoalIdIn(goals.keySet()).stream()
+                .sorted(Comparator.comparing(GoalFixedSchedule::getGoalId))
+                .forEach(fixed -> byDay.computeIfAbsent(fixed.getDayOfWeek(), day -> new ArrayList<>()).add(fixed));
+
+        List<FixedScheduleResponses.Day> days = new ArrayList<>();
+        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+            LocalDate current = date;
+            List<FixedScheduleResponses.Item> items = byDay.getOrDefault(date.getDayOfWeek(), List.of()).stream()
+                    .filter(fixed -> covers(goals.get(fixed.getGoalId()), current))
+                    .map(fixed -> new FixedScheduleResponses.Item(fixed.getGoalId(),
+                            goals.get(fixed.getGoalId()).getTitle(), fixed.getDayOfWeek(), fixed.getContent()))
+                    .toList();
+            if (!items.isEmpty()) {
+                days.add(new FixedScheduleResponses.Day(date, items));
+            }
+        }
+        return new FixedScheduleResponses.Days(days);
+    }
+
     @Transactional
     public GoalResponses.Detail update(Long userId, Long goalId, UpdateGoalRequest request) {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
@@ -128,6 +163,10 @@ public class GoalService {
                 throw new BusinessException(GoalErrorCode.GOAL_INVALID_INPUT);
             }
         }
+    }
+
+    private static boolean covers(Goal goal, LocalDate date) {
+        return !date.isBefore(goal.getStartDate()) && !date.isAfter(goal.getEndDate());
     }
 
     private void requireAiPlanApplied(Long goalId) {

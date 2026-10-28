@@ -3,6 +3,7 @@ package com.hama.domain.goal.repository;
 import com.hama.domain.goal.entity.Goal;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -53,6 +54,15 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
             where g.userId = :userId and g.deletedAt is null
             """)
     Page<Goal> findListed(@Param("userId") Long userId, Pageable pageable);
+
+    @Query("""
+            select g from Goal g
+            where g.userId = :userId and g.deletedAt is null
+              and g.startDate <= :to and g.endDate >= :from
+            order by g.id asc
+            """)
+    List<Goal> findOverlapping(@Param("userId") Long userId, @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 
     @Query("select g from Goal g where g.id = :id and g.deletedAt is null")
     Optional<Goal> findActive(@Param("id") Long id);

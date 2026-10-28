@@ -411,6 +411,73 @@ class GoalApiIntegrationTest {
                 .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_INPUT"));
     }
 
+    private long goalWithFixedSchedules(Session user, String title, LocalDate start, LocalDate end,
+            String fixedSchedulesJson) throws Exception {
+        MvcResult result = mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"%s","startDate":"%s","endDate":"%s","fixedSchedules":%s}
+                                """.formatted(title, start, end, fixedSchedulesJson)), user))
+                .andExpect(status().isCreated()).andReturn();
+        return body(result).at("/data/goalId").asLong();
+    }
+
+    @Test
+    void 고정_일정을_목표_기간_안의_날짜별로_묶어_조회한다() throws Exception {
+        Session owner = signup();
+        // TODAY(2026-10-04)는 일요일입니다.
+        long first = goalWithFixedSchedules(owner, "토익", TODAY, TODAY.plusDays(30), """
+                [{"dayOfWeek":"MONDAY","content":"한국사 공부"},{"dayOfWeek":"WEDNESDAY","content":"야근"}]""");
+        long second = goalWithFixedSchedules(owner, "운동", TODAY.plusDays(3), TODAY.plusDays(30), """
+                [{"dayOfWeek":"MONDAY","content":"병원"},{"dayOfWeek":"WEDNESDAY","content":"헬스"},
+                 {"dayOfWeek":"FRIDAY","content":"알바"}]""");
+        goalWithFixedSchedules(signup(), "남의 목표", TODAY, TODAY.plusDays(30), """
+                [{"dayOfWeek":"MONDAY","content":"침범"}]""");
+
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules")
+                        .param("from", TODAY.toString()).param("to", TODAY.plusDays(5).toString()), owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.days.length()").value(3))
+                .andExpect(jsonPath("$.data.days[0].date").value("2026-10-05"))
+                .andExpect(jsonPath("$.data.days[0].schedules.length()").value(1))
+                .andExpect(jsonPath("$.data.days[0].schedules[0].goalId").value(first))
+                .andExpect(jsonPath("$.data.days[0].schedules[0].goalTitle").value("토익"))
+                .andExpect(jsonPath("$.data.days[0].schedules[0].dayOfWeek").value("MONDAY"))
+                .andExpect(jsonPath("$.data.days[0].schedules[0].content").value("한국사 공부"))
+                .andExpect(jsonPath("$.data.days[1].date").value("2026-10-07"))
+                .andExpect(jsonPath("$.data.days[1].schedules.length()").value(2))
+                .andExpect(jsonPath("$.data.days[1].schedules[0].content").value("야근"))
+                .andExpect(jsonPath("$.data.days[1].schedules[1].goalId").value(second))
+                .andExpect(jsonPath("$.data.days[1].schedules[1].content").value("헬스"))
+                .andExpect(jsonPath("$.data.days[2].date").value("2026-10-09"))
+                .andExpect(jsonPath("$.data.days[2].schedules[0].content").value("알바"));
+
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules")
+                        .param("from", TODAY.plusDays(40).toString()).param("to", TODAY.plusDays(50).toString()), owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.days.length()").value(0));
+    }
+
+    @Test
+    void 고정_일정_조회_범위가_잘못되면_400이다() throws Exception {
+        Session owner = signup();
+
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules")
+                        .param("from", TODAY.plusDays(1).toString()).param("to", TODAY.toString()), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_RANGE"));
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules")
+                        .param("from", TODAY.toString()).param("to", TODAY.plusDays(366).toString()), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_RANGE"));
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules").param("from", TODAY.toString()), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_RANGE"));
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules")
+                        .param("from", "2026/10/04").param("to", TODAY.toString()), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("BINDING_ERROR"));
+    }
+
     // ---- 리스트 · 삭제 ----
 
     @Test

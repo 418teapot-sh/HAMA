@@ -2,6 +2,7 @@ package com.hama.domain.goal.controller;
 
 import com.hama.domain.goal.dto.CreateGoalRequest;
 import com.hama.domain.goal.dto.CurrentStatusResponse;
+import com.hama.domain.goal.dto.FixedScheduleResponses;
 import com.hama.domain.goal.dto.GoalResponses;
 import com.hama.domain.goal.dto.UpdateCurrentStatusRequest;
 import com.hama.domain.goal.dto.UpdateGoalRequest;
@@ -14,7 +15,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -68,6 +71,21 @@ public class GoalController {
             @Valid @RequestBody CreateGoalRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(goalService.create(authUser.userId(), request)));
+    }
+
+    @Operation(summary = "고정 일정 날짜별 조회",
+            description = """
+                    기간이 [from, to] 와 겹치는 내 목표들의 요일별 고정 일정을 실제 날짜로 펼쳐 날짜별로 묶어 돌려줍니다.
+                    목표 기간 밖의 날짜는 빠지고, 일정이 하나도 없는 날짜는 응답에 없습니다. 날짜 오름차순, 같은 날은 목표 생성 순입니다.
+                    from·to 는 yyyy-MM-dd 이고 둘 다 필요합니다. 하나라도 없거나 from > to 이거나 범위가 366일 이상이면
+                    400(GOAL_INVALID_RANGE), 날짜 형식이 틀리면 400(BINDING_ERROR).
+                    """)
+    @GetMapping("/fixed-schedules")
+    public ApiResponse<FixedScheduleResponses.Days> fixedSchedules(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ApiResponse.success(goalService.fixedSchedules(authUser.userId(), from, to));
     }
 
     @Operation(summary = "목표 상세 조회",
