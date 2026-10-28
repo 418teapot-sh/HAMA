@@ -101,6 +101,26 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
     }
 
     @Test
+    void 이벤트_없는_원본_변경도_GET이_감지하되_호출_간격을_보존한다() throws Exception {
+        User user = user();
+        long goalId = goal(user);
+        record(user, goalId, "700점");
+        answer("처음 요약");
+        worker.process(goalId);
+        jdbc.update("update goal set current_status = '새 현재 상태' where goal_id = ?", goalId);
+        var state = summary(user, goalId);
+        assertThat(state.get("stale").asBoolean()).isTrue();
+        assertThat(state.get("status").asString()).isEqualTo("PENDING");
+        worker.process(goalId);
+        assertThat(calls()).isEqualTo(1);
+        TIME.advance(60);
+        answer("변경된 상태 요약");
+        worker.process(goalId);
+        assertThat(AI.requests().getLast().messages().getFirst().content()).contains("새 현재 상태");
+        assertThat(summary(user, goalId).get("stale").asBoolean()).isFalse();
+    }
+
+    @Test
     void 수정과_명시적_재시도는_영속된_60초_간격을_우회하지_못한다() throws Exception {
         User user = user();
         long goalId = goal(user);
@@ -425,13 +445,11 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
         worker.process(goalId);
         assertThat(json.readTree(AI.requests().getLast().messages().getFirst().content())
                 .get("progressRate").decimalValue()).isEqualByComparingTo("50.0");
-        // 이벤트 없는 원본 변경도 GET이 감지합니다. 예전 목표 PATCH API는 삭제됐습니다.
-        jdbc.update("update goal set current_status = '새 현재 상태' where goal_id = ?", goalId);
-        assertThat(summary(user, goalId).get("stale").asBoolean()).isTrue();
+        call(patch("/api/v1/goals/" + goalId), user, Map.of("title", "새 목표 제목"), 200);
         TIME.advance(60);
-        answer("상태 변경");
+        answer("제목 변경");
         worker.process(goalId);
-        assertThat(AI.requests().getLast().messages().getFirst().content()).contains("새 현재 상태");
+        assertThat(AI.requests().getLast().messages().getFirst().content()).contains("새 목표 제목");
     }
 
     @Test
