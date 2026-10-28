@@ -3,6 +3,7 @@ package com.hama.domain.goal.repository;
 import com.hama.domain.goal.entity.Goal;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,7 +16,8 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
 
     // 진행 중·지난 목표 필터는 플랜이 적용된(저장 status = IN_PROGRESS) 목표만 보고, PAST 는 종료일로 가릅니다.
     // 전체(필터 생략)는 PLANNING 도 포함해서, AI 흐름을 중간에 그만둔 목표를 찾아 지울 수 있게 합니다.
-    // 진행 중은 마감이 가까운 순, 지난 목표는 최근에 끝난 순, 전체는 최근에 만든 순입니다.
+    // 완료(COMPLETED)는 저장 status 로만 가르고 종료일과 무관합니다.
+    // 진행 중은 마감이 가까운 순, 지난 목표는 최근에 끝난 순, 완료는 최근에 바뀐 순, 전체는 최근에 만든 순입니다.
 
     @Query(value = """
             select g from Goal g
@@ -46,6 +48,19 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
     @Query(value = """
             select g from Goal g
             where g.userId = :userId and g.deletedAt is null
+              and g.status = com.hama.domain.goal.entity.GoalStatus.COMPLETED
+            order by g.updatedAt desc, g.id desc
+            """,
+            countQuery = """
+            select count(g) from Goal g
+            where g.userId = :userId and g.deletedAt is null
+              and g.status = com.hama.domain.goal.entity.GoalStatus.COMPLETED
+            """)
+    Page<Goal> findCompleted(@Param("userId") Long userId, Pageable pageable);
+
+    @Query(value = """
+            select g from Goal g
+            where g.userId = :userId and g.deletedAt is null
             order by g.id desc
             """,
             countQuery = """
@@ -53,6 +68,15 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
             where g.userId = :userId and g.deletedAt is null
             """)
     Page<Goal> findListed(@Param("userId") Long userId, Pageable pageable);
+
+    @Query("""
+            select g from Goal g
+            where g.userId = :userId and g.deletedAt is null
+              and g.startDate <= :to and g.endDate >= :from
+            order by g.id asc
+            """)
+    List<Goal> findOverlapping(@Param("userId") Long userId, @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 
     @Query("select g from Goal g where g.id = :id and g.deletedAt is null")
     Optional<Goal> findActive(@Param("id") Long id);

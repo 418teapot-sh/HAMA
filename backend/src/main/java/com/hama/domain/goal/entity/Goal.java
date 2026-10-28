@@ -57,7 +57,7 @@ public class Goal extends BaseTimeEntity {
     @Column(name = "end_date")
     private LocalDate endDate;
 
-    /** PLANNING / IN_PROGRESS 만 저장됩니다. 응답에는 {@link #effectiveStatus} 를 쓰세요. */
+    /** PLANNING / IN_PROGRESS / COMPLETED 만 저장됩니다. 응답에는 {@link #effectiveStatus} 를 쓰세요. */
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(nullable = false, length = 20)
@@ -82,21 +82,35 @@ public class Goal extends BaseTimeEntity {
         return goal;
     }
 
-    /** 수정 결과(기존 값과 병합한 전체 값)를 받습니다. 지난 목표는 409 입니다. */
+    /** 수정 결과(기존 값과 병합한 전체 값)를 받습니다. 지난 목표와 완료한 목표는 409 입니다. */
     public void revise(GoalContent content, LocalDate today) {
-        if (isPast(today)) {
-            throw new BusinessException(GoalErrorCode.GOAL_NOT_EDITABLE);
-        }
+        requireEditable(today);
         validate(content, status == GoalStatus.IN_PROGRESS, today);
         apply(content);
     }
 
-    /** currentStatus 만 바꿉니다. 지난 목표는 revise() 와 같은 이유로 막습니다. */
+    /** currentStatus 만 바꿉니다. 지난 목표와 완료한 목표는 revise() 와 같은 이유로 막습니다. */
     public void updateCurrentStatus(String currentStatus, LocalDate today) {
-        if (isPast(today)) {
+        requireEditable(today);
+        this.currentStatus = currentStatus == null ? null : currentStatus.strip();
+    }
+
+    /** 진행 중(종료일 전)인 목표만 완료할 수 있습니다. 남은 AI 투두는 그대로 둡니다. */
+    public void complete(LocalDate today) {
+        if (status != GoalStatus.IN_PROGRESS || isPast(today)) {
+            throw new BusinessException(GoalErrorCode.GOAL_NOT_IN_PROGRESS);
+        }
+        this.status = GoalStatus.COMPLETED;
+    }
+
+    public boolean isCompleted() {
+        return status == GoalStatus.COMPLETED;
+    }
+
+    private void requireEditable(LocalDate today) {
+        if (isPast(today) || isCompleted()) {
             throw new BusinessException(GoalErrorCode.GOAL_NOT_EDITABLE);
         }
-        this.currentStatus = currentStatus == null ? null : currentStatus.strip();
     }
 
     /** 플랜을 적용해 진행 중으로 바꿉니다. 호출하는 쪽이 PLANNING 이고 기간이 있는지 먼저 확인합니다. */
@@ -127,7 +141,7 @@ public class Goal extends BaseTimeEntity {
 
     /** 진행 중인 목표만 삭제할 수 없습니다. PLANNING 은 플랜을 아직 고르지 않은 목표라 지울 수 있어야 합니다. */
     public boolean isDeletable(LocalDate today) {
-        return status == GoalStatus.PLANNING || isPast(today);
+        return status == GoalStatus.PLANNING || isCompleted() || isPast(today);
     }
 
     public boolean isOwnedBy(Long userId) {

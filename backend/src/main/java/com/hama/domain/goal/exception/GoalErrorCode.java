@@ -12,8 +12,11 @@ public enum GoalErrorCode implements BaseErrorCode {
     GOAL_INVALID_INPUT(HttpStatus.BAD_REQUEST, "목표의 필수 정보가 올바르지 않습니다."),
     GOAL_INVALID_PERIOD(HttpStatus.BAD_REQUEST, "시작일은 종료일보다 늦을 수 없고, 종료일은 오늘 이후여야 합니다."),
     GOAL_PERIOD_TOO_LONG(HttpStatus.BAD_REQUEST, "목표 기간은 최대 1년입니다."),
-    GOAL_NOT_EDITABLE(HttpStatus.CONFLICT, "지난 목표는 수정할 수 없습니다."),
-    GOAL_NOT_DELETABLE(HttpStatus.CONFLICT, "진행 중인 목표는 삭제할 수 없습니다.");
+    GOAL_INVALID_RANGE(HttpStatus.BAD_REQUEST, "조회 시작일은 종료일보다 늦을 수 없고, 범위는 최대 366일입니다."),
+    GOAL_NOT_EDITABLE(HttpStatus.CONFLICT, "지난 목표와 완료한 목표는 수정할 수 없습니다."),
+    GOAL_NOT_IN_PROGRESS(HttpStatus.CONFLICT, "진행 중인 목표에서만 할 수 있습니다."),
+    GOAL_NOT_DELETABLE(HttpStatus.CONFLICT, "진행 중인 목표는 삭제할 수 없습니다."),
+    GOAL_AI_PLAN_NOT_APPLIED(HttpStatus.CONFLICT, "AI 플랜을 적용한 목표만 가능합니다.");
 
     private final HttpStatus status;
     private final String message;

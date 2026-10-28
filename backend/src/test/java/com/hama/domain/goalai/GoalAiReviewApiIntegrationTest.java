@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import com.hama.domain.payment.service.CreditService;
@@ -140,6 +141,41 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
 
         // 위 실패들은 모두 자격 검증 단계에서 막혀 크레딧을 쓰지 않습니다.
         assertThat(credits(user)).isEqualTo(before);
+    }
+
+    @Test
+    void 직접_완료한_목표는_종료일_전이어도_리뷰할_수_있다() throws Exception {
+        User user = user();
+        long goalId = inProgressGoal(user);
+        checkin(user, goalId, "START", 700, null);
+        checkin(user, goalId, "END", 860, true);
+        JsonNode notEnded = call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goalId), 409);
+        assertThat(notEnded.at("/error/code").asString()).isEqualTo("AI_REVIEW_GOAL_NOT_ENDED");
+
+        call(patch("/api/v1/goals/" + goalId + "/complete"), user, null, 200);
+        AI.answer(ACHIEVED_ANSWER);
+        JsonNode data = call(post("/api/v1/goals/ai/reviews"), user,
+                Map.of("goalId", goalId, "currentStatus", "토익 860점"), 201).get("data");
+
+        assertThat(data.get("achieved").asBoolean()).isTrue();
+    }
+
+    @Test
+    void 멘트는_줄바꿈_없는_한_줄씩_두_줄로_저장한다() throws Exception {
+        User user = user();
+        long goalId = reviewableGoal(user);
+
+        AI.answer("""
+                {"achieved":true,"comparison":"처음보다\\n100점 올랐어요!",
+                 "message":"%s"}
+                """.formatted("일정을 모두 소화했어요! ".repeat(5)));
+        JsonNode data = call(post("/api/v1/goals/ai/reviews"), user,
+                Map.of("goalId", goalId, "currentStatus", "토익 800점"), 201).get("data");
+
+        assertThat(data.get("comparison").asString()).isEqualTo("처음보다 100점 올랐어요!");
+        String message = data.get("message").asString();
+        assertThat(message).doesNotContain("\n").hasSizeLessThanOrEqualTo(40).startsWith("일정을 모두 소화했어요!");
+        assertThat(AI.requests().getLast().systemPrompt()).contains("40자 이하");
     }
 
     @Test

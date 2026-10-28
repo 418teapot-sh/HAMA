@@ -2,6 +2,7 @@ package com.hama.domain.goal.service;
 
 import com.hama.domain.goal.dto.CreateGoalRequest;
 import com.hama.domain.goal.dto.CurrentStatusResponse;
+import com.hama.domain.goal.dto.FixedScheduleResponses;
 import com.hama.domain.goal.dto.GoalResponses;
 import com.hama.domain.goal.dto.UpdateGoalRequest;
 import com.hama.domain.goal.entity.Goal;
@@ -23,7 +24,11 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -77,6 +82,7 @@ public class GoalService {
                 : switch (filter) {
                     case IN_PROGRESS -> goalRepository.findInProgress(userId, today, pageable);
                     case PAST -> goalRepository.findPast(userId, today, pageable);
+                    case COMPLETED -> goalRepository.findCompleted(userId, pageable);
                 };
         List<Long> goalIds = goals.getContent().stream().map(Goal::getId).toList();
         Map<Long, GoalTodoCount> counts = goalTodoRepository.countByGoals(goalIds);
@@ -91,6 +97,36 @@ public class GoalService {
         return detail(goal);
     }
 
+    /** 기간이 [from, to] 와 겹치는 목표의 요일별 고정 일정을 실제 날짜로 펼쳐, 일정이 있는 날짜만 돌려줍니다. */
+    public FixedScheduleResponses.Days fixedSchedules(Long userId, LocalDate from, LocalDate to) {
+        if (from == null || to == null || from.isAfter(to) || ChronoUnit.DAYS.between(from, to) >= 366) {
+            throw new BusinessException(GoalErrorCode.GOAL_INVALID_RANGE);
+        }
+        Map<Long, Goal> goals = new LinkedHashMap<>();
+        goalRepository.findOverlapping(userId, from, to).forEach(goal -> goals.put(goal.getId(), goal));
+        if (goals.isEmpty()) {
+            return new FixedScheduleResponses.Days(List.of());
+        }
+        Map<DayOfWeek, List<GoalFixedSchedule>> byDay = new EnumMap<>(DayOfWeek.class);
+        fixedScheduleRepository.findByGoalIdIn(goals.keySet()).stream()
+                .sorted(Comparator.comparing(GoalFixedSchedule::getGoalId))
+                .forEach(fixed -> byDay.computeIfAbsent(fixed.getDayOfWeek(), day -> new ArrayList<>()).add(fixed));
+
+        List<FixedScheduleResponses.Day> days = new ArrayList<>();
+        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+            LocalDate current = date;
+            List<FixedScheduleResponses.Item> items = byDay.getOrDefault(date.getDayOfWeek(), List.of()).stream()
+                    .filter(fixed -> covers(goals.get(fixed.getGoalId()), current))
+                    .map(fixed -> new FixedScheduleResponses.Item(fixed.getGoalId(),
+                            goals.get(fixed.getGoalId()).getTitle(), fixed.getDayOfWeek(), fixed.getContent()))
+                    .toList();
+            if (!items.isEmpty()) {
+                days.add(new FixedScheduleResponses.Day(date, items));
+            }
+        }
+        return new FixedScheduleResponses.Days(days);
+    }
+
     @Transactional
     public GoalResponses.Detail update(Long userId, Long goalId, UpdateGoalRequest request) {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
@@ -102,11 +138,22 @@ public class GoalService {
     @Transactional
     public CurrentStatusResponse updateCurrentStatus(Long userId, Long goalId, String currentStatus) {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
+        requireAiPlanApplied(goalId);
         goal.updateCurrentStatus(currentStatus, today());
         return new CurrentStatusResponse(goal.getId(), goal.getCurrentStatus(), goal.getUpdatedAt());
     }
 
-    /** 지난 목표와 PLANNING 목표만 삭제할 수 있고, 연결된 투두도 함께 소프트 삭제합니다. */
+    /** AI 플랜을 적용한 진행 중 목표를 COMPLETED 로 바꿉니다. 응답은 상세 조회와 같습니다. */
+    @Transactional
+    public GoalResponses.Detail complete(Long userId, Long goalId) {
+        Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
+        requireAiPlanApplied(goalId);
+        goal.complete(today());
+        events.publishEvent(new GoalProgressChanged(goalId));
+        return detail(goal);
+    }
+
+    /** 지난 목표·완료한 목표·PLANNING 목표만 삭제할 수 있고, 연결된 투두도 함께 소프트 삭제합니다. */
     @Transactional
     public void delete(Long userId, Long goalId) {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
@@ -126,6 +173,16 @@ public class GoalService {
             if (!seen.add(fixed.dayOfWeek())) {
                 throw new BusinessException(GoalErrorCode.GOAL_INVALID_INPUT);
             }
+        }
+    }
+
+    private static boolean covers(Goal goal, LocalDate date) {
+        return !date.isBefore(goal.getStartDate()) && !date.isAfter(goal.getEndDate());
+    }
+
+    private void requireAiPlanApplied(Long goalId) {
+        if (!goalPlanRepository.existsByGoalIdAndSelectedTrue(goalId)) {
+            throw new BusinessException(GoalErrorCode.GOAL_AI_PLAN_NOT_APPLIED);
         }
     }
 

@@ -105,6 +105,15 @@ class GoalApiIntegrationTest {
         return createGoal(user, "매일 러닝 30분", TODAY, TODAY.plusDays(60));
     }
 
+    /** 플랜 선택(AI 호출)을 거치지 않고 선택된 A 플랜 행을 넣어 aiPlanApplied 목표로 만듭니다. */
+    private void applyAiPlan(long goalId) {
+        jdbc.update("""
+                INSERT INTO goal_plan (goal_id, variant, title, summary, preference, detail_json, total_todos,
+                                       avg_daily_minutes, selected, created_at, updated_at)
+                VALUES (?, 'A', '플랜', '요약', 'BALANCED', '{}', 0, 0, b'1', NOW(6), NOW(6))
+                """, goalId);
+    }
+
     /** API 로는 과거 종료일을 넣을 수 없으므로 DB 를 직접 바꿔 지난 목표를 만듭니다. */
     private void makePast(long goalId) {
         jdbc.update("UPDATE goal SET start_date = ?, end_date = ? WHERE goal_id = ?",
@@ -312,6 +321,7 @@ class GoalApiIntegrationTest {
     void 현재_상태만_수정하고_다른_필드는_그대로다() throws Exception {
         Session owner = signup();
         long goalId = createGoal(owner);
+        applyAiPlan(goalId);
 
         mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currentStatus\":\"토익 700점\"}"), owner))
@@ -339,6 +349,7 @@ class GoalApiIntegrationTest {
     void 현재_상태_수정은_권한과_글자수를_검증한다() throws Exception {
         Session owner = signup(), other = signup();
         long goalId = createGoal(owner);
+        applyAiPlan(goalId);
 
         mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currentStatus\":\"침범\"}"), other))
@@ -350,6 +361,25 @@ class GoalApiIntegrationTest {
                         .content("{\"currentStatus\":\"%s\"}".formatted("가".repeat(201))), owner))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.fields.currentStatus").exists());
+    }
+
+    @Test
+    void AI_플랜을_적용하지_않은_목표는_현재_상태를_수정할_수_없다() throws Exception {
+        Session owner = signup();
+        long inProgress = createGoal(owner);
+        MvcResult planning = mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"플랜 전","startDate":"%s","endDate":"%s"}
+                                """.formatted(TODAY, TODAY.plusDays(30))), owner))
+                .andExpect(status().isCreated()).andReturn();
+        long planningId = body(planning).at("/data/goalId").asLong();
+
+        for (long goalId : List.of(inProgress, planningId)) {
+            mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"currentStatus\":\"토익 700점\"}"), owner))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.error.code").value("GOAL_AI_PLAN_NOT_APPLIED"));
+        }
     }
 
     // ---- 고정 일정 ----
@@ -379,6 +409,73 @@ class GoalApiIntegrationTest {
                                 """.formatted(TODAY, TODAY.plusDays(30))), owner))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_INPUT"));
+    }
+
+    private long goalWithFixedSchedules(Session user, String title, LocalDate start, LocalDate end,
+            String fixedSchedulesJson) throws Exception {
+        MvcResult result = mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"%s","startDate":"%s","endDate":"%s","fixedSchedules":%s}
+                                """.formatted(title, start, end, fixedSchedulesJson)), user))
+                .andExpect(status().isCreated()).andReturn();
+        return body(result).at("/data/goalId").asLong();
+    }
+
+    @Test
+    void 고정_일정을_목표_기간_안의_날짜별로_묶어_조회한다() throws Exception {
+        Session owner = signup();
+        // TODAY(2026-10-04)는 일요일입니다.
+        long first = goalWithFixedSchedules(owner, "토익", TODAY, TODAY.plusDays(30), """
+                [{"dayOfWeek":"MONDAY","content":"한국사 공부"},{"dayOfWeek":"WEDNESDAY","content":"야근"}]""");
+        long second = goalWithFixedSchedules(owner, "운동", TODAY.plusDays(3), TODAY.plusDays(30), """
+                [{"dayOfWeek":"MONDAY","content":"병원"},{"dayOfWeek":"WEDNESDAY","content":"헬스"},
+                 {"dayOfWeek":"FRIDAY","content":"알바"}]""");
+        goalWithFixedSchedules(signup(), "남의 목표", TODAY, TODAY.plusDays(30), """
+                [{"dayOfWeek":"MONDAY","content":"침범"}]""");
+
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules")
+                        .param("from", TODAY.toString()).param("to", TODAY.plusDays(5).toString()), owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.days.length()").value(3))
+                .andExpect(jsonPath("$.data.days[0].date").value("2026-10-05"))
+                .andExpect(jsonPath("$.data.days[0].schedules.length()").value(1))
+                .andExpect(jsonPath("$.data.days[0].schedules[0].goalId").value(first))
+                .andExpect(jsonPath("$.data.days[0].schedules[0].goalTitle").value("토익"))
+                .andExpect(jsonPath("$.data.days[0].schedules[0].dayOfWeek").value("MONDAY"))
+                .andExpect(jsonPath("$.data.days[0].schedules[0].content").value("한국사 공부"))
+                .andExpect(jsonPath("$.data.days[1].date").value("2026-10-07"))
+                .andExpect(jsonPath("$.data.days[1].schedules.length()").value(2))
+                .andExpect(jsonPath("$.data.days[1].schedules[0].content").value("야근"))
+                .andExpect(jsonPath("$.data.days[1].schedules[1].goalId").value(second))
+                .andExpect(jsonPath("$.data.days[1].schedules[1].content").value("헬스"))
+                .andExpect(jsonPath("$.data.days[2].date").value("2026-10-09"))
+                .andExpect(jsonPath("$.data.days[2].schedules[0].content").value("알바"));
+
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules")
+                        .param("from", TODAY.plusDays(40).toString()).param("to", TODAY.plusDays(50).toString()), owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.days.length()").value(0));
+    }
+
+    @Test
+    void 고정_일정_조회_범위가_잘못되면_400이다() throws Exception {
+        Session owner = signup();
+
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules")
+                        .param("from", TODAY.plusDays(1).toString()).param("to", TODAY.toString()), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_RANGE"));
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules")
+                        .param("from", TODAY.toString()).param("to", TODAY.plusDays(366).toString()), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_RANGE"));
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules").param("from", TODAY.toString()), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_RANGE"));
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules")
+                        .param("from", "2026/10/04").param("to", TODAY.toString()), owner))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("BINDING_ERROR"));
     }
 
     // ---- 리스트 · 삭제 ----
@@ -445,6 +542,71 @@ class GoalApiIntegrationTest {
         mvc.perform(auth(delete("/api/v1/goals/" + goalId), owner))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("GOAL_NOT_DELETABLE"));
+    }
+
+    // ---- 완료 ----
+
+    @Test
+    void AI_플랜을_적용한_진행_중_목표를_완료하면_COMPLETED_로_조회되고_수정은_막히고_삭제는_된다() throws Exception {
+        Session owner = signup();
+        long goalId = createGoal(owner);
+        applyAiPlan(goalId);
+        long other = createGoal(owner, "진행 중", TODAY, TODAY.plusDays(20));
+
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/complete"), owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.goalId").value(goalId))
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.aiPlanApplied").value(true));
+
+        mvc.perform(auth(get("/api/v1/goals").param("status", "COMPLETED"), owner))
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].goalId").value(goalId))
+                .andExpect(jsonPath("$.data.content[0].status").value("COMPLETED"));
+        mvc.perform(auth(get("/api/v1/goals").param("status", "IN_PROGRESS"), owner))
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].goalId").value(other));
+
+        makePast(goalId);
+        mvc.perform(auth(get("/api/v1/goals/" + goalId), owner))
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"));
+        mvc.perform(auth(get("/api/v1/goals").param("status", "PAST"), owner))
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/complete"), owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GOAL_NOT_IN_PROGRESS"));
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentStatus\":\"바꿔보기\"}"), owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GOAL_NOT_EDITABLE"));
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"바꿔보기\"}"), owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GOAL_NOT_EDITABLE"));
+
+        mvc.perform(auth(delete("/api/v1/goals/" + goalId), owner))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void 플랜을_적용하지_않았거나_지난_목표는_완료할_수_없다() throws Exception {
+        Session owner = signup(), stranger = signup();
+        long withoutPlan = createGoal(owner);
+        long past = createGoal(owner);
+        applyAiPlan(past);
+        makePast(past);
+
+        mvc.perform(auth(patch("/api/v1/goals/" + withoutPlan + "/complete"), owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GOAL_AI_PLAN_NOT_APPLIED"));
+        mvc.perform(auth(patch("/api/v1/goals/" + past + "/complete"), owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GOAL_NOT_IN_PROGRESS"));
+        mvc.perform(auth(patch("/api/v1/goals/" + past + "/complete"), stranger))
+                .andExpect(status().isForbidden());
+        mvc.perform(auth(patch("/api/v1/goals/999999999/complete"), owner))
+                .andExpect(status().isNotFound());
     }
 
     @Test

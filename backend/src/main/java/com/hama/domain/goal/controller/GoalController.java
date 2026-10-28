@@ -2,6 +2,7 @@ package com.hama.domain.goal.controller;
 
 import com.hama.domain.goal.dto.CreateGoalRequest;
 import com.hama.domain.goal.dto.CurrentStatusResponse;
+import com.hama.domain.goal.dto.FixedScheduleResponses;
 import com.hama.domain.goal.dto.GoalResponses;
 import com.hama.domain.goal.dto.UpdateCurrentStatusRequest;
 import com.hama.domain.goal.dto.UpdateGoalRequest;
@@ -14,7 +15,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,7 +32,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "목표", description = """
-        목표 직접 생성·조회·수정·삭제. 종료일이 오늘(KST)보다 이전이면 status 는 PAST(지난 목표)입니다.
+        목표 직접 생성·조회·수정·완료·삭제. 진행 중인 목표의 종료일이 오늘(KST)보다 이전이면 status 는 PAST(지난 목표)입니다.
         진행률(progressRate) = 완료된 AI_GOAL_TASK ÷ 전체 AI_GOAL_TASK × 100, 투두가 없으면 0.0.
         aiPlanApplied 는 goals/ai/plans 로 만든 플랜을 선택해 투두가 생긴 목표인지 여부입니다.
         """)
@@ -42,7 +45,7 @@ public class GoalController {
 
     @Operation(summary = "목표 리스트 조회",
             description = """
-                    status: IN_PROGRESS(진행 중, 마감 가까운 순) | PAST(지난 목표, 최근 종료 순),
+                    status: IN_PROGRESS(진행 중, 마감 가까운 순) | PAST(지난 목표, 최근 종료 순) | COMPLETED(완료, 최근 변경 순),
                     생략하면 플랜 선택 전(PLANNING)까지 포함한 전체(최근 생성 순). page 는 0부터, size 는 1~100(기본 20).
                     status 값이 잘못되면 400(BINDING_ERROR), page·size 범위를 벗어나면 400(VALIDATION_FAILED).
                     """)
@@ -68,6 +71,21 @@ public class GoalController {
             @Valid @RequestBody CreateGoalRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(goalService.create(authUser.userId(), request)));
+    }
+
+    @Operation(summary = "고정 일정 날짜별 조회",
+            description = """
+                    기간이 [from, to] 와 겹치는 내 목표들의 요일별 고정 일정을 실제 날짜로 펼쳐 날짜별로 묶어 돌려줍니다.
+                    목표 기간 밖의 날짜는 빠지고, 일정이 하나도 없는 날짜는 응답에 없습니다. 날짜 오름차순, 같은 날은 목표 생성 순입니다.
+                    from·to 는 yyyy-MM-dd 이고 둘 다 필요합니다. 하나라도 없거나 from > to 이거나 범위가 366일 이상이면
+                    400(GOAL_INVALID_RANGE), 날짜 형식이 틀리면 400(BINDING_ERROR).
+                    """)
+    @GetMapping("/fixed-schedules")
+    public ApiResponse<FixedScheduleResponses.Days> fixedSchedules(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ApiResponse.success(goalService.fixedSchedules(authUser.userId(), from, to));
     }
 
     @Operation(summary = "목표 상세 조회",
@@ -96,8 +114,9 @@ public class GoalController {
 
     @Operation(summary = "현재 상태 수정",
             description = """
-                    currentStatus 만 바꿉니다. 다른 필드는 건드리지 않습니다. null 이면 지웁니다.
-                    지난 목표(PAST)는 409(GOAL_NOT_EDITABLE), 404 / 403 은 상세와 같습니다.
+                    AI 플랜을 적용한(aiPlanApplied) 목표의 currentStatus 만 바꿉니다. 다른 필드는 건드리지 않습니다. null 이면 지웁니다.
+                    플랜을 선택하지 않은 목표는 409(GOAL_AI_PLAN_NOT_APPLIED),
+                    지난 목표(PAST)·완료한 목표(COMPLETED)는 409(GOAL_NOT_EDITABLE), 404 / 403 은 상세와 같습니다.
                     """)
     @PatchMapping("/{goalId}/current-status")
     public ApiResponse<CurrentStatusResponse> updateCurrentStatus(
@@ -106,9 +125,24 @@ public class GoalController {
         return ApiResponse.success(goalService.updateCurrentStatus(authUser.userId(), goalId, request.currentStatus()));
     }
 
+    @Operation(summary = "목표 완료",
+            description = """
+                    AI 플랜을 적용한 진행 중(IN_PROGRESS) 목표를 COMPLETED 로 바꿉니다. 응답은 상세 조회와 같습니다.
+                    완료한 목표는 종료일이 지나도 PAST 가 되지 않고, 수정·투두 추가·미루기·재배치를 할 수 없습니다. 남은 AI 투두는 지우지 않습니다.
+                    플랜을 선택하지 않은 목표는 409(GOAL_AI_PLAN_NOT_APPLIED),
+                    이미 완료했거나 지난 목표(PAST)는 409(GOAL_NOT_IN_PROGRESS), 404 / 403 은 상세와 같습니다.
+                    """)
+    @PatchMapping("/{goalId}/complete")
+    public ApiResponse<GoalResponses.Detail> complete(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long goalId) {
+        return ApiResponse.success(goalService.complete(authUser.userId(), goalId));
+    }
+
     @Operation(summary = "목표 삭제",
             description = """
-                    지난 목표(PAST)와 플랜 선택 전(PLANNING) 목표만 삭제할 수 있고, 진행 중(IN_PROGRESS)이면 409(GOAL_NOT_DELETABLE)입니다.
+                    지난 목표(PAST)·완료한 목표(COMPLETED)·플랜 선택 전(PLANNING) 목표만 삭제할 수 있고,
+                    진행 중(IN_PROGRESS)이면 409(GOAL_NOT_DELETABLE)입니다.
                     연결된 투두도 함께 소프트 삭제됩니다.
                     성공 시 HTTP 200, 공통 응답의 data 는 null 입니다. 404 / 403 은 상세와 같습니다.
                     """)
