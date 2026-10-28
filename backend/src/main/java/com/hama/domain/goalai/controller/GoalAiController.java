@@ -108,7 +108,8 @@ public class GoalAiController {
                     동일 입력의 저장 결과는 200으로 재사용하며 추가 AI 호출·차감이 없습니다(잔액 0도 재사용 가능).
                     신규 생성은 201이며 크레딧 1개를 쓰고(402 INSUFFICIENT_CREDITS), 실패하면 한 번만 돌려줍니다.
                     생성 중에는 409(AI_REVIEW_GENERATING)이며 추가 호출·차감하지 않습니다.
-                    예약은 AI 타임아웃+60초(최소 120초) 후 만료하며 다음 생성 요청에서 회수·환급합니다.
+                    예약은 AI 타임아웃+60초(최소 120초) 후 만료하며 다음 조회/생성 요청에서 회수·환급합니다.
+                    아직 같은 토큰을 보유하고 입력이 유효한 응답은 만료만으로 폐기하지 않습니다.
                     이전 리뷰는 입력 지문이 없어 최초 재생성 한 번은 신규 생성으로 처리됩니다.
                     PLANNING 목표는 409(AI_REVIEW_GOAL_NOT_STARTED), 완료(COMPLETED)하지 않았고 종료일도 지나지 않았으면 409(AI_REVIEW_GOAL_NOT_ENDED),
                     END 체크인이 없으면 409(AI_REVIEW_END_REQUIRED), AI 응답을 기다리는 동안 목표·체크인이 바뀌면 409(AI_REVIEW_OUTDATED).
@@ -130,7 +131,11 @@ public class GoalAiController {
     }
 
     @Operation(summary = "목표 종료 AI 리뷰 조회",
-            description = "가장 최근에 만든 리뷰를 돌려줍니다. 아직 리뷰가 없으면 404(AI_REVIEW_NOT_FOUND). 403 은 생성과 같습니다.")
+            description = """
+                    가장 최근에 만든 리뷰를 돌려줍니다. 만료된 생성 예약이 있으면 차감분을 한 번 환급합니다.
+                    이후 리뷰 없음404(AI_REVIEW_NOT_FOUND)·삭제 목표404여도 환급은 보존됩니다. 403은 생성과 같습니다.
+                    조회/생성 요청이 없을 때의 백그라운드 환급은 보장하지 않습니다. 잔액은 내 정보 API로 다시 확인하세요.
+                    """)
     @GetMapping("/reviews")
     public ApiResponse<ReviewResponse> review(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
