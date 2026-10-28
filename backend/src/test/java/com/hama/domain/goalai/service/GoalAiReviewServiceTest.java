@@ -32,12 +32,18 @@ class GoalAiReviewServiceTest {
     }
 
     @Test
-    void 앞뒤_공백은_지우고_500자가_넘으면_자른다() {
-        assertThat(GoalAiReviewService.cut("  좋아요  ")).isEqualTo("좋아요");
-        String tooLong = "가".repeat(600);
-        String cut = GoalAiReviewService.cut(tooLong);
-        assertThat(cut).hasSize(500);
-        assertThat(cut).isEqualTo("가".repeat(500));
+    void 멘트는_줄바꿈_없는_한_줄로_만들고_40자가_넘으면_자른다() {
+        assertThat(GoalAiReviewService.oneLine("  좋아요  ")).isEqualTo("좋아요");
+        assertThat(GoalAiReviewService.oneLine("처음보다\n100점   올랐어요!\r\n")).isEqualTo("처음보다 100점 올랐어요!");
+        assertThat(GoalAiReviewService.oneLine("가".repeat(60))).isEqualTo("가".repeat(40));
+        assertThat(GoalAiReviewService.oneLine("가".repeat(39) + " 나다")).isEqualTo("가".repeat(39));
+    }
+
+    @Test
+    void 이모지는_반으로_잘리지_않는다() {
+        String cut = GoalAiReviewService.oneLine("가".repeat(39) + "🎉🎉");
+        assertThat(cut).isEqualTo("가".repeat(39) + "🎉");
+        assertThat(cut.codePointCount(0, cut.length())).isEqualTo(40);
     }
 
     @Test

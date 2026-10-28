@@ -53,7 +53,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class GoalAiReviewService {
 
-    private static final int MAX_TEXT = 500;
+    private static final int MAX_LINE = 40;
     private static final int MAX_NOTE_LENGTH = 300;
     private static final int MAX_MID_CHECKINS = 20;
 
@@ -62,10 +62,11 @@ public class GoalAiReviewService {
             목표 정보(JSON: 목표 제목, 목표를 시작할 때 입력한 현재 상태(initialStatus), 투두 진행률, START/MID/END 체크인 기록,
             지금(종료 시점) 입력한 상태(currentStatus))를 보고 판단해. initialStatus 와 currentStatus 는 자유 텍스트라 숫자가 아닐 수 있어.
             achieved 는 네가 스스로 판정해. END 체크인의 achieved 는 참고만 하고 그대로 따르지 마.
+            화면에 두 줄로 보여 주므로 comparison 과 message 는 각각 줄바꿈 없는 짧은 한 문장(%d자 이하)이어야 해.
             반드시 아래 필드를 가진 JSON 객체 하나로만 답해.
             {"achieved": true 또는 false,
-             "comparison": initialStatus·currentStatus·투두 진행률을 비교하는 한국어 문장(500자 이하),
-             "message": achieved 가 true 면 칭찬, false 면 격려하는 한국어 문장(500자 이하)}
+             "comparison": initialStatus·currentStatus·투두 진행률을 비교한 한 줄(예: "처음보다 100점 올랐어요!"),
+             "message": achieved 가 true 면 칭찬, false 면 격려하는 한 줄(예: "일정을 모두 소화했어요!")}
             """;
 
     private final GoalRepository goals;
@@ -110,11 +111,11 @@ public class GoalAiReviewService {
 
         try {
             ReviewAnswer answer = aiClient.chatForJson(AiRequest.of("goal-review",
-                    REVIEW_PROMPT.formatted(LocalDate.now(clock)),
+                    REVIEW_PROMPT.formatted(LocalDate.now(clock), MAX_LINE),
                     List.of(AiMessage.user(json.write(snapshot.payload())))), ReviewAnswer.class);
             boolean achieved = validate(answer);
-            String comparison = cut(answer.comparison());
-            String message = cut(answer.message());
+            String comparison = oneLine(answer.comparison());
+            String message = oneLine(answer.message());
 
             return transaction.execute(status -> {
                 lockOwner(userId, goalId);
@@ -292,9 +293,13 @@ public class GoalAiReviewService {
         return answer.achieved();
     }
 
-    static String cut(String text) {
-        String stripped = text.strip();
-        return stripped.length() <= MAX_TEXT ? stripped : stripped.substring(0, MAX_TEXT);
+    /** 프롬프트를 어겨도 화면에 한 줄로 나가도록 줄바꿈·연속 공백을 공백 하나로 바꾸고 MAX_LINE 글자(코드포인트)로 자릅니다. */
+    static String oneLine(String text) {
+        String flat = text.replaceAll("\\s+", " ").strip();
+        if (flat.codePointCount(0, flat.length()) <= MAX_LINE) {
+            return flat;
+        }
+        return flat.substring(0, flat.offsetByCodePoints(0, MAX_LINE)).strip();
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

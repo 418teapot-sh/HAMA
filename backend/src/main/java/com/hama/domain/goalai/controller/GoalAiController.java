@@ -103,6 +103,7 @@ public class GoalAiController {
     @Operation(summary = "목표 종료 AI 리뷰 생성",
             description = """
                     END 체크인 뒤 목표 전체(지표·투두 진행률·체크인 기록)를 AI 에 넘겨 달성 여부와 성과 비교·칭찬/격려 멘트를 돌려받습니다.
+                    comparison(성과 비교)과 message(칭찬/격려)는 화면에 두 줄로 보여 주도록 각각 줄바꿈 없는 40자 이하 한 줄입니다.
                     achieved 는 AI 가 직접 판정하며 END 체크인의 achieved 는 참고만 합니다. 목표당 리뷰는 1건이고, 입력이 달라 새로 생성하면 덮어씁니다.
                     동일 입력의 저장 결과는 200으로 재사용하며 추가 AI 호출·차감이 없습니다(잔액 0도 재사용 가능).
                     신규 생성은 201이며 크레딧 1개를 쓰고(402 INSUFFICIENT_CREDITS), 실패하면 한 번만 돌려줍니다.
