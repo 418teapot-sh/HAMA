@@ -79,7 +79,6 @@ liner:
   reasoning-effort: low
 
 paddle:
-  api-key: ${PADDLE_API_KEY:}
   # 웹훅 서명 검증용. 이게 없으면 아무나 "결제 완료" 웹훅을 위조해서
   # 크레딧을 충전할 수 있습니다.
   webhook-secret: ${PADDLE_WEBHOOK_SECRET:}
