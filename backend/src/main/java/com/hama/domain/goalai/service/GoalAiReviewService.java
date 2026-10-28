@@ -24,6 +24,7 @@ import com.hama.global.ai.AiMessage;
 import com.hama.global.ai.AiRequest;
 import com.hama.global.ai.LinerProperties;
 import com.hama.global.exception.BusinessException;
+import com.hama.global.exception.GlobalErrorCode;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -81,6 +82,7 @@ public class GoalAiReviewService {
     private final CreditService credits;
     private final GoalAiJson json;
     private final TransactionTemplate transaction;
+    private final TransactionTemplate recovery;
     private final Clock clock;
     private final UserRepository users;
     private final GoalReviewGenerationRepository generations;
@@ -99,6 +101,9 @@ public class GoalAiReviewService {
         this.json = json;
         this.transaction = new TransactionTemplate(transaction.getTransactionManager());
         this.transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        this.recovery = new TransactionTemplate(transaction.getTransactionManager());
+        this.recovery.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        this.recovery.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.clock = clock;
         this.users = users;
         this.generations = generations;
@@ -127,7 +132,7 @@ public class GoalAiReviewService {
                         LocalDate.now(clock));
                 GoalReviewGeneration generation = generations.findByGoalId(goalId)
                         .orElseThrow(() -> new BusinessException(GoalAiErrorCode.AI_REVIEW_OUTDATED));
-                if (!generation.owns(snapshot.token()) || generation.expired(LocalDateTime.now(clock))
+                if (!generation.owns(snapshot.token())
                         || !fingerprint(payload(goal, currentStatus)).equals(snapshot.inputHash())) {
                     throw new BusinessException(GoalAiErrorCode.AI_REVIEW_OUTDATED);
                 }
@@ -138,7 +143,7 @@ public class GoalAiReviewService {
                 String compared = snapshot.payload().currentStatus();
                 GoalReview review = existing.orElseGet(() -> GoalReview.create(goalId, achieved, comparison,
                         message, compared));
-                review.overwrite(achieved, comparison, message, compared);
+                existing.ifPresent(saved -> saved.overwrite(achieved, comparison, message, compared));
                 reviews.saveAndFlush(review);
                 goal.recordResult(achieved);
                 generation.complete(snapshot.inputHash(), resultFingerprint(review));
@@ -182,6 +187,7 @@ public class GoalAiReviewService {
 
     /** 사용자 → 목표 순서. 소프트 삭제 후 환급도 같은 순서로 직렬화합니다. */
     private void lockOwner(Long userId, Long goalId) {
+        requireOwner(userId, goalId);
         users.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
         Long owner = generations.lockGoalOwner(goalId)
@@ -192,8 +198,17 @@ public class GoalAiReviewService {
         }
     }
 
+    private void requireOwner(Long userId, Long goalId) {
+        var owner = generations.findGoalOwner(goalId)
+                .orElseThrow(() -> new BusinessException(GoalErrorCode.GOAL_NOT_FOUND));
+        if (!owner.getUserId().equals(userId)) {
+            throw new BusinessException(owner.getDeletedAt() == null
+                    ? GlobalErrorCode.FORBIDDEN : GoalErrorCode.GOAL_NOT_FOUND);
+        }
+    }
+
     private void recoverExpired(Long userId, Long goalId) {
-        transaction.executeWithoutResult(status -> {
+        recovery.executeWithoutResult(status -> {
             lockOwner(userId, goalId);
             generations.findByGoalId(goalId).filter(g -> g.expired(LocalDateTime.now(clock)))
                     .ifPresent(g -> refundAndRelease(userId, g));
@@ -246,6 +261,12 @@ public class GoalAiReviewService {
     }
 
     public ReviewResponse get(Long userId, Long goalId) {
+        boolean expired = Boolean.TRUE.equals(transaction.execute(status -> {
+            requireOwner(userId, goalId);
+            return generations.findByGoalId(goalId).filter(g -> g.expired(LocalDateTime.now(clock))).isPresent();
+        }));
+        // 보통 GET은 잠그지 않습니다. 회수는 별도 커밋하여 아래의 리뷰 없음/삭제 목표 404에도 보존합니다.
+        if (expired) recoverExpired(userId, goalId);
         return transaction.execute(status -> {
             Goal goal = GoalAiPlanService.owned(goals.findActive(goalId), userId);
             GoalReview review = reviews.findByGoalId(goalId)
