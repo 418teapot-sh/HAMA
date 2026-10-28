@@ -122,8 +122,9 @@ class GoalTest {
         goal.startPlan();
         assertThat(goal.isDeletable(TODAY)).isFalse();
 
-        goal.complete(TODAY);
+        goal.complete(TODAY.atTime(10, 0));
 
+        assertThat(goal.getCompletedAt()).isEqualTo(TODAY.atTime(10, 0));
         assertThat(goal.effectiveStatus(TODAY)).isEqualTo(GoalStatus.COMPLETED);
         assertThat(goal.effectiveStatus(TODAY.plusDays(60))).isEqualTo(GoalStatus.COMPLETED);
         assertThat(goal.isPast(TODAY.plusDays(60))).isFalse();
@@ -134,9 +135,21 @@ class GoalTest {
         assertThatThrownBy(() -> goal.updateCurrentStatus("새 상태", TODAY))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_NOT_EDITABLE);
-        assertThatThrownBy(() -> goal.complete(TODAY))
+        assertThatThrownBy(() -> goal.complete(TODAY.atTime(11, 0)))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_NOT_IN_PROGRESS);
+        assertThat(goal.getCompletedAt()).isEqualTo(TODAY.atTime(10, 0));
+    }
+
+    @Test
+    void 고정_일정은_진행_중이면_종료일까지_완료하면_완료일까지_보인다() {
+        Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+        goal.startPlan();
+        assertThat(goal.scheduleEndDate()).isEqualTo(TODAY.plusDays(30));
+
+        goal.complete(TODAY.plusDays(5).atTime(23, 0));
+
+        assertThat(goal.scheduleEndDate()).isEqualTo(TODAY.plusDays(5));
     }
 
     @Test
@@ -145,10 +158,10 @@ class GoalTest {
         Goal past = Goal.create(1L, content(TODAY.minusDays(10), TODAY), TODAY);
         past.startPlan();
 
-        assertThatThrownBy(() -> planning.complete(TODAY))
+        assertThatThrownBy(() -> planning.complete(TODAY.atTime(10, 0)))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_NOT_IN_PROGRESS);
-        assertThatThrownBy(() -> past.complete(TODAY.plusDays(1)))
+        assertThatThrownBy(() -> past.complete(TODAY.plusDays(1).atStartOfDay()))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_NOT_IN_PROGRESS);
         assertThat(past.effectiveStatus(TODAY.plusDays(1))).isEqualTo(GoalStatus.PAST);

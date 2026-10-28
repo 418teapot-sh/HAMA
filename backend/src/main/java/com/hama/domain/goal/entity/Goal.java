@@ -72,6 +72,10 @@ public class Goal extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private GoalStatus status;
 
+    /** COMPLETED 로 바꾼 시각. COMPLETED 가 아니면 null 입니다. */
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
     /** 성공한 A/B 플랜 생성 횟수. {@link #MAX_PLAN_GENERATIONS} 에 닿으면 더 만들 수 없습니다. */
     @Column(name = "plan_generation_count", nullable = false)
     private int planGenerationCount;
@@ -110,15 +114,24 @@ public class Goal extends BaseTimeEntity {
     }
 
     /** 진행 중(종료일 전)인 목표만 완료할 수 있습니다. 남은 AI 투두는 그대로 둡니다. */
-    public void complete(LocalDate today) {
-        if (status != GoalStatus.IN_PROGRESS || isPast(today)) {
+    public void complete(LocalDateTime now) {
+        if (status != GoalStatus.IN_PROGRESS || isPast(now.toLocalDate())) {
             throw new BusinessException(GoalErrorCode.GOAL_NOT_IN_PROGRESS);
         }
         this.status = GoalStatus.COMPLETED;
+        this.completedAt = now;
     }
 
     public boolean isCompleted() {
         return status == GoalStatus.COMPLETED;
+    }
+
+    /** 고정 일정을 보여줄 마지막 날. 완료한 목표는 종료일 전이라도 완료한 날까지입니다. */
+    public LocalDate scheduleEndDate() {
+        if (isCompleted() && completedAt != null && completedAt.toLocalDate().isBefore(endDate)) {
+            return completedAt.toLocalDate();
+        }
+        return endDate;
     }
 
     private void requireEditable(LocalDate today) {

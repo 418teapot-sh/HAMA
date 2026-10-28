@@ -129,7 +129,7 @@ AI 를 부르는 API(9, 13) 공통: `429 AI_RATE_LIMIT`, `502 AI_UPSTREAM_ERROR`
 
 | 쿼리 | 필수 | 설명 |
 | --- | --- | --- |
-| `status` | X | `IN_PROGRESS`(마감 가까운 순) / `PAST`(최근 종료 순) / `COMPLETED`(최근 변경 순). 생략하면 PLANNING 포함 전체(최근 생성 순) |
+| `status` | X | `IN_PROGRESS`(마감 가까운 순) / `PAST`(최근 종료 순) / `COMPLETED`(최근 완료한 순). 생략하면 PLANNING 포함 전체(최근 생성 순) |
 | `page` | X | 기본 0 |
 | `size` | X | 기본 20, 최대 100 |
 
@@ -296,13 +296,15 @@ AI 없이 목표만 만듭니다. 항상 `PLANNING` 으로 시작하고 투두�
 - 수정(4, 5번), AI 투두 추가·미루기·재배치를 할 수 없습니다.
 - 삭제는 할 수 있습니다.
 - 남은 AI 투두는 지워지지 않습니다.
+- 고정 일정(8번)은 완료한 날까지만 나옵니다.
 - 종료일 전이어도 종료 AI 리뷰(13번)를 만들 수 있습니다 (END 체크인은 필요).
 
 **응답** `GoalDetail` (3번과 같음, `status: "COMPLETED"`)
 
 **에러**
-- `409 GOAL_AI_PLAN_NOT_APPLIED`: 플랜을 선택하지 않은 목표
+상태를 먼저 확인하고, 그다음 플랜 적용 여부를 봅니다.
 - `409 GOAL_NOT_IN_PROGRESS`: PLANNING, 이미 COMPLETED, 또는 PAST
+- `409 GOAL_AI_PLAN_NOT_APPLIED`: 진행 중인데 선택한 플랜이 없는 목표
 
 ---
 
@@ -328,9 +330,11 @@ AI 없이 목표만 만듭니다. 항상 `PLANNING` 으로 시작하고 투두�
 | 쿼리 | 필수 | 설명 |
 | --- | --- | --- |
 | `from` | O | `yyyy-MM-dd` |
-| `to` | O | `yyyy-MM-dd`. from 부터 366일 미만 |
+| `to` | O | `yyyy-MM-dd`. 양 끝 포함 최대 366일 (`to` 는 `from` + 365일까지) |
 
-- 각 목표의 기간(startDate~endDate) 밖의 날짜는 빠집니다.
+- 플랜을 고른 목표만 나옵니다. 플랜 선택 전(`PLANNING`) 목표의 고정 일정은 나오지 않습니다.
+- 진행 중·지난 목표는 기간(startDate~endDate) 안의 날짜에만 나옵니다.
+- 완료한 목표(`COMPLETED`)는 완료한 날까지만 나옵니다. 그 다음 날부터는 빠집니다.
 - 일정이 하나도 없는 날짜는 응답에 없습니다.
 - 날짜 오름차순, 같은 날짜 안에서는 목표를 만든 순서입니다.
 
@@ -357,7 +361,7 @@ AI 없이 목표만 만듭니다. 항상 `PLANNING` 으로 시작하고 투두�
 ```
 
 **에러**
-- `400 GOAL_INVALID_RANGE`: from/to 누락, from > to, 366일 이상
+- `400 GOAL_INVALID_RANGE`: from/to 누락, from > to, 양 끝 포함 366일 초과
 - `400 BINDING_ERROR`: 날짜 형식이 `yyyy-MM-dd` 가 아님
 
 ---

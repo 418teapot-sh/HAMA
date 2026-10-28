@@ -26,14 +26,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -109,14 +109,14 @@ public class GoalService {
         if (from == null || to == null || from.isAfter(to) || ChronoUnit.DAYS.between(from, to) >= 366) {
             throw new BusinessException(GoalErrorCode.GOAL_INVALID_RANGE);
         }
-        Map<Long, Goal> goals = new LinkedHashMap<>();
-        goalRepository.findOverlapping(userId, from, to).forEach(goal -> goals.put(goal.getId(), goal));
+        Map<Long, Goal> goals = goalRepository.findOverlapping(userId, from, to).stream()
+                .collect(Collectors.toMap(Goal::getId, Function.identity()));
         if (goals.isEmpty()) {
             return new FixedScheduleResponses.Days(List.of());
         }
+        // 같은 날짜 안에서는 목표 생성 순(goalId 오름차순)이어야 해서 조회 순서를 그대로 씁니다.
         Map<DayOfWeek, List<GoalFixedSchedule>> byDay = new EnumMap<>(DayOfWeek.class);
-        fixedScheduleRepository.findByGoalIdIn(goals.keySet()).stream()
-                .sorted(Comparator.comparing(GoalFixedSchedule::getGoalId))
+        fixedScheduleRepository.findByGoalIdInOrderByGoalIdAsc(goals.keySet())
                 .forEach(fixed -> byDay.computeIfAbsent(fixed.getDayOfWeek(), day -> new ArrayList<>()).add(fixed));
 
         List<FixedScheduleResponses.Day> days = new ArrayList<>();
@@ -152,14 +152,17 @@ public class GoalService {
         return new CurrentStatusResponse(goal.getId(), goal.getCurrentStatus(), goal.getUpdatedAt());
     }
 
-    /** AI 플랜을 적용한 진행 중 목표를 COMPLETED 로 바꿉니다. 응답은 상세 조회와 같습니다. */
+    /**
+     * AI 플랜을 적용한 진행 중 목표를 COMPLETED 로 바꿉니다. 응답은 상세 조회와 같습니다.
+     * 상태(GOAL_NOT_IN_PROGRESS)를 플랜 적용 여부보다 먼저 봅니다. 진행 요약은 완료 목표에서 갱신하지 않으므로
+     * 이벤트를 발행하지 않습니다.
+     */
     @Transactional
     public GoalResponses.Detail complete(Long userId, Long goalId) {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
+        goal.complete(LocalDateTime.now(clock).truncatedTo(ChronoUnit.SECONDS));
         requireAiPlanApplied(goalId);
-        goal.complete(today());
-        events.publishEvent(new GoalProgressChanged(goalId));
-        return detail(goal);
+        return detail(goal, true);
     }
 
     /** 지난 목표·완료한 목표·PLANNING 목표만 삭제할 수 있고, 연결된 투두도 함께 소프트 삭제합니다. */
@@ -186,7 +189,7 @@ public class GoalService {
     }
 
     private static boolean covers(Goal goal, LocalDate date) {
-        return !date.isBefore(goal.getStartDate()) && !date.isAfter(goal.getEndDate());
+        return !date.isBefore(goal.getStartDate()) && !date.isAfter(goal.scheduleEndDate());
     }
 
     private void requireAiPlanApplied(Long goalId) {
@@ -196,7 +199,10 @@ public class GoalService {
     }
 
     private GoalResponses.Detail detail(Goal goal) {
-        boolean aiPlanApplied = goalPlanRepository.existsByGoalIdAndSelectedTrue(goal.getId());
+        return detail(goal, goalPlanRepository.existsByGoalIdAndSelectedTrue(goal.getId()));
+    }
+
+    private GoalResponses.Detail detail(Goal goal, boolean aiPlanApplied) {
         List<GoalFixedSchedule> fixedSchedules = fixedScheduleRepository.findByGoalIdOrderByDayOfWeekAsc(goal.getId());
         return GoalResponses.Detail.from(goal, today(),
                 goalTodoRepository.countByGoal(goal.getId()).progressRate(), aiPlanApplied, fixedSchedules);

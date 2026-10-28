@@ -17,7 +17,7 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
     // 진행 중·지난 목표 필터는 플랜이 적용된(저장 status = IN_PROGRESS) 목표만 보고, PAST 는 종료일로 가릅니다.
     // 전체(필터 생략)는 PLANNING 도 포함해서, AI 흐름을 중간에 그만둔 목표를 찾아 지울 수 있게 합니다.
     // 완료(COMPLETED)는 저장 status 로만 가르고 종료일과 무관합니다.
-    // 진행 중은 마감이 가까운 순, 지난 목표는 최근에 끝난 순, 완료는 최근에 바뀐 순, 전체는 최근에 만든 순입니다.
+    // 진행 중은 마감이 가까운 순, 지난 목표는 최근에 끝난 순, 완료는 최근에 완료한 순, 전체는 최근에 만든 순입니다.
 
     @Query(value = """
             select g from Goal g
@@ -49,7 +49,7 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
             select g from Goal g
             where g.userId = :userId and g.deletedAt is null
               and g.status = com.hama.domain.goal.entity.GoalStatus.COMPLETED
-            order by g.updatedAt desc, g.id desc
+            order by g.completedAt desc, g.id desc
             """,
             countQuery = """
             select count(g) from Goal g
@@ -69,9 +69,13 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
             """)
     Page<Goal> findListed(@Param("userId") Long userId, Pageable pageable);
 
+    // 고정 일정은 플랜을 고른 목표만 봅니다. PLANNING(버려졌을 수 있는 목표)은 빼고,
+    // COMPLETED 는 완료일까지만 보이도록 호출하는 쪽이 Goal.scheduleEndDate() 로 자릅니다.
     @Query("""
             select g from Goal g
             where g.userId = :userId and g.deletedAt is null
+              and g.status in (com.hama.domain.goal.entity.GoalStatus.IN_PROGRESS,
+                               com.hama.domain.goal.entity.GoalStatus.COMPLETED)
               and g.startDate <= :to and g.endDate >= :from
             order by g.id asc
             """)

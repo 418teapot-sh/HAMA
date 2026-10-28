@@ -200,7 +200,8 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
 
         assertThat(data.get("comparison").asString()).isEqualTo("처음보다 100점 올랐어요!");
         String message = data.get("message").asString();
-        assertThat(message).doesNotContain("\n").hasSizeLessThanOrEqualTo(40).startsWith("일정을 모두 소화했어요!");
+        assertThat(message).doesNotContain("\n").hasSizeLessThanOrEqualTo(40).startsWith("일정을 모두 소화했어요!")
+                .endsWith("…");
         assertThat(AI.requests().getLast().systemPrompt()).contains("40자 이하");
     }
 

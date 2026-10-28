@@ -9,5 +9,5 @@ public interface GoalFixedScheduleRepository extends JpaRepository<GoalFixedSche
 
     List<GoalFixedSchedule> findByGoalIdOrderByDayOfWeekAsc(Long goalId);
 
-    List<GoalFixedSchedule> findByGoalIdIn(Collection<Long> goalIds);
+    List<GoalFixedSchedule> findByGoalIdInOrderByGoalIdAsc(Collection<Long> goalIds);
 }
