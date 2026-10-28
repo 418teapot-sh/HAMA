@@ -382,6 +382,26 @@ class GoalApiIntegrationTest {
         }
     }
 
+    @Test
+    void 크레딧이_0이면_목표를_만들지_않고_402이며_차감하지_않는다() throws Exception {
+        Session owner = signup();
+        jdbc.update("UPDATE users SET credits = 0 WHERE user_id = ?", owner.userId());
+
+        mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"목표","startDate":"%s","endDate":"%s"}
+                                """.formatted(TODAY, TODAY.plusDays(30))), owner))
+                .andExpect(status().isPaymentRequired())
+                .andExpect(jsonPath("$.error.code").value("INSUFFICIENT_CREDITS"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM goal WHERE user_id = ?", Long.class, owner.userId()))
+                .isZero();
+
+        jdbc.update("UPDATE users SET credits = 1 WHERE user_id = ?", owner.userId());
+        createGoal(owner);
+        assertThat(jdbc.queryForObject("SELECT credits FROM users WHERE user_id = ?", Integer.class, owner.userId()))
+                .isEqualTo(1);
+    }
+
     // ---- 고정 일정 ----
 
     @Test
