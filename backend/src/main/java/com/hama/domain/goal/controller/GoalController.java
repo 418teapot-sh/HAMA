@@ -45,7 +45,7 @@ public class GoalController {
 
     @Operation(summary = "목표 리스트 조회",
             description = """
-                    status: IN_PROGRESS(진행 중, 마감 가까운 순) | PAST(지난 목표, 최근 종료 순) | COMPLETED(완료, 최근 변경 순),
+                    status: IN_PROGRESS(진행 중, 마감 가까운 순) | PAST(지난 목표, 최근 종료 순) | COMPLETED(완료, 최근 완료한 순),
                     생략하면 플랜 선택 전(PLANNING)까지 포함한 전체(최근 생성 순). page 는 0부터, size 는 1~100(기본 20).
                     status 값이 잘못되면 400(BINDING_ERROR), page·size 범위를 벗어나면 400(VALIDATION_FAILED).
                     """)
@@ -78,9 +78,11 @@ public class GoalController {
     @Operation(summary = "고정 일정 날짜별 조회",
             description = """
                     기간이 [from, to] 와 겹치는 내 목표들의 요일별 고정 일정을 실제 날짜로 펼쳐 날짜별로 묶어 돌려줍니다.
-                    목표 기간 밖의 날짜는 빠지고, 일정이 하나도 없는 날짜는 응답에 없습니다. 날짜 오름차순, 같은 날은 목표 생성 순입니다.
-                    from·to 는 yyyy-MM-dd 이고 둘 다 필요합니다. 하나라도 없거나 from > to 이거나 범위가 366일 이상이면
-                    400(GOAL_INVALID_RANGE), 날짜 형식이 틀리면 400(BINDING_ERROR).
+                    플랜을 고른 목표만 봅니다. 진행 중(IN_PROGRESS·PAST)은 목표 기간 안, 완료(COMPLETED)는 완료한 날까지만 나오고,
+                    플랜 선택 전(PLANNING) 목표는 나오지 않습니다. 일정이 하나도 없는 날짜는 응답에 없습니다.
+                    날짜 오름차순, 같은 날은 목표 생성 순입니다.
+                    from·to 는 yyyy-MM-dd 이고 둘 다 필요하며, 양 끝 포함 최대 366일(to 는 from + 365일까지)입니다.
+                    하나라도 없거나 from > to 이거나 366일을 넘으면 400(GOAL_INVALID_RANGE), 날짜 형식이 틀리면 400(BINDING_ERROR).
                     """)
     @GetMapping("/fixed-schedules")
     public ApiResponse<FixedScheduleResponses.Days> fixedSchedules(
@@ -131,8 +133,8 @@ public class GoalController {
             description = """
                     AI 플랜을 적용한 진행 중(IN_PROGRESS) 목표를 COMPLETED 로 바꿉니다. 응답은 상세 조회와 같습니다.
                     완료한 목표는 종료일이 지나도 PAST 가 되지 않고, 수정·투두 추가·미루기·재배치를 할 수 없습니다. 남은 AI 투두는 지우지 않습니다.
-                    플랜을 선택하지 않은 목표는 409(GOAL_AI_PLAN_NOT_APPLIED),
-                    이미 완료했거나 지난 목표(PAST)는 409(GOAL_NOT_IN_PROGRESS), 404 / 403 은 상세와 같습니다.
+                    상태를 먼저 봅니다. PLANNING·이미 완료·지난 목표(PAST)는 409(GOAL_NOT_IN_PROGRESS),
+                    진행 중인데 선택한 플랜이 없으면 409(GOAL_AI_PLAN_NOT_APPLIED), 404 / 403 은 상세와 같습니다.
                     """)
     @PatchMapping("/{goalId}/complete")
     public ApiResponse<GoalResponses.Detail> complete(

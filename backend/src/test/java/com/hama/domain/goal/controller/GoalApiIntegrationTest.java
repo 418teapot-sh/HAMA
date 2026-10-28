@@ -447,7 +447,15 @@ class GoalApiIntegrationTest {
                 .andExpect(jsonPath("$.data.content.length()").value(0));
     }
 
+    /** 고정 일정 조회는 플랜을 고른 목표만 보므로 createGoal 처럼 IN_PROGRESS 로 바꿔 둡니다. */
     private long goalWithFixedSchedules(Session user, String title, LocalDate start, LocalDate end,
+            String fixedSchedulesJson) throws Exception {
+        long goalId = planningGoalWithFixedSchedules(user, title, start, end, fixedSchedulesJson);
+        jdbc.update("UPDATE goal SET status = 'IN_PROGRESS' WHERE goal_id = ?", goalId);
+        return goalId;
+    }
+
+    private long planningGoalWithFixedSchedules(Session user, String title, LocalDate start, LocalDate end,
             String fixedSchedulesJson) throws Exception {
         MvcResult result = mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -455,6 +463,31 @@ class GoalApiIntegrationTest {
                                 """.formatted(title, start, end, fixedSchedulesJson)), user))
                 .andExpect(status().isCreated()).andReturn();
         return body(result).at("/data/goalId").asLong();
+    }
+
+    @Test
+    void 고정_일정은_PLANNING_목표를_빼고_완료한_목표는_완료일까지만_보여준다() throws Exception {
+        Session owner = signup();
+        // TODAY(2026-10-04)는 일요일이고, 완료 API 는 오늘(KST) 완료로 남깁니다.
+        long active = goalWithFixedSchedules(owner, "진행 중", TODAY, TODAY.plusDays(30), """
+                [{"dayOfWeek":"MONDAY","content":"한국사 공부"}]""");
+        planningGoalWithFixedSchedules(owner, "버린 목표", TODAY, TODAY.plusDays(30), """
+                [{"dayOfWeek":"MONDAY","content":"버린 일정"}]""");
+        long completed = goalWithFixedSchedules(owner, "완료", TODAY, TODAY.plusDays(30), """
+                [{"dayOfWeek":"SUNDAY","content":"완료 전 일정"},{"dayOfWeek":"MONDAY","content":"완료 후 일정"}]""");
+        applyAiPlan(completed);
+        mvc.perform(auth(patch("/api/v1/goals/" + completed + "/complete"), owner)).andExpect(status().isOk());
+
+        mvc.perform(auth(get("/api/v1/goals/fixed-schedules")
+                        .param("from", TODAY.toString()).param("to", TODAY.plusDays(7).toString()), owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.days.length()").value(2))
+                .andExpect(jsonPath("$.data.days[0].date").value("2026-10-04"))
+                .andExpect(jsonPath("$.data.days[0].schedules.length()").value(1))
+                .andExpect(jsonPath("$.data.days[0].schedules[0].goalId").value(completed))
+                .andExpect(jsonPath("$.data.days[1].date").value("2026-10-05"))
+                .andExpect(jsonPath("$.data.days[1].schedules.length()").value(1))
+                .andExpect(jsonPath("$.data.days[1].schedules[0].goalId").value(active));
     }
 
     @Test
@@ -626,16 +659,45 @@ class GoalApiIntegrationTest {
     }
 
     @Test
-    void 플랜을_적용하지_않았거나_지난_목표는_완료할_수_없다() throws Exception {
+    void 완료_목록은_리뷰_등으로_수정돼도_완료한_순서를_지킨다() throws Exception {
+        Session owner = signup();
+        long first = createGoal(owner, "먼저 완료", TODAY, TODAY.plusDays(20));
+        long second = createGoal(owner, "나중 완료", TODAY, TODAY.plusDays(20));
+        for (long goalId : List.of(first, second)) {
+            applyAiPlan(goalId);
+            mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/complete"), owner)).andExpect(status().isOk());
+        }
+        assertThat(jdbc.queryForObject("SELECT completed_at IS NOT NULL FROM goal WHERE goal_id = ?",
+                Boolean.class, first)).isTrue();
+        // 고정 시계라 완료 시각이 같으므로 순서를 정해 두고, 먼저 완료한 목표를 나중에 수정한 것처럼 만듭니다.
+        jdbc.update("UPDATE goal SET completed_at = ?, updated_at = ? WHERE goal_id = ?",
+                Timestamp.valueOf(TODAY.atTime(0, 1)), Timestamp.valueOf(TODAY.atTime(23, 0)), first);
+        jdbc.update("UPDATE goal SET completed_at = ? WHERE goal_id = ?",
+                Timestamp.valueOf(TODAY.atTime(0, 2)), second);
+
+        mvc.perform(auth(get("/api/v1/goals").param("status", "COMPLETED"), owner))
+                .andExpect(jsonPath("$.data.content[0].goalId").value(second))
+                .andExpect(jsonPath("$.data.content[1].goalId").value(first));
+    }
+
+    @Test
+    void PLANNING이거나_플랜이_없거나_지난_목표는_완료할_수_없다() throws Exception {
         Session owner = signup(), stranger = signup();
+        long planning = planningGoalWithFixedSchedules(owner, "플랜 고르는 중", TODAY, TODAY.plusDays(30), "[]");
         long withoutPlan = createGoal(owner);
         long past = createGoal(owner);
         applyAiPlan(past);
         makePast(past);
 
+        // 상태를 먼저 보므로 PLANNING 은 플랜이 없어도 GOAL_NOT_IN_PROGRESS 입니다.
+        mvc.perform(auth(patch("/api/v1/goals/" + planning + "/complete"), owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GOAL_NOT_IN_PROGRESS"));
         mvc.perform(auth(patch("/api/v1/goals/" + withoutPlan + "/complete"), owner))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("GOAL_AI_PLAN_NOT_APPLIED"));
+        assertThat(jdbc.queryForObject("SELECT status FROM goal WHERE goal_id = ?", String.class, withoutPlan))
+                .isEqualTo("IN_PROGRESS");
         mvc.perform(auth(patch("/api/v1/goals/" + past + "/complete"), owner))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("GOAL_NOT_IN_PROGRESS"));

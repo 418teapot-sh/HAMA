@@ -32,18 +32,21 @@ class GoalAiReviewServiceTest {
     }
 
     @Test
-    void 멘트는_줄바꿈_없는_한_줄로_만들고_40자가_넘으면_자른다() {
+    void 멘트는_줄바꿈_없는_한_줄로_만들고_40자가_넘으면_39자에_말줄임표를_붙인다() {
         assertThat(GoalAiReviewService.oneLine("  좋아요  ")).isEqualTo("좋아요");
         assertThat(GoalAiReviewService.oneLine("처음보다\n100점   올랐어요!\r\n")).isEqualTo("처음보다 100점 올랐어요!");
-        assertThat(GoalAiReviewService.oneLine("가".repeat(60))).isEqualTo("가".repeat(40));
-        assertThat(GoalAiReviewService.oneLine("가".repeat(39) + " 나다")).isEqualTo("가".repeat(39));
+        assertThat(GoalAiReviewService.oneLine("가".repeat(40))).isEqualTo("가".repeat(40));
+        assertThat(GoalAiReviewService.oneLine("가".repeat(41))).isEqualTo("가".repeat(39) + "…");
+        assertThat(GoalAiReviewService.oneLine("가".repeat(38) + " 나다")).isEqualTo("가".repeat(38) + "…");
     }
 
     @Test
-    void 이모지는_반으로_잘리지_않는다() {
-        String cut = GoalAiReviewService.oneLine("가".repeat(39) + "🎉🎉");
-        assertThat(cut).isEqualTo("가".repeat(39) + "🎉");
-        assertThat(cut.codePointCount(0, cut.length())).isEqualTo(40);
+    void 이모지는_조합까지_한_글자로_세고_반으로_잘리지_않는다() {
+        String family = "👨‍👩‍👧";
+        assertThat(GoalAiReviewService.oneLine("가".repeat(39) + family)).isEqualTo("가".repeat(39) + family);
+
+        String cut = GoalAiReviewService.oneLine("가".repeat(38) + family + family + "나");
+        assertThat(cut).isEqualTo("가".repeat(38) + family + "…");
     }
 
     @Test

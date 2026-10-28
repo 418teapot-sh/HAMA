@@ -28,12 +28,14 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.text.BreakIterator;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -54,6 +56,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class GoalAiReviewService {
 
     private static final int MAX_LINE = 40;
+    private static final String ELLIPSIS = "…";
     private static final int MAX_NOTE_LENGTH = 300;
     private static final int MAX_MID_CHECKINS = 20;
 
@@ -62,7 +65,8 @@ public class GoalAiReviewService {
             목표 정보(JSON: 목표 제목, 목표를 시작할 때 입력한 현재 상태(initialStatus), 투두 진행률, START/MID/END 체크인 기록,
             지금(종료 시점) 입력한 상태(currentStatus))를 보고 판단해. initialStatus 와 currentStatus 는 자유 텍스트라 숫자가 아닐 수 있어.
             achieved 는 네가 스스로 판정해. END 체크인의 achieved 는 참고만 하고 그대로 따르지 마.
-            화면에 두 줄로 보여 주므로 comparison 과 message 는 각각 줄바꿈 없는 짧은 한 문장(%d자 이하)이어야 해.
+            화면에 두 줄로 보여 주므로 comparison 과 message 는 각각 줄바꿈 없는 짧은 한 문장(공백·이모지 포함 %2$d자 이하)이어야 해.
+            답하기 전에 글자 수를 세어 보고, %2$d자를 넘으면 뜻은 그대로 두고 더 짧은 문장으로 다시 써. 넘는 부분은 잘려서 보이지 않아.
             반드시 아래 필드를 가진 JSON 객체 하나로만 답해.
             {"achieved": true 또는 false,
              "comparison": initialStatus·currentStatus·투두 진행률을 비교한 한 줄(예: "처음보다 100점 올랐어요!"),
@@ -300,13 +304,26 @@ public class GoalAiReviewService {
         return answer.achieved();
     }
 
-    /** 프롬프트를 어겨도 화면에 한 줄로 나가도록 줄바꿈·연속 공백을 공백 하나로 바꾸고 MAX_LINE 글자(코드포인트)로 자릅니다. */
+    /**
+     * 프롬프트를 어겨도 화면에 한 줄로 나가도록 줄바꿈·연속 공백을 공백 하나로 바꿉니다. MAX_LINE 글자를 넘으면
+     * MAX_LINE - 1 글자까지 남기고 … 를 붙입니다. 글자는 화면에 보이는 단위(grapheme)로 세서 👨‍👩‍👧 같은 조합 이모지가 깨지지 않습니다.
+     */
     static String oneLine(String text) {
         String flat = text.replaceAll("\\s+", " ").strip();
-        if (flat.codePointCount(0, flat.length()) <= MAX_LINE) {
-            return flat;
+        BreakIterator graphemes = BreakIterator.getCharacterInstance(Locale.ROOT);
+        graphemes.setText(flat);
+        int count = 0;
+        int keepEnd = 0;
+        for (int end = graphemes.next(); end != BreakIterator.DONE; end = graphemes.next()) {
+            count++;
+            if (count == MAX_LINE - 1) {
+                keepEnd = end;
+            }
+            if (count > MAX_LINE) {
+                return flat.substring(0, keepEnd).strip() + ELLIPSIS;
+            }
         }
-        return flat.substring(0, flat.offsetByCodePoints(0, MAX_LINE)).strip();
+        return flat;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
