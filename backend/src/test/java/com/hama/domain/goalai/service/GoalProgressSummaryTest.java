@@ -45,7 +45,36 @@ class GoalProgressSummaryTest {
         state.markDirty(now.plusSeconds(1));
         state.superseded(now.plusSeconds(2));
         assertThat(state.getRevision()).isGreaterThan(claimed);
-        assertThat(state.canClaim(now.plusSeconds(2))).isTrue();
+        assertThat(state.canClaim(now.plusSeconds(59))).isFalse();
+        assertThat(state.canClaim(now.plusSeconds(60))).isTrue();
         assertThat(state.getStatus()).isEqualTo("PENDING");
+    }
+    @Test
+    void 실패_대기와_수동_재시도는_호출_간격을_앞당기지_않는다() {
+        var state = GoalProgressSummary.create(1L, now);
+        assertThat(state.canClaim(now)).isTrue();
+        state.claim("one", now, 120);
+        state.failed(now);
+        assertThat(state.getNextAttemptAt()).isEqualTo(now.plusSeconds(60));
+        state.markDirty(now.plusSeconds(10));
+        assertThat(state.canClaim(now.plusSeconds(59))).isFalse();
+        assertThat(state.canClaim(now.plusSeconds(60))).isTrue();
+        state.claim("two", now.plusSeconds(60), 120);
+        state.failed(now.plusSeconds(130));
+        assertThat(state.getNextAttemptAt()).isEqualTo(now.plusSeconds(160));
+    }
+
+    @Test
+    void 만료_복구는_횟수를_초기화하지_않고_새로운_90초_대기도_추가하지_않는다() {
+        var state = GoalProgressSummary.create(1L, now);
+        for (int i = 0; i < 3; i++) {
+            var at = now.plusMinutes(i * 3L);
+            state.claim("token", at, 120);
+            state.recoverExpired(at.plusSeconds(120));
+        }
+        assertThat(state.getAttempts()).isEqualTo(3);
+        assertThat(state.getStatus()).isEqualTo("FAILED");
+        state.markDirty(now.plusMinutes(8));
+        assertThat(state.canClaim(now.plusMinutes(8))).isTrue();
     }
 }

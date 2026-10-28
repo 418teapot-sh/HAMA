@@ -40,6 +40,7 @@ public class GoalProgressService {
     private final Clock clock;
     private final TransactionTemplate transaction;
     private final long leaseSeconds;
+    private final TransactionTemplate readTransaction;
 
     public GoalProgressService(GoalRepository goals, TodoRepository todos, GoalProgressSummaryRepository summaries,
             GoalProgressSource source, AiClient ai, @Qualifier("be3Clock") Clock clock,
@@ -52,6 +53,9 @@ public class GoalProgressService {
         this.clock = clock;
         this.transaction = new TransactionTemplate(transaction.getTransactionManager());
         this.transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        this.readTransaction = new TransactionTemplate(transaction.getTransactionManager());
+        this.readTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        this.readTransaction.setReadOnly(true);
         this.leaseSeconds = Math.max(120L, (long) liner.timeoutSeconds() + 60L);
     }
 
@@ -64,10 +68,20 @@ public class GoalProgressService {
     }
 
     public GoalProgressResponses.Summary get(Long userId, Long goalId) {
-        return inspect(userId, goalId, false);
+        var result = readTransaction.execute(tx -> {
+            Goal goal = GoalAiPlanService.owned(goals.findActive(goalId), userId);
+            var found = summaries.findByGoalId(goalId);
+            if (found.isEmpty()) return null;
+            var state = found.get();
+            var input = source.read(goal);
+            return needsReconciliation(goal, state, input) ? null : response(goalId, state, input);
+        });
+        // 읽은 엔티티를 넘기지 않고 별도 트랜잭션에서 잠금 후 모두 다시 확인합니다.
+        return result == null ? inspect(userId, goalId, false) : result;
     }
 
     public GoalProgressResponses.Summary retry(Long userId, Long goalId) {
+        readTransaction.execute(tx -> GoalAiPlanService.owned(goals.findActive(goalId), userId));
         return inspect(userId, goalId, true);
     }
 
@@ -78,6 +92,7 @@ public class GoalProgressService {
             GoalProgressSummary state = summaries.findForUpdate(goalId)
                     .orElseGet(() -> summaries.save(GoalProgressSummary.create(goalId, now())));
             GoalProgressSource.Input input = source.read(goal);
+            state.recoverExpired(now());
             boolean same = input.hash().equals(state.getSourceHash());
             if (!active(goal)) {
                 state.inactive();
@@ -89,12 +104,29 @@ public class GoalProgressService {
                     || (retry && !state.running(now()) && state.getStatus().equals("FAILED"))) {
                 state.markDirty(now());
             }
-            boolean stale = state.getSummary() != null && !same;
-            return new GoalProgressResponses.Summary(goalId, state.getStatus(), state.getSummary(),
-                    state.getGeneratedAt(), stale, state.getUsedRecordCount(), state.getTotalRecordCount(),
-                    input.total(), state.getAttempts(), state.getStatus().equals("PENDING")
-                            ? state.getNextAttemptAt() : null);
+            return response(goalId, state, input);
         });
+    }
+
+    private boolean needsReconciliation(Goal goal, GoalProgressSummary state, GoalProgressSource.Input input) {
+        if (!active(goal)) return !state.getStatus().equals("INACTIVE")
+                || state.getRequestToken() != null || state.getRevision() != state.getProcessedRevision();
+        if (state.getRequestToken() != null && !state.running(now())) return true;
+        if (input.hash().equals(state.getSourceHash())) {
+            String expected = state.getSummary() == null ? "EMPTY" : "READY";
+            return !state.getStatus().equals(expected) || state.getRequestToken() != null
+                    || state.getRevision() != state.getProcessedRevision();
+        }
+        return input.used() == 0 || state.getRevision() == state.getProcessedRevision();
+    }
+
+    private GoalProgressResponses.Summary response(Long goalId, GoalProgressSummary state,
+            GoalProgressSource.Input input) {
+        boolean stale = state.getSummary() != null && !input.hash().equals(state.getSourceHash());
+        return new GoalProgressResponses.Summary(goalId, state.getStatus(), state.getSummary(),
+                state.getGeneratedAt(), stale, state.getUsedRecordCount(), state.getTotalRecordCount(),
+                input.total(), state.getAttempts(), state.getStatus().equals("PENDING")
+                        ? state.getNextAttemptAt() : null);
     }
 
     /** 후보는 잠금 없이 읽고 실제 예약은 목표 → 요약 순서입니다. 다중 인스턴스도 토큰으로 구분합니다. */
@@ -130,8 +162,7 @@ public class GoalProgressService {
                     return;
                 }
                 var current = source.read(goal.get());
-                if (state.get().getRevision() != job.revision() || !current.hash().equals(job.input().hash())
-                        || !state.get().running(now())) {
+                if (state.get().getRevision() != job.revision() || !current.hash().equals(job.input().hash())) {
                     state.get().superseded(now());
                     return;
                 }

@@ -10,7 +10,11 @@ import com.hama.domain.goalai.service.GoalProgressService;
 import com.hama.domain.todo.dto.UpdateTodoNoteRequest;
 import com.hama.domain.todo.service.TodoService;
 import jakarta.persistence.EntityManager;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.concurrent.CountDownLatch;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -24,6 +28,22 @@ import tools.jackson.databind.JsonNode;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
 
+    private static final ProgressClock TIME = new ProgressClock();
+
+    @org.springframework.test.context.bean.override.convention.TestBean(name = "be3Clock", methodName = "progressClock")
+    protected Clock clock;
+
+    static Clock progressClock() { return TIME; }
+
+    private static final class ProgressClock extends Clock {
+        private volatile Instant instant = Instant.parse("2026-10-01T03:00:00Z");
+        void advance(long seconds) { instant = instant.plusSeconds(seconds); }
+        void reset() { instant = Instant.parse("2026-10-01T03:00:00Z"); }
+        @Override public ZoneId getZone() { return ZoneId.of("Asia/Seoul"); }
+        @Override public Clock withZone(ZoneId zone) { return Clock.fixed(instant, zone); }
+        @Override public Instant instant() { return instant; }
+    }
+
     @Autowired
     private GoalProgressService worker;
     @Autowired
@@ -35,6 +55,7 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
 
     @BeforeEach
     void isolateDurableQueue() {
+        TIME.reset();
         // 워커는 전역 DB 대기를 읽으므로 이전 테스트의 작업을 hama_test에서 격리합니다.
         jdbc.update("delete from goal_progress_summary");
     }
@@ -77,6 +98,130 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
 
     private void answer(String text) {
         AI.answer("{\"summary\":\"" + text + "\"}");
+    }
+
+    @Test
+    void 이벤트_없는_원본_변경도_GET이_감지하되_호출_간격을_보존한다() throws Exception {
+        User user = user();
+        long goalId = goal(user);
+        record(user, goalId, "700점");
+        answer("처음 요약");
+        worker.process(goalId);
+        jdbc.update("update goal set current_status = '새 현재 상태' where goal_id = ?", goalId);
+        var state = summary(user, goalId);
+        assertThat(state.get("stale").asBoolean()).isTrue();
+        assertThat(state.get("status").asString()).isEqualTo("PENDING");
+        worker.process(goalId);
+        assertThat(calls()).isEqualTo(1);
+        TIME.advance(60);
+        answer("변경된 상태 요약");
+        worker.process(goalId);
+        assertThat(AI.requests().getLast().messages().getFirst().content()).contains("새 현재 상태");
+        assertThat(summary(user, goalId).get("stale").asBoolean()).isFalse();
+    }
+
+    @Test
+    void 수정과_명시적_재시도는_영속된_60초_간격을_우회하지_못한다() throws Exception {
+        User user = user();
+        long goalId = goal(user);
+        long id = record(user, goalId, "700점");
+        answer("첫 요약");
+        worker.process(goalId);
+        TIME.advance(59);
+        note(user, id, "750점");
+        note(user, id, "800점");
+        var pending = call(post("/api/v1/goals/" + goalId + "/progress-summary/retry"), user, null, 202);
+        assertThat(pending.at("/data/nextAttemptAt").asString()).isEqualTo("2026-10-01T12:01:00");
+        worker.processDue();
+        assertThat(calls()).isEqualTo(1);
+        TIME.advance(1);
+        answer("최신 800점 요약");
+        worker.processDue();
+        assertThat(calls()).isEqualTo(2);
+        assertThat(AI.requests().getLast().messages().getFirst().content()).contains("800점");
+        assertThat(summary(user, goalId).get("status").asString()).isEqualTo("READY");
+    }
+
+    @Test
+    void 미회수_토큰의_느린_성공은_만료만으로_버리거나_재시도하지_않는다() throws Exception {
+        User user = user();
+        long goalId = goal(user);
+        record(user, goalId, "700점");
+        AI.onNextAnswer(() -> TIME.advance(121));
+        answer("느리지만 유효한 요약");
+        worker.process(goalId);
+        worker.processDue();
+        assertThat(summary(user, goalId).get("summary").asString()).isEqualTo("느리지만 유효한 요약");
+        assertThat(calls()).isEqualTo(1);
+    }
+
+    @Test
+    void 만료만_반복해도_같은_입력은_세_번_후_멈춘다() throws Exception {
+        User user = user();
+        long goalId = goal(user);
+        record(user, goalId, "700점");
+        for (int i = 0; i < 3; i++) {
+            AI.onNextAnswer(() -> TIME.advance(121));
+            AI.answer("{}");
+            worker.process(goalId);
+            TIME.advance(60);
+        }
+        assertThat(calls()).isEqualTo(3);
+        assertThat(summary(user, goalId).get("status").asString()).isEqualTo("FAILED");
+        worker.processDue();
+        assertThat(calls()).isEqualTo(3);
+    }
+
+    @Test
+    void 재시도는_만료_예약을_실제_대기로_회수하고_시도_횟수를_보존한다() throws Exception {
+        User user = user();
+        long goalId = goal(user);
+        record(user, goalId, "700점");
+        jdbc.update("""
+                update goal_progress_summary set request_token = 'crash', lease_until = '2026-09-30',
+                    status = 'GENERATING', attempts = 2 where goal_id = ?
+                """, goalId);
+        var response = call(post("/api/v1/goals/" + goalId + "/progress-summary/retry"), user, null, 202);
+        assertThat(response.at("/data/status").asString()).isEqualTo("PENDING");
+        assertThat(response.at("/data/attempts").asInt()).isEqualTo(2);
+        assertThat(jdbc.queryForObject("select request_token from goal_progress_summary where goal_id = ?",
+                String.class, goalId)).isNull();
+        answer("남은 한 번으로 복구");
+        worker.process(goalId);
+        assertThat(calls()).isEqualTo(1);
+    }
+
+    @Test
+    void 일반_폴링과_타인_재시도는_다른_트랜잭션의_목표_잠금을_기다리지_않는다() throws Exception {
+        User user = user();
+        User other = user();
+        long goalId = goal(user);
+        record(user, goalId, "700점");
+        answer("저장 요약");
+        worker.process(goalId);
+        var before = jdbc.queryForMap("select revision, updated_at, next_attempt_at from goal_progress_summary where goal_id = ?", goalId);
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var holder = executor.submit(() -> transaction.executeWithoutResult(tx -> {
+                jdbc.queryForList("select goal_id from goal where goal_id = ? for update", goalId);
+                locked.countDown();
+                try { if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("lock test timeout"); }
+                catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException(e); }
+            }));
+            try {
+                assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+                executor.submit(() -> {
+                    summary(user, goalId);
+                    summary(user, goalId);
+                    call(post("/api/v1/goals/" + goalId + "/progress-summary/retry"), other, null, 403);
+                    return null;
+                }).get(5, TimeUnit.SECONDS);
+            } finally { release.countDown(); }
+            holder.get(5, TimeUnit.SECONDS);
+        }
+        assertThat(jdbc.queryForMap("select revision, updated_at, next_attempt_at from goal_progress_summary where goal_id = ?", goalId))
+                .isEqualTo(before);
     }
 
     @Test
@@ -186,6 +331,7 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
         worker.process(goalId);
         assertThat(summary(user, goalId).get("status").asString()).isEqualTo("PENDING");
         assertThat(summary(user, goalId).get("summary").isNull()).isTrue();
+        TIME.advance(60);
         answer("최신 요약");
         worker.process(goalId);
         assertThat(summary(user, goalId).get("summary").asString()).isEqualTo("최신 요약");
@@ -200,7 +346,7 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
         worker.process(goalId);
         note(user, id, "800점");
         for (int i = 0; i < 3; i++) {
-            jdbc.update("update goal_progress_summary set next_attempt_at = '2026-09-30' where goal_id = ?", goalId);
+            TIME.advance(60);
             AI.answer("{}");
             worker.process(goalId);
         }
@@ -213,6 +359,7 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
         worker.processDue();
         assertThat(calls()).isEqualTo(before);
         call(post("/api/v1/goals/" + goalId + "/progress-summary/retry"), user, null, 202);
+        TIME.advance(60);
         answer("복구 요약");
         worker.process(goalId);
         assertThat(summary(user, goalId).get("status").asString()).isEqualTo("READY");
@@ -256,7 +403,7 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
         long goalId = goal(user);
         record(user, goalId, "700점");
         AI.onNextAnswer(() -> {
-            jdbc.update("update goal_progress_summary set lease_until = '2026-09-30' where goal_id = ?", goalId);
+            TIME.advance(120);
             worker.process(goalId);
         });
         answer("새 토큰 결과");
@@ -293,11 +440,13 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
         worker.process(goalId);
         todo(user, goalId);
         assertThat(summary(user, goalId).get("stale").asBoolean()).isTrue();
+        TIME.advance(60);
         answer("완료율 변경");
         worker.process(goalId);
         assertThat(json.readTree(AI.requests().getLast().messages().getFirst().content())
                 .get("progressRate").decimalValue()).isEqualByComparingTo("50.0");
         call(patch("/api/v1/goals/" + goalId), user, Map.of("title", "새 목표 제목"), 200);
+        TIME.advance(60);
         answer("제목 변경");
         worker.process(goalId);
         assertThat(AI.requests().getLast().messages().getFirst().content()).contains("새 목표 제목");

@@ -33,6 +33,7 @@ public class GoalProgressSummary extends BaseTimeEntity {
     private int attempts;
     @Column(nullable = false, length = 20)
     private String status;
+    /** READY 뒤에도 보존하는 다음 호출 가능 시각. 원문 변경/재시도가 cooldown을 지우지 않습니다. */
     @Column(name = "next_attempt_at", nullable = false)
     private LocalDateTime nextAttemptAt;
     @Column(name = "request_token", length = 36)
@@ -60,7 +61,7 @@ public class GoalProgressSummary extends BaseTimeEntity {
     public void markDirty(LocalDateTime now) {
         revision++;
         attempts = 0;
-        nextAttemptAt = now;
+        postponeUntil(now);
         status = requestToken == null ? "PENDING" : "GENERATING";
     }
 
@@ -76,6 +77,7 @@ public class GoalProgressSummary extends BaseTimeEntity {
         requestToken = token;
         leaseUntil = now.plusSeconds(leaseSeconds);
         attempts++;
+        nextAttemptAt = now.plusSeconds(60);
         status = "GENERATING";
     }
 
@@ -105,14 +107,26 @@ public class GoalProgressSummary extends BaseTimeEntity {
     public void superseded(LocalDateTime now) {
         release();
         attempts = 0;
-        nextAttemptAt = now;
+        postponeUntil(now);
         status = "PENDING";
     }
 
     public void failed(LocalDateTime now) {
         release();
         status = attempts >= 3 ? "FAILED" : "PENDING";
-        nextAttemptAt = now.plusSeconds(30L * attempts);
+        postponeUntil(attempts >= 3 ? now : now.plusSeconds(30L * attempts));
+    }
+
+    /** 만료는 실패 횟수를 초기화하지 않습니다. 새 입력으로 초기화된 attempts도 그대로 둡니다. */
+    public void recoverExpired(LocalDateTime now) {
+        if (requestToken == null || running(now)) return;
+        release();
+        status = attempts >= 3 ? "FAILED" : "PENDING";
+        postponeUntil(now);
+    }
+
+    private void postponeUntil(LocalDateTime earliest) {
+        if (nextAttemptAt == null || nextAttemptAt.isBefore(earliest)) nextAttemptAt = earliest;
     }
 
     public void inactive() {
