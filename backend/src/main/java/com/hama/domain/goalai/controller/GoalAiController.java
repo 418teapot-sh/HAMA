@@ -109,7 +109,7 @@ public class GoalAiController {
                     생성 중에는 409(AI_REVIEW_GENERATING)이며 추가 호출·차감하지 않습니다.
                     예약은 AI 타임아웃+60초(최소 120초) 후 만료하며 다음 생성 요청에서 회수·환급합니다.
                     이전 리뷰는 입력 지문이 없어 최초 재생성 한 번은 신규 생성으로 처리됩니다.
-                    PLANNING 목표는 409(AI_REVIEW_GOAL_NOT_STARTED), 종료일이 지나지 않았으면 409(AI_REVIEW_GOAL_NOT_ENDED),
+                    PLANNING 목표는 409(AI_REVIEW_GOAL_NOT_STARTED), 완료(COMPLETED)하지 않았고 종료일도 지나지 않았으면 409(AI_REVIEW_GOAL_NOT_ENDED),
                     END 체크인이 없으면 409(AI_REVIEW_END_REQUIRED), AI 응답을 기다리는 동안 목표·체크인이 바뀌면 409(AI_REVIEW_OUTDATED).
                     없는 목표 404(GOAL_NOT_FOUND), 다른 사람의 목표 403(FORBIDDEN).
                     """)

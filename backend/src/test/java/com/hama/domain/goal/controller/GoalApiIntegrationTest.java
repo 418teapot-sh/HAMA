@@ -544,6 +544,71 @@ class GoalApiIntegrationTest {
                 .andExpect(jsonPath("$.error.code").value("GOAL_NOT_DELETABLE"));
     }
 
+    // ---- 완료 ----
+
+    @Test
+    void AI_플랜을_적용한_진행_중_목표를_완료하면_COMPLETED_로_조회되고_수정은_막히고_삭제는_된다() throws Exception {
+        Session owner = signup();
+        long goalId = createGoal(owner);
+        applyAiPlan(goalId);
+        long other = createGoal(owner, "진행 중", TODAY, TODAY.plusDays(20));
+
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/complete"), owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.goalId").value(goalId))
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.aiPlanApplied").value(true));
+
+        mvc.perform(auth(get("/api/v1/goals").param("status", "COMPLETED"), owner))
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].goalId").value(goalId))
+                .andExpect(jsonPath("$.data.content[0].status").value("COMPLETED"));
+        mvc.perform(auth(get("/api/v1/goals").param("status", "IN_PROGRESS"), owner))
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].goalId").value(other));
+
+        makePast(goalId);
+        mvc.perform(auth(get("/api/v1/goals/" + goalId), owner))
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"));
+        mvc.perform(auth(get("/api/v1/goals").param("status", "PAST"), owner))
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/complete"), owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GOAL_NOT_IN_PROGRESS"));
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId + "/current-status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentStatus\":\"바꿔보기\"}"), owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GOAL_NOT_EDITABLE"));
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"바꿔보기\"}"), owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GOAL_NOT_EDITABLE"));
+
+        mvc.perform(auth(delete("/api/v1/goals/" + goalId), owner))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void 플랜을_적용하지_않았거나_지난_목표는_완료할_수_없다() throws Exception {
+        Session owner = signup(), stranger = signup();
+        long withoutPlan = createGoal(owner);
+        long past = createGoal(owner);
+        applyAiPlan(past);
+        makePast(past);
+
+        mvc.perform(auth(patch("/api/v1/goals/" + withoutPlan + "/complete"), owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GOAL_AI_PLAN_NOT_APPLIED"));
+        mvc.perform(auth(patch("/api/v1/goals/" + past + "/complete"), owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GOAL_NOT_IN_PROGRESS"));
+        mvc.perform(auth(patch("/api/v1/goals/" + past + "/complete"), stranger))
+                .andExpect(status().isForbidden());
+        mvc.perform(auth(patch("/api/v1/goals/999999999/complete"), owner))
+                .andExpect(status().isNotFound());
+    }
+
     @Test
     void PLANNING_목표는_전체_리스트에만_나오고_삭제할_수_있다() throws Exception {
         Session owner = signup();

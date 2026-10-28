@@ -82,6 +82,7 @@ public class GoalService {
                 : switch (filter) {
                     case IN_PROGRESS -> goalRepository.findInProgress(userId, today, pageable);
                     case PAST -> goalRepository.findPast(userId, today, pageable);
+                    case COMPLETED -> goalRepository.findCompleted(userId, pageable);
                 };
         List<Long> goalIds = goals.getContent().stream().map(Goal::getId).toList();
         Map<Long, GoalTodoCount> counts = goalTodoRepository.countByGoals(goalIds);
@@ -142,7 +143,17 @@ public class GoalService {
         return new CurrentStatusResponse(goal.getId(), goal.getCurrentStatus(), goal.getUpdatedAt());
     }
 
-    /** 지난 목표와 PLANNING 목표만 삭제할 수 있고, 연결된 투두도 함께 소프트 삭제합니다. */
+    /** AI 플랜을 적용한 진행 중 목표를 COMPLETED 로 바꿉니다. 응답은 상세 조회와 같습니다. */
+    @Transactional
+    public GoalResponses.Detail complete(Long userId, Long goalId) {
+        Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
+        requireAiPlanApplied(goalId);
+        goal.complete(today());
+        events.publishEvent(new GoalProgressChanged(goalId));
+        return detail(goal);
+    }
+
+    /** 지난 목표·완료한 목표·PLANNING 목표만 삭제할 수 있고, 연결된 투두도 함께 소프트 삭제합니다. */
     @Transactional
     public void delete(Long userId, Long goalId) {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);

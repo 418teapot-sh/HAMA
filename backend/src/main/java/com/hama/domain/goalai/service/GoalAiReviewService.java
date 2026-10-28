@@ -248,12 +248,15 @@ public class GoalAiReviewService {
         });
     }
 
-    /** 계획 중(PLANNING) → 종료일 미도달 → END 체크인 없음 순서로 막습니다. 종료 전이면 END 유무와 무관하게 먼저 걸립니다. */
+    /**
+     * 계획 중(PLANNING) → 종료일 미도달 → END 체크인 없음 순서로 막습니다. 종료 전이면 END 유무와 무관하게 먼저 걸립니다.
+     * 직접 완료(COMPLETED)한 목표는 종료일 전이어도 끝난 것으로 봅니다.
+     */
     private Goal requireReviewable(Goal goal, LocalDate today) {
         if (goal.getStatus() == GoalStatus.PLANNING) {
             throw new BusinessException(GoalAiErrorCode.AI_REVIEW_GOAL_NOT_STARTED);
         }
-        if (!goal.isPast(today)) {
+        if (!goal.isPast(today) && !goal.isCompleted()) {
             throw new BusinessException(GoalAiErrorCode.AI_REVIEW_GOAL_NOT_ENDED);
         }
         if (!checkins.existsByGoalIdAndType(goal.getId(), CheckinType.END)) {

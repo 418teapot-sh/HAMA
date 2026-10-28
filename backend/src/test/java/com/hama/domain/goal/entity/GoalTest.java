@@ -117,6 +117,44 @@ class GoalTest {
     }
 
     @Test
+    void 진행_중인_목표를_완료하면_종료일이_지나도_COMPLETED이고_수정할_수_없지만_삭제할_수_있다() {
+        Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+        goal.startPlan();
+        assertThat(goal.isDeletable(TODAY)).isFalse();
+
+        goal.complete(TODAY);
+
+        assertThat(goal.effectiveStatus(TODAY)).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(goal.effectiveStatus(TODAY.plusDays(60))).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(goal.isPast(TODAY.plusDays(60))).isFalse();
+        assertThat(goal.isDeletable(TODAY)).isTrue();
+        assertThatThrownBy(() -> goal.revise(content(TODAY, TODAY.plusDays(40)), TODAY))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_NOT_EDITABLE);
+        assertThatThrownBy(() -> goal.updateCurrentStatus("새 상태", TODAY))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_NOT_EDITABLE);
+        assertThatThrownBy(() -> goal.complete(TODAY))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_NOT_IN_PROGRESS);
+    }
+
+    @Test
+    void PLANNING이거나_지난_목표는_완료할_수_없다() {
+        Goal planning = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+        Goal past = Goal.create(1L, content(TODAY.minusDays(10), TODAY), TODAY);
+        past.startPlan();
+
+        assertThatThrownBy(() -> planning.complete(TODAY))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_NOT_IN_PROGRESS);
+        assertThatThrownBy(() -> past.complete(TODAY.plusDays(1)))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_NOT_IN_PROGRESS);
+        assertThat(past.effectiveStatus(TODAY.plusDays(1))).isEqualTo(GoalStatus.PAST);
+    }
+
+    @Test
     void 수정은_전체_값을_바꾸고_제목_앞뒤_공백을_지운다() {
         Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
 
