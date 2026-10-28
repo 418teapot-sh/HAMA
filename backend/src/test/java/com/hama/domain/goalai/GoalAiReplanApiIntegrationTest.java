@@ -43,20 +43,22 @@ class GoalAiReplanApiIntegrationTest extends GoalAiTestSupport {
         long goalId = planningGoal(user);
         long planA = generatePlans(user, goalId).at("/plans/0/planId").asLong();
         call(post("/api/v1/goals/ai/plans/" + planA + "/select"), user, null, 200);
-        // 10/1·10/3·10/5 09:00 에 놓인 투두가 있는 상태에서 목표 시작일만 10/5 로 늦춥니다.
+        // 플랜 A 는 매일 1개(09:00~10:00) 입니다. 목표 시작일을 10/5 로 늦추면 10/1~10/4 투두 4개가 밀립니다.
         jdbc.update("update goal set start_date = '2026-10-05' where goal_id = ?", goalId);
 
         JsonNode data = call(post("/api/v1/goals/ai/replan"), user, Map.of("goalId", goalId), 200).get("data");
 
-        assertThat(data.get("movedCount").asInt()).isEqualTo(2);
+        assertThat(data.get("movedCount").asInt()).isEqualTo(4);
         assertThat(jdbc.queryForObject("""
                 select count(*) from todo where goal_id = ? and status = 'PENDING' and todo_date < '2026-10-05'
                 """, Integer.class, goalId)).isZero();
+        // 10/5 에 원래 있던 투두(09:00) + 밀려 들어온 4개가 그날 빈 시간 순서대로 채워집니다.
         assertThat(jdbc.queryForList("""
                 select start_time from todo where goal_id = ? and todo_date = '2026-10-05' order by start_time
                 """, Object.class, goalId)).extracting(String::valueOf)
                 .satisfiesExactly(t -> assertThat(t).startsWith("09:00"), t -> assertThat(t).startsWith("10:00"),
-                        t -> assertThat(t).startsWith("11:00"));
+                        t -> assertThat(t).startsWith("11:00"), t -> assertThat(t).startsWith("12:00"),
+                        t -> assertThat(t).startsWith("13:00"));
     }
 
     @Test

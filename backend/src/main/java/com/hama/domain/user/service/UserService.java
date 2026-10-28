@@ -25,17 +25,16 @@ public class UserService {
     /*
      * 탈퇴 때 지우는 테이블입니다. 테이블 사이에 FK 가 없어서 DB 가 대신 지워주지 않으므로 자식부터 직접 지웁니다.
      * soft delete(deleted_at) 된 행도 개인정보라 전부 지웁니다. payment 는 전자상거래법상 5년 보관이라 남깁니다.
-     * 사용자 데이터를 담는 테이블을 새로 만들면 여기에 추가하세요. UserWithdrawApiIntegrationTest 는 user_id·goal_id·session_id
+     * 사용자 데이터를 담는 테이블을 새로 만들면 여기에 추가하세요. UserWithdrawApiIntegrationTest 는 user_id·goal_id
      * 컬럼이 있는 테이블만 검사하므로, 다른 키(todo_id 등)로만 이어지는 테이블은 직접 챙겨야 합니다.
      */
     /** goal_id 로 지우는 목표의 자식 테이블 */
     static final List<String> GOAL_CHILD_TABLES =
-            List.of("goal_progress_summary", "goal_checkin", "goal_review_generation", "goal_review", "goal_plan", "period_goal", "milestone");
-    /** session_id 로 지우는 AI 세션의 자식 테이블 */
-    static final List<String> SESSION_CHILD_TABLES = List.of("goal_ai_message");
+            List.of("goal_checkin", "goal_review_generation", "goal_review", "goal_plan", "goal_fixed_schedule",
+                    "goal_progress_summary");
     /** user_id 로 지우는 테이블. 자식을 다 지운 뒤 이 순서대로 지웁니다. */
     static final List<String> USER_TABLES =
-            List.of("goal_ai_session", "todo", "schedule", "goal", "refresh_token", "password_reset_token", "users");
+            List.of("todo", "schedule", "goal", "refresh_token", "password_reset_token", "users");
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -54,8 +53,8 @@ public class UserService {
      * <p>READ_COMMITTED: 기본값(REPEATABLE READ)이면 user_id 로 잠그고 지울 때 인덱스의 빈 구간(갭)까지 잠가서,
      * 탈퇴가 끝날 때까지 다른 사용자의 로그인·투두 생성이 기다립니다. 투두·체크인 서비스와 같은 수준입니다.
      *
-     * <p>락 순서는 사용자 → AI 세션 → 목표입니다. 비밀번호(bcrypt)는 락 밖에서 먼저 확인하고, 사용자 행을 기본키로 잠가
-     * 같은 사용자의 탈퇴 두 번과 로그인을 한 줄로 세웁니다. 잠근 뒤 행이 없으면 먼저 온 탈퇴가 끝난 것이라 그대로 성공합니다. 목표 확정(GoalAiDraftService.confirm)이 세션을 잠근 뒤 목표를 넣고,
+     * <p>락 순서는 사용자 → 목표입니다. 비밀번호(bcrypt)는 락 밖에서 먼저 확인하고, 사용자 행을 기본키로 잠가
+     * 같은 사용자의 탈퇴 두 번과 로그인을 한 줄로 세웁니다. 잠근 뒤 행이 없으면 먼저 온 탈퇴가 끝난 것이라 그대로 성공합니다.
      * 투두·체크인·플랜·replan 은 목표만 잠그므로, 이 순서면 어느 쪽과도 서로 기다리며 막히지 않습니다(교착 방지).
      * 자식 테이블은 JOIN 대신 미리 잠근 id 로 지웁니다. JOIN DELETE 는 옵티마이저가 자식 테이블을 전체 스캔하면
      * 다른 사용자 행까지 잠그기 때문입니다.
@@ -71,12 +70,9 @@ public class UserService {
         }
 
         Map<String, Long> byUser = Map.of("userId", userId);
-        List<Long> sessionIds = jdbc.queryForList(
-                "SELECT session_id FROM goal_ai_session WHERE user_id = :userId FOR UPDATE", byUser, Long.class);
         List<Long> goalIds = jdbc.queryForList(
                 "SELECT goal_id FROM goal WHERE user_id = :userId FOR UPDATE", byUser, Long.class);
         deleteIn(GOAL_CHILD_TABLES, "goal_id", goalIds);
-        deleteIn(SESSION_CHILD_TABLES, "session_id", sessionIds);
         USER_TABLES.forEach(table -> jdbc.update("DELETE FROM " + table + " WHERE user_id = :userId", byUser));
         log.info("[Withdraw] 회원탈퇴 userId={}", userId);
     }

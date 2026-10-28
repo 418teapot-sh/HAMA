@@ -47,22 +47,4 @@ public class GoalTodoRepository {
     public GoalTodoCount countByGoal(Long goalId) {
         return countByGoals(List.of(goalId)).getOrDefault(goalId, GoalTodoCount.EMPTY);
     }
-
-    /** 기간 목표별 집계 (트리 조회용). */
-    public Map<Long, GoalTodoCount> countByPeriodGoals(Long goalId) {
-        Map<Long, GoalTodoCount> counts = new HashMap<>();
-        jdbc.query("""
-                        SELECT period_goal_id, COUNT(*) AS total,
-                               SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed
-                        FROM todo
-                        WHERE goal_id = :goalId AND period_goal_id IS NOT NULL AND %s
-                        GROUP BY period_goal_id
-                        """.formatted(ACTIVE_GOAL_TASK),
-                new MapSqlParameterSource("goalId", goalId),
-                rs -> {
-                    counts.put(rs.getLong("period_goal_id"),
-                            new GoalTodoCount(rs.getLong("total"), rs.getLong("completed")));
-                });
-        return counts;
-    }
 }

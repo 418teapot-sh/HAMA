@@ -59,11 +59,12 @@ public class GoalAiReviewService {
 
     private static final String REVIEW_PROMPT = """
             너는 목표 달성 여부를 판정하고 성과를 비교해 멘트를 주는 코치야. 오늘은 %s(KST)야.
-            목표 정보(JSON: 지표 이름·단위·시작값·목표값, 투두 진행률, START/MID/END 체크인 기록, 사용자가 지금 입력한 상태)를 보고 판단해.
+            목표 정보(JSON: 목표 제목, 목표를 시작할 때 입력한 현재 상태(initialStatus), 투두 진행률, START/MID/END 체크인 기록,
+            지금(종료 시점) 입력한 상태(currentStatus))를 보고 판단해. initialStatus 와 currentStatus 는 자유 텍스트라 숫자가 아닐 수 있어.
             achieved 는 네가 스스로 판정해. END 체크인의 achieved 는 참고만 하고 그대로 따르지 마.
             반드시 아래 필드를 가진 JSON 객체 하나로만 답해.
             {"achieved": true 또는 false,
-             "comparison": 시작값·목표값·최종값을 숫자로 비교하는 한국어 문장(500자 이하),
+             "comparison": initialStatus·currentStatus·투두 진행률을 비교하는 한국어 문장(500자 이하),
              "message": achieved 가 true 면 칭찬, false 면 격려하는 한국어 문장(500자 이하)}
             """;
 
@@ -266,8 +267,7 @@ public class GoalAiReviewService {
         List<CheckinSnapshot> snapshots = limitMid(all, MAX_MID_CHECKINS).stream().map(CheckinSnapshot::from)
                 .toList();
         BigDecimal progressRate = goalTodos.countByGoal(goal.getId()).progressRate();
-        return new ReviewPayload(goal.getTitle(), goal.getMetricName(), goal.getUnit(), goal.getStartValue(),
-                goal.getTargetValue(), progressRate, snapshots, currentStatus);
+        return new ReviewPayload(goal.getTitle(), goal.getCurrentStatus(), progressRate, snapshots, currentStatus);
     }
 
     /** MID 는 개수 제한이 없어 토큰 한도를 넘길 수 있습니다. 최근 maxMid 개만 남기고, START/END 는 항상 남깁니다. 순서는 그대로입니다. */
@@ -298,8 +298,8 @@ public class GoalAiReviewService {
     record ReviewAnswer(Boolean achieved, String comparison, String message) {
     }
 
-    record ReviewPayload(String title, String metricName, String unit, BigDecimal startValue, BigDecimal targetValue,
-            BigDecimal progressRate, List<CheckinSnapshot> checkins, String currentStatus) {
+    record ReviewPayload(String title, String initialStatus, BigDecimal progressRate,
+            List<CheckinSnapshot> checkins, String currentStatus) {
     }
 
     /** 읽기 트랜잭션에서 본 목표 데이터(payload)와 그 시점의 기존 리뷰 버전을 함께 들고 다닙니다. */

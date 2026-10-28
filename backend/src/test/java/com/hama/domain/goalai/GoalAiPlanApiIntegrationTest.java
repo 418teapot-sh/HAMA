@@ -22,15 +22,14 @@ class GoalAiPlanApiIntegrationTest extends GoalAiTestSupport {
         assertThat(a.get("planId").asLong()).isPositive();
         assertThat(a.get("variant").asString()).isEqualTo("A");
         assertThat(a.get("title").asString()).isEqualTo("여유형");
-        assertThat(a.get("summary").asString()).isEqualTo("주 3일, 하루 1시간.");
-        assertThat(a.get("milestones")).hasSize(2);
-        assertThat(a.at("/milestones/0/seq").asInt()).isEqualTo(1);
-        assertThat(a.at("/milestones/0/startDate").asString()).isEqualTo("2026-10-01");
-        assertThat(a.at("/milestones/1/endDate").asString()).isEqualTo("2026-12-31");
-        assertThat(a.at("/stats/totalTodos").asInt()).isEqualTo(30);
-        assertThat(a.at("/stats/avgDailyMinutes").asInt()).isEqualTo(94);
+        assertThat(a.get("tasks")).hasSize(1);
+        assertThat(a.at("/tasks/0/content").asString()).isEqualTo("영어 단어 30개 외우기");
+        assertThat(a.at("/tasks/0/timesPerWeek").asInt()).isEqualTo(7);
+        assertThat(a.at("/stats/totalTodos").asInt()).isEqualTo(92);
+        assertThat(a.at("/stats/avgDailyMinutes").asInt()).isEqualTo(60);
         assertThat(plans.get(1).get("variant").asString()).isEqualTo("B");
-        assertThat(plans.get(1).at("/stats/totalTodos").asInt()).isEqualTo(92);
+        assertThat(plans.get(1).get("tasks")).hasSize(2);
+        assertThat(plans.get(1).at("/stats/totalTodos").asInt()).isEqualTo(106);
         assertThat(AI.requests().getLast().purpose()).isEqualTo("goal-plan");
         assertThat(AI.requests().getLast().messages().getFirst().content()).contains("\"planStartDate\":\"2026-10-01\"");
     }
@@ -46,7 +45,7 @@ class GoalAiPlanApiIntegrationTest extends GoalAiTestSupport {
         assertThat(listed).hasSize(2);
         assertThat(listed.get(0).get("planId").asLong()).isEqualTo(first);
         assertThat(listed.get(0).get("selected").asBoolean()).isFalse();
-        assertThat(listed.at("/0/milestones/0/title").asString()).isEqualTo("기초 다지기");
+        assertThat(listed.at("/0/tasks/0/content").asString()).isEqualTo("영어 단어 30개 외우기");
 
         long second = generatePlans(user, goalId).at("/plans/0/planId").asLong();
         JsonNode replaced = call(get("/api/v1/goals/ai/plans").param("goalId", String.valueOf(goalId)), user, null,
@@ -72,7 +71,7 @@ class GoalAiPlanApiIntegrationTest extends GoalAiTestSupport {
         User user = user();
         long goalId = planningGoal(user);
         AI.answer("""
-                {"plans":[{"variant":"A","title":"여유형","summary":"-","milestones":[]}]}
+                {"plans":[{"variant":"A","title":"여유형","summary":"-","tasks":[]}]}
                 """);
 
         JsonNode error = call(post("/api/v1/goals/ai/plans"), user, Map.of("goalId", goalId), 502);

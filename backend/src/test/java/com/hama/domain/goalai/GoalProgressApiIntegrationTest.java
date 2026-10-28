@@ -39,9 +39,12 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
         jdbc.update("delete from goal_progress_summary");
     }
 
+    /** 직접 생성은 PLANNING 으로 시작하므로, 플랜을 고른 뒤의 진행 중 목표로 바꿔 둡니다. */
     private long goal(User user) throws Exception {
-        return call(post("/api/v1/goals"), user, Map.of("title", "토익 850점", "startDate", "2026-10-01",
+        long id = call(post("/api/v1/goals"), user, Map.of("title", "토익 850점", "startDate", "2026-10-01",
                 "endDate", "2026-10-31"), 201).at("/data/goalId").asLong();
+        jdbc.update("update goal set status = 'IN_PROGRESS' where goal_id = ?", id);
+        return id;
     }
 
     private long todo(User user, long goalId) throws Exception {

@@ -5,7 +5,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.hama.domain.goalai.GoalAiTestSupport;
-import com.hama.domain.goal.entity.*;
 import com.hama.domain.goal.repository.*;
 import com.hama.domain.todo.entity.Todo;
 import com.hama.domain.todo.repository.TodoRepository;
@@ -27,8 +26,6 @@ import static org.mockito.Mockito.*;
 
 class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
     @Autowired GoalRepository goals;
-    @Autowired MilestoneRepository milestones;
-    @Autowired PeriodGoalRepository periods;
     @Autowired TodoService todoService;
     @Autowired GoalAiReplanService replan;
     @MockitoSpyBean BusyTimeReader busy;
@@ -39,9 +36,12 @@ class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
     long goal(User u, String end) throws Exception {
         return goal(u, "2026-09-20", end);
     }
+    /** 직접 생성은 PLANNING 으로 시작하므로, 플랜을 고른 뒤의 진행 중 목표로 바꿔 둡니다. */
     long goal(User u, String start, String end) throws Exception {
-        return call(post("/api/v1/goals"), u, Map.of("title", "미루기 검증", "startDate", start, "endDate", end), 201)
+        long id = call(post("/api/v1/goals"), u, Map.of("title", "미루기 검증", "startDate", start, "endDate", end), 201)
                 .at("/data/goalId").asLong();
+        jdbc.update("update goal set status='IN_PROGRESS' where goal_id=?", id);
+        return id;
     }
     long todo(User u, long goal, String date, String start, String end) throws Exception {
         var body = new HashMap<String,Object>(Map.of("category", "AI_GOAL_TASK", "content", "할 일", "goalId", goal, "todoDate", date));
@@ -65,7 +65,7 @@ class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
         return call(post("/api/v1/calendar/days/" + date + "/postpone"), u, body, 200).get("data");
     }
     Map<String,Object> row(long id) {
-        return jdbc.queryForMap("select todo_date,start_time,end_time,postponed_count,updated_at,period_goal_id from todo where todo_id=?", id);
+        return jdbc.queryForMap("select todo_date,start_time,end_time,postponed_count,updated_at from todo where todo_id=?", id);
     }
     void assertSlot(long id, String date, String start, String end, int count) {
         Todo t = todos.findById(id).orElseThrow();
@@ -75,16 +75,12 @@ class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
         assertThat(t.getPostponedCount()).isEqualTo(count);
     }
 
-    @Test void 자동은_다음날_기존길이와_기간목표를_보존하고_캘린더와_ICS에_반영된다() throws Exception {
+    @Test void 자동은_다음날_기존길이를_보존하고_캘린더와_ICS에_반영된다() throws Exception {
         User u = user(); long g = goal(u, "2026-10-31");
         long t = todo(u,g,"2026-10-04","19:00","20:15");
-        var m = milestones.saveAndFlush(Milestone.create(g,1,"단계",null,LocalDate.parse("2026-09-20"),LocalDate.parse("2026-10-31")));
-        long p = periods.saveAndFlush(PeriodGoal.create(m,PeriodType.WEEKLY,1,"주",LocalDate.parse("2026-09-28"),LocalDate.parse("2026-10-04"))).getId();
-        jdbc.update("update todo set period_goal_id=? where todo_id=?",p,t);
         var response = move(u,t,null,200).get("data");
         assertThat(response.get("startTime").asString()).isEqualTo("09:00");
         assertSlot(t,"2026-10-05","09:00","10:15",1);
-        assertThat(todos.findById(t).orElseThrow().getPeriodGoalId()).isEqualTo(p);
         var items = call(get("/api/v1/calendar").param("from","2026-10-05").param("to","2026-10-05").param("types","AI_GOAL"),u,null,200).at("/data/items");
         assertThat(items.size()).isOne();
         String ics = mvc.perform(get("/api/v1/calendar/export").param("from","2026-10-05").param("to","2026-10-05")

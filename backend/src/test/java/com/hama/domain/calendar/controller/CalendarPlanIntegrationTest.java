@@ -16,16 +16,17 @@ class CalendarPlanIntegrationTest extends GoalAiTestSupport {
     void 집중플랜을_선택한_뒤_월간_124개_투두를_조회하고_내보낸다() throws Exception {
         User user = user();
         long goal = planningGoal(user);
+        // 매일 하는 할 일 4개라 10월 31일 동안 하루 4개씩 124개입니다.
         String dailyTasks = """
-                [{"content":"듣기","sessionsPerWeek":7,"minutes":30},
-                 {"content":"읽기","sessionsPerWeek":7,"minutes":30},
-                 {"content":"단어","sessionsPerWeek":7,"minutes":30},
-                 {"content":"복습","sessionsPerWeek":7,"minutes":30}]
+                [{"content":"듣기","timesPerWeek":7,"minutes":30},
+                 {"content":"읽기","timesPerWeek":7,"minutes":30},
+                 {"content":"단어","timesPerWeek":7,"minutes":30},
+                 {"content":"복습","timesPerWeek":7,"minutes":30}]
                 """;
         AI.answer("""
                 {"plans":[
-                  {"variant":"A","title":"여유형","milestones":[{"title":"학습","weeklyTasks":%s}]},
-                  {"variant":"B","title":"집중형","milestones":[{"title":"학습","weeklyTasks":%s}]}]}
+                  {"variant":"A","title":"여유형","summary":"매일 4가지","tasks":%s},
+                  {"variant":"B","title":"집중형","summary":"매일 4가지","tasks":%s}]}
                 """.formatted(dailyTasks, dailyTasks));
         long plan = call(post("/api/v1/goals/ai/plans"), user, Map.of("goalId", goal), 201)
                 .at("/data/plans/1/planId").asLong();

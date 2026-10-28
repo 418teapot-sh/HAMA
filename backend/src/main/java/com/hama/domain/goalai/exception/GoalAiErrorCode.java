@@ -8,10 +8,6 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum GoalAiErrorCode implements BaseErrorCode {
-    AI_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "목표 대화 세션을 찾을 수 없습니다."),
-    AI_SESSION_NOT_READY(HttpStatus.CONFLICT, "목표 초안이 아직 완성되지 않았습니다."),
-    AI_SESSION_CONFIRMED(HttpStatus.CONFLICT, "이미 목표로 확정된 세션입니다."),
-    AI_SESSION_TURN_LIMIT(HttpStatus.CONFLICT, "대화 횟수를 모두 사용했습니다. 새 세션으로 다시 시작해주세요."),
     AI_PLAN_NOT_FOUND(HttpStatus.NOT_FOUND, "플랜을 찾을 수 없습니다."),
     AI_PLAN_ALREADY_SELECTED(HttpStatus.CONFLICT, "이미 선택된 플랜입니다."),
     AI_PLAN_OUTDATED(HttpStatus.CONFLICT, "목표 기간이 바뀌었거나 플랜 시작일이 지나 적용할 수 없습니다. 플랜을 다시 만들어주세요."),

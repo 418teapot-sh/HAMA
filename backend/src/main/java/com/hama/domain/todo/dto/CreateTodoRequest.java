@@ -41,10 +41,6 @@ public record CreateTodoRequest(
 
         @Positive
         @Schema(description = "AI_GOAL_TASK 필수. TASK는 null.")
-        Long goalId,
-
-        @Positive
-        @Schema(description = "AI_GOAL_TASK의 선택 기간 목표. TASK는 null.")
-        Long periodGoalId
+        Long goalId
 ) {
 }

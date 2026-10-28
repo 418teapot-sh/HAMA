@@ -1,6 +1,5 @@
 package com.hama.domain.goal.entity;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
@@ -8,12 +7,7 @@ import java.time.LocalDate;
  */
 public record GoalContent(
         String title,
-        String description,
-        String metricName,
-        String unit,
-        BigDecimal startValue,
-        BigDecimal targetValue,
-        BigDecimal weeklyAvailableHours,
+        String currentStatus,
         LocalDate startDate,
         LocalDate endDate
 ) {
