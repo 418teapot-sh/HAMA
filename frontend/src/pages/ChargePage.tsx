@@ -4,7 +4,9 @@ import icBack from '../assets/icons/ic_back.svg'
 import IconAlert from '../components/IconAlert'
 import NavigationBar from '../components/NavigationBar'
 import { CheckIcon, CloseIcon } from '../components/TodoIcons'
+import { loadMe } from '../features/auth/api'
 import { useAuthStore } from '../features/auth/store'
+import { isPaddleConfigured, openCheckout } from '../features/payment/paddle'
 import PlanOption from '../features/payment/PlanOption'
 import { CREDIT_PLANS, DEFAULT_PLAN, formatWon, type CreditPlan } from '../features/payment/plans'
 import { paths } from '../paths'
@@ -27,15 +29,24 @@ type Result = 'success' | 'fail' | null
  *   성공: 남은 크레딧 반영 후 표시 · 닫기 → 이전 작업(들어온 화면)으로 돌아감
  *   실패: 닫기 / 같은 요금제로 다시 시도
  *
- * 페이지 구현 단계: 결제하기를 눌러도 아직 결제창(Paddle)이 열리지 않습니다. 연동은 다음 작업에서 합니다.
+ * 결제 (features/payment/paddle): 결제하기 → Paddle 결제창(overlay) → 결과
+ *   - 결제 완료: 백엔드 웹훅이 크레딧을 충전할 때까지 /users/me 를 잠깐 다시 불러온 뒤 성공 팝업
+ *   - 결제 실패 · 결제창을 못 엶: 실패 팝업 (다시 시도하기 = 같은 요금제로 다시)
+ *   - 결제하지 않고 닫음: 아무것도 띄우지 않음
+ * TODO: Paddle 값(client token · 가격 ID)은 환경변수로 받습니다. 값이 없으면 결제창 대신 실패 팝업이 뜹니다.
  * 개발 서버에서만 주소 뒤에 ?preview=success · ?preview=fail 을 붙이면 결과 팝업을 미리 볼 수 있습니다.
  */
 export default function ChargePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  const credits = useAuthStore((s) => s.user?.credits ?? 0)
+  const user = useAuthStore((s) => s.user)
+  const credits = user?.credits ?? 0
   const [plan, setPlan] = useState<CreditPlan>(DEFAULT_PLAN)
+  /** 결제창을 연 요금제 (성공 팝업 문구 · 다시 시도하기에 씀) */
+  const [paidPlan, setPaidPlan] = useState<CreditPlan>(DEFAULT_PLAN)
+  /** 결제창을 여는 중 · 결제 확인 중에는 버튼을 다시 누를 수 없음 */
+  const [paying, setPaying] = useState(false)
   const [result, setResult] = useState<Result>(() => {
     const preview = import.meta.env.DEV ? searchParams.get('preview') : null
     return preview === 'success' || preview === 'fail' ? preview : null
@@ -49,9 +60,27 @@ export default function ChargePage() {
     else navigate(paths.home, { replace: true })
   }
 
-  function handlePay() {
-    // TODO: 연동 작업에서 Paddle.Checkout.open({ items: [{ priceId }], customData: { userId } }) 로 결제창을 열고,
-    //       결제 완료 후 크레딧을 다시 불러와 setResult('success'), 실패가 확인되면 setResult('fail')
+  async function handlePay(target: CreditPlan = plan) {
+    if (paying || !user) return
+    setPaidPlan(target)
+    if (!isPaddleConfigured(target)) {
+      setResult('fail')
+      return
+    }
+    setPaying(true)
+    try {
+      const outcome = await openCheckout(target, user)
+      if (outcome === 'completed') {
+        await waitForCredits(credits)
+        setResult('success')
+      } else if (outcome === 'failed') {
+        setResult('fail')
+      }
+    } catch {
+      setResult('fail')
+    } finally {
+      setPaying(false)
+    }
   }
 
   return (
@@ -96,7 +125,8 @@ export default function ChargePage() {
         </div>
         <button
           type="button"
-          onClick={handlePay}
+          disabled={paying}
+          onClick={() => void handlePay()}
           className="flex h-[48px] w-full items-center justify-center rounded-[12px] bg-brand-main px-[20px] py-[12px] text-body-b3 text-white-w1"
         >
           {formatWon(plan.price)} 결제하기
@@ -108,7 +138,7 @@ export default function ChargePage() {
         open={result === 'success'}
         icon={<CheckIcon className="size-[24px]" />}
         title="충전이 완료 되었어요."
-        lines={[`크레딧 ${plan.credits}회가 충전됐어요.`, '이제 목표를 이어서 만들어 보세요.']}
+        lines={[`크레딧 ${paidPlan.credits}회가 충전됐어요.`, '이제 목표를 이어서 만들어 보세요.']}
         note={`남은 크레딧 ${credits}회`}
         confirmText="닫기"
         onConfirm={() => {
@@ -126,9 +156,26 @@ export default function ChargePage() {
         confirmText="다시 시도하기"
         onConfirm={() => {
           setResult(null)
-          handlePay()
+          void handlePay(paidPlan)
         }}
       />
     </div>
   )
+}
+
+/** 웹훅이 처리될 때까지 기다리는 최대 시간 · 다시 불러오는 간격 */
+const CREDIT_WAIT_MS = 10000
+const CREDIT_POLL_MS = 1000
+
+/**
+ * 결제 완료 뒤 백엔드 웹훅이 크레딧을 충전할 때까지 /users/me 를 다시 불러옵니다.
+ * 시간 안에 늘지 않아도 결제는 끝났으므로 그대로 성공 팝업을 띄웁니다(남은 크레딧은 나중에 반영).
+ */
+async function waitForCredits(before: number) {
+  const until = Date.now() + CREDIT_WAIT_MS
+  while (Date.now() < until) {
+    await new Promise((resolve) => setTimeout(resolve, CREDIT_POLL_MS))
+    await loadMe()
+    if ((useAuthStore.getState().user?.credits ?? 0) > before) return
+  }
 }
