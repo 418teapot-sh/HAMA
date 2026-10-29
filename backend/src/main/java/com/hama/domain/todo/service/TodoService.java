@@ -65,11 +65,14 @@ public class TodoService {
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public TodoResponses.Created create(Long userId, CreateTodoRequest request) {
-        if ("TASK".equals(request.category())) {
+        if ("TASK".equals(request.category()) || "OTHER".equals(request.category())) {
             if (request.goalId() != null) {
                 throw new BusinessException(TodoErrorCode.TODO_INVALID_INPUT);
             }
-            return createTask(userId, request.content(), request.todoDate(), request.startTime(), request.endTime());
+            Todo todo = "OTHER".equals(request.category())
+                    ? Todo.createOther(userId, request.content(), request.todoDate(), request.startTime(), request.endTime())
+                    : Todo.createTask(userId, request.content(), request.todoDate(), request.startTime(), request.endTime());
+            return new TodoResponses.Created(todoRepository.save(todo).getId());
         }
         if (!"AI_GOAL_TASK".equals(request.category()) || request.goalId() == null || request.todoDate() == null) {
             throw new BusinessException(TodoErrorCode.TODO_INVALID_INPUT);
@@ -98,6 +101,7 @@ public class TodoService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public TodoResponses.Updated update(Long userId, Long todoId, UpdateTodoRequest request) {
         Todo todo = ownedForUpdate(userId, todoId);
+        if (request.getCategory() != null) todo.changeCategory(TodoCategory.valueOf(request.getCategory()));
         todo.revise(request.getContent() == null ? todo.getContent() : request.getContent(),
                 request.startOr(todo.getStartTime()), request.endOr(todo.getEndTime()));
         return TodoResponses.Updated.from(todo);
@@ -128,6 +132,16 @@ public class TodoService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
+    public TodoResponses.Completion undoComplete(Long userId, Long todoId) {
+        Todo todo = ownedForUpdate(userId, todoId);
+        todo.undoComplete();
+        todoRepository.flush();
+        progressChanged(todo);
+        return TodoResponses.Completion.from(todo, todo.getGoalId() == null ? null
+                : counts.countByGoal(todo.getGoalId()).progressRate());
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public TodoResponses.Note updateNote(Long userId, Long todoId, UpdateTodoNoteRequest request) {
         Todo todo = ownedForUpdate(userId, todoId);
         if (request.hasStatusNote()) {
@@ -143,6 +157,7 @@ public class TodoService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void delete(Long userId, Long todoId) {
         Todo todo = ownedForUpdate(userId, todoId);
+        todo.requireUserEditable();
         todo.delete(now());
         progressChanged(todo);
     }

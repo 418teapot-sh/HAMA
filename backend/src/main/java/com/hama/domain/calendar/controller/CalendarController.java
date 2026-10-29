@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/calendar")
 @RequiredArgsConstructor
-@Tag(name = "캘린더", description = "일반 TASK·목표 투두·고정/개인 일정 조회 및 내보내기.")
+@Tag(name = "캘린더", description = "일반 TASK·기타 OTHER·목표 투두·고정/개인 일정 조회 및 내보내기.")
 public class CalendarController {
 
     private final CalendarService service;
@@ -54,7 +54,7 @@ public class CalendarController {
 
 
     @Operation(summary = "캘린더 통합 조회", description = "KST 날짜 from/to를 포함하여 최대 366일. types 생략 시 전체. "
-            + "반복·여러 날 일정은 날짜별로 반환하며 겹침은 계산하지 않습니다. 시간 없는 TASK는 종일입니다. "
+            + "반복·여러 날 일정은 날짜별로 반환하며 겹침은 계산하지 않습니다. 시간 없는 TASK/OTHER는 종일입니다. "
             + "날짜별로 분할한 최종 항목은 요청 기간 전체에서 최대 10,000개이며 초과하면 CALENDAR_RESULT_LIMIT_EXCEEDED(400)를 반환합니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "캘린더 조회 성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "기간/타입 오류 또는 요청 기간 전체 최종 항목 10,000개 초과",
@@ -68,7 +68,7 @@ public class CalendarController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser user,
             @Parameter(required = true, example = "2026-10-01") @RequestParam(required = false) String from,
             @Parameter(required = true, example = "2026-10-31") @RequestParam(required = false) String to,
-            @Parameter(description = "쉼표로 구분: FIXED,PERSONAL,AI_GOAL,TASK") @RequestParam(required = false) String types) {
+            @Parameter(description = "쉼표로 구분: FIXED,PERSONAL,AI_GOAL,TASK,OTHER") @RequestParam(required = false) String types) {
         return ApiResponse.success(service.get(user.userId(), CalendarQuery.parse(from, to, types)));
     }
 
@@ -89,7 +89,7 @@ public class CalendarController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser user,
             @Parameter(required = true, example = "2026-10-01") @RequestParam(required = false) String from,
             @Parameter(required = true, example = "2026-10-31") @RequestParam(required = false) String to,
-            @Parameter(description = "쉼표로 구분: FIXED,PERSONAL,AI_GOAL,TASK. 생략 시 전체") @RequestParam(required = false) String types) {
+            @Parameter(description = "쉼표로 구분: FIXED,PERSONAL,AI_GOAL,TASK,OTHER. 생략 시 전체") @RequestParam(required = false) String types) {
         CalendarQuery query = CalendarQuery.parse(from, to, types);
         return ResponseEntity.ok().contentType(MediaType.parseMediaType("text/calendar;charset=UTF-8"))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"hama-" + query.from() + "-" + query.to() + ".ics\"")

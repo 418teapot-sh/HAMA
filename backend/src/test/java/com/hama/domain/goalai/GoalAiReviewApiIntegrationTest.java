@@ -63,6 +63,28 @@ class GoalAiReviewApiIntegrationTest extends GoalAiTestSupport {
     }
 
     @Test
+    void 완료취소로_진행률이_바뀌면_종료리뷰도_같은입력으로_재사용하지_않는다() throws Exception {
+        User user = user();
+        long goal = inProgressGoal(user);
+        long todo = jdbc.queryForObject("select min(todo_id) from todo where goal_id=?", Long.class, goal);
+        call(patch("/api/v1/todos/" + todo + "/complete"), user, null, 200);
+        endGoal(goal);
+        checkin(user, goal, "END", 860, true);
+        int before = credits(user);
+        AI.answer(ACHIEVED_ANSWER);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goal), 201);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goal), 200);
+        call(patch("/api/v1/todos/" + todo + "/uncomplete"), user, null, 200);
+        // 이미 저장한 리뷰 조회는 보존하고, 명시 재생성만 변경 입력으로 처리합니다.
+        call(get("/api/v1/goals/ai/reviews").param("goalId", String.valueOf(goal)), user, null, 200);
+        assertThat(credits(user)).isEqualTo(before - 1);
+        AI.answer(MISSED_ANSWER);
+        call(post("/api/v1/goals/ai/reviews"), user, Map.of("goalId", goal), 201);
+        assertThat(credits(user)).isEqualTo(before - 2);
+        assertThat(AI.requests().getLast().messages().getFirst().content()).contains("\"progressRate\":0.0");
+    }
+
+    @Test
     void END_체크인_뒤_리뷰를_만들면_AI_가_판정한_결과를_저장하고_크레딧을_쓴다() throws Exception {
         User user = user();
         long goalId = inProgressGoal(user);

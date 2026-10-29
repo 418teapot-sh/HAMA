@@ -11,13 +11,13 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import tools.jackson.databind.annotation.JsonDeserialize;
 
-@Schema(description = "일반 TASK 또는 목표 연결 AI_GOAL_TASK 생성.")
+@Schema(description = "일반 TASK·기타 OTHER 또는 목표 연결 AI_GOAL_TASK 생성.")
 @ValidTodoGoalLink
 public record CreateTodoRequest(
         @NotNull(message = "카테고리는 필수입니다.")
-        @Pattern(regexp = "TASK|AI_GOAL_TASK", message = "TASK 또는 AI_GOAL_TASK를 입력해야 합니다.")
+        @Pattern(regexp = "TASK|OTHER|AI_GOAL_TASK", message = "TASK, OTHER 또는 AI_GOAL_TASK를 입력해야 합니다.")
         @JsonDeserialize(using = StrictDeserializers.Text.class)
-        @Schema(example = "TASK", allowableValues = {"TASK", "AI_GOAL_TASK"}, requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(example = "TASK", allowableValues = {"TASK", "OTHER", "AI_GOAL_TASK"}, requiredMode = Schema.RequiredMode.REQUIRED)
         String category,
 
         @NotBlank(message = "내용은 필수입니다.")
@@ -40,7 +40,7 @@ public record CreateTodoRequest(
         LocalTime endTime,
 
         @Positive
-        @Schema(description = "AI_GOAL_TASK 필수. TASK는 null.")
+        @Schema(description = "AI_GOAL_TASK 필수. TASK/OTHER는 null.")
         Long goalId
 ) {
 }

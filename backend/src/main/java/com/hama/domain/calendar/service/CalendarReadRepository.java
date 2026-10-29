@@ -63,22 +63,22 @@ public class CalendarReadRepository {
 
     public List<TaskCandidate> tasks(long userId, CalendarQuery query, long afterId) {
         List<String> categories = query.types().stream()
-                .filter(type -> type == CalendarType.TASK || type == CalendarType.AI_GOAL)
-                .map(type -> type == CalendarType.TASK ? "TASK" : "AI_GOAL_TASK").toList();
+                .filter(type -> type == CalendarType.TASK || type == CalendarType.OTHER || type == CalendarType.AI_GOAL)
+                .map(type -> type == CalendarType.AI_GOAL ? "AI_GOAL_TASK" : type.name()).toList();
         if (categories.isEmpty()) return List.of();
         return jdbc.query("""
                 SELECT t.todo_id, t.content, t.todo_date, t.start_time, t.end_time, t.status, t.status_note,
                        t.category, t.goal_id
                 FROM todo t WHERE t.user_id = :user AND t.deleted_at IS NULL AND t.category IN (:categories)
                   AND t.todo_id > :cursor AND t.todo_date BETWEEN :first AND :last
-                  AND (t.category = 'TASK' OR EXISTS
+                  AND (t.category IN ('TASK', 'OTHER') OR EXISTS
                       (SELECT 1 FROM goal g WHERE g.goal_id = t.goal_id AND g.user_id = :user AND g.deleted_at IS NULL))
                 ORDER BY t.todo_id LIMIT 100
                 """, Map.of("user", userId, "cursor", afterId, "first", query.from(), "last", query.to(), "categories", categories),
                 (rs, row) -> new TaskCandidate(rs.getLong("todo_id"), rs.getString("content"), rs.getObject("todo_date", LocalDate.class),
                         rs.getObject("start_time", LocalTime.class), rs.getObject("end_time", LocalTime.class),
                         TodoStatus.valueOf(rs.getString("status")), rs.getString("status_note"),
-                        "TASK".equals(rs.getString("category")) ? CalendarType.TASK : CalendarType.AI_GOAL,
+                        "AI_GOAL_TASK".equals(rs.getString("category")) ? CalendarType.AI_GOAL : CalendarType.valueOf(rs.getString("category")),
                         rs.getObject("goal_id", Long.class)));
     }
 }
