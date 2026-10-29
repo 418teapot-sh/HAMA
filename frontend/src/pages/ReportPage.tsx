@@ -5,26 +5,66 @@ import icMascot from '../assets/icons/ic_mascot.svg'
 import Modal from '../components/Modal'
 import NavigationBar from '../components/NavigationBar'
 import Toast from '../components/Toast'
-import { deleteGoal, getGoals, getGoalTree, replanGoal, type GoalSummary, type GoalTree } from '../features/goal/api'
+import {
+  deleteGoal,
+  getGoalReview,
+  getGoals,
+  getGoalTasks,
+  getProgressSummary,
+  replanGoal,
+  type GoalSummary,
+  type GoalTask,
+} from '../features/goal/api'
 import GoalMoreSheet from '../features/goal/components/GoalMoreSheet'
 import ReportGoalCard from '../features/goal/components/ReportGoalCard'
+import { useAuthStore } from '../features/auth/store'
+import CreditShortageModal from '../features/payment/CreditShortageModal'
 import { useToast } from '../hooks/useToast'
 import { paths } from '../paths'
 
-type Tab = 'IN_PROGRESS' | 'PAST'
+/** ENDED = 완료 처리한 목표(COMPLETED) + 종료일이 지난 목표(PAST) */
+type Tab = 'IN_PROGRESS' | 'ENDED'
 
 const TABS: { value: Tab; label: string }[] = [
   { value: 'IN_PROGRESS', label: '진행중인 목표' },
-  { value: 'PAST', label: '완료한 목표' },
+  { value: 'ENDED', label: '완료한 목표' },
 ]
 
-type GoalWithTree = { goal: GoalSummary; tree: GoalTree | null }
+type ReportItem = { goal: GoalSummary; tasks: GoalTask[]; aiSummary: string[] | null }
 
-/** 목표 목록과 각 목표의 계층 트리(체크 목록·AI 요약용)를 함께 불러옵니다 */
-async function loadGoals(tab: Tab): Promise<GoalWithTree[]> {
-  const goals = await getGoals(tab)
-  const trees = await Promise.all(goals.map((goal) => getGoalTree(goal.goalId).catch(() => null)))
-  return goals.map((goal, i) => ({ goal, tree: trees[i] }))
+/**
+ * 진행 중 목표의 AI 요약 (크레딧 안 씀). 상태 기록이 쌓이면 서버가 알아서 갱신합니다.
+ * READY 면 요약 문장, 만드는 중·기록 없음은 안내 한 줄, 그 밖에는 숨김
+ */
+async function loadProgressSummary(goalId: number) {
+  const summary = await getProgressSummary(goalId)
+  if (summary.status === 'READY' && summary.summary) return summary.summary.split('\n').filter(Boolean)
+  if (summary.status === 'PENDING' || summary.status === 'GENERATING') return ['AI 가 요약을 만들고 있어요.']
+  if (summary.status === 'EMPTY') return ['완료한 투두에 상태를 남기면 AI 가 요약해드려요.']
+  return null
+}
+
+/** 끝난 목표의 종료 AI 리뷰 두 줄 (성과 비교 · 칭찬/격려). 리뷰가 없으면(404) 숨김 */
+async function loadReview(goalId: number) {
+  const review = await getGoalReview(goalId)
+  return [review.comparison, review.message]
+}
+
+/** 목표 목록과 각 목표의 할 일 · AI 요약을 함께 불러옵니다. 카드 하나가 실패해도 나머지는 보여 줍니다 */
+async function loadGoals(tab: Tab): Promise<ReportItem[]> {
+  const goals =
+    tab === 'IN_PROGRESS'
+      ? await getGoals('IN_PROGRESS')
+      : (await Promise.all([getGoals('COMPLETED'), getGoals('PAST')])).flat()
+  return Promise.all(
+    goals.map(async (goal) => {
+      const [goalTasks, aiSummary] = await Promise.all([
+        getGoalTasks(goal.goalId).catch(() => null),
+        (tab === 'IN_PROGRESS' ? loadProgressSummary(goal.goalId) : loadReview(goal.goalId)).catch(() => null),
+      ])
+      return { goal, tasks: goalTasks?.tasks ?? [], aiSummary }
+    }),
+  )
 }
 
 /**
@@ -35,17 +75,20 @@ async function loadGoals(tab: Tab): Promise<GoalWithTree[]> {
  *   - 안 고른 탭: 배경 Card_Back + 글자 Body/B5 Black/Gray40
  *   마스코트 아이콘은 흰색·회색 파일이 아직 없어 ic_mascot 에 색 필터를 씌웠습니다.
  *   TODO: Figma 탭 아이콘(흰색·회색)을 받아 파일로 바꿉니다
+ * - 완료한 목표 탭 = 완료 처리한 목표(COMPLETED) 먼저, 그다음 종료일이 지난 목표(PAST)
  * - 목표 카드 목록 간격 20
  */
 export default function ReportPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const [tab, setTab] = useState<Tab>('IN_PROGRESS')
-  const [items, setItems] = useState<GoalWithTree[] | null>(null)
+  const [items, setItems] = useState<ReportItem[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [moreGoal, setMoreGoal] = useState<GoalSummary | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<GoalSummary | null>(null)
   const [replanningId, setReplanningId] = useState<number | null>(null)
+  const [creditShortage, setCreditShortage] = useState(false)
+  const credits = useAuthStore((state) => state.user?.credits ?? 0)
 
   const reload = useCallback(async (target: Tab) => {
     setItems(null)
@@ -87,8 +130,10 @@ export default function ReportPage() {
     try {
       const result = await replanGoal(goalId)
       toast.show(result.movedCount > 0 ? `투두 ${result.movedCount}개를 다시 배치했어요.` : '다시 배치할 투두가 없어요.')
-    } catch {
-      toast.show('일정을 재계산하지 못했어요. 잠시 후 다시 시도해주세요.')
+    } catch (error) {
+      // 일정 재계산은 크레딧 1회를 씀 (옮긴 투두가 없으면 차감 안 됨)
+      if (getApiError(error)?.code === 'INSUFFICIENT_CREDITS') setCreditShortage(true)
+      else toast.show('일정을 재계산하지 못했어요. 잠시 후 다시 시도해주세요.')
     } finally {
       setReplanningId(null)
     }
@@ -152,11 +197,12 @@ export default function ReportPage() {
           </p>
         ) : (
           <ul className="flex flex-col gap-[20px]">
-            {items.map(({ goal, tree }) => (
+            {items.map(({ goal, tasks, aiSummary }) => (
               <li key={goal.goalId}>
                 <ReportGoalCard
                   goal={goal}
-                  tree={tree}
+                  tasks={tasks}
+                  aiSummary={aiSummary}
                   onMore={() => setMoreGoal(goal)}
                   onReplan={goal.status === 'IN_PROGRESS' ? () => handleReplan(goal.goalId) : undefined}
                   replanning={replanningId === goal.goalId}
@@ -169,7 +215,7 @@ export default function ReportPage() {
 
       <GoalMoreSheet
         open={moreGoal !== null}
-        isPast={moreGoal?.status === 'PAST'}
+        isPast={moreGoal?.status === 'PAST' || moreGoal?.status === 'COMPLETED'}
         onClose={() => setMoreGoal(null)}
         onEdit={() => {
           // TODO: 목표 수정 화면 디자인이 정해지면 연결합니다 (PATCH /api/v1/goals/{goalId})
@@ -191,6 +237,8 @@ export default function ReportPage() {
         onCancel={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
       />
+
+      <CreditShortageModal open={creditShortage} credits={credits} onClose={() => setCreditShortage(false)} />
 
       <Toast message={toast.message} />
     </>

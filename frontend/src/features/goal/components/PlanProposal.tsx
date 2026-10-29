@@ -16,7 +16,7 @@ type PlanProposalProps = {
   onSelect: (planId: number) => void
 }
 
-/** 체크 목록에 보여줄 마일스톤 수 */
+/** 체크 목록에 보여줄 할 일 수 */
 const MAX_ITEMS = 3
 
 /**
@@ -25,7 +25,8 @@ const MAX_ITEMS = 3
  * - 카드 양옆 화살표로 A ↔ B. 끝이면 화살표를 흐리게
  * - 카드: 반경 20 / 패딩 20·16 / 간격 16. 고르면 배경 Card_Back_2(40%) + 테두리 Card_Stroke_2, 아니면 Card_Back + Stroke
  *   - 유형(여유형·집중형) Body/B9, 목표 제목 Heading/H1, 기간 Body/B8 Black/Gray60
- *   - 마일스톤 목록 상자: 홈 목표 요약 카드와 같은 모양 (체크 24 + Body/B7 SemiBold Brand/Main_80)
+ *   - 할 일 목록 상자: 홈 목표 요약 카드와 같은 모양 (체크 24 + Body/B7 SemiBold Brand/Main_80)
+ *     할 일 옆에 '주 n회' 를 붙여 A/B 차이가 보이게 함
  *   - 선택 버튼: 높이 48 / 반경 12, 고르면 Brand/Main, 아니면 Black/Gray20
  */
 export default function PlanProposal({
@@ -72,12 +73,14 @@ export default function PlanProposal({
             <p className="text-body-b8 text-black-gray60">{formatGoalPeriod(goal.startDate, goal.endDate)}</p>
           </div>
 
-          {plan.milestones.length > 0 && (
+          {plan.tasks.length > 0 && (
             <ul className="flex flex-col gap-[4px] rounded-[16px] border border-stroke bg-card-back p-[16px]">
-              {plan.milestones.slice(0, MAX_ITEMS).map((milestone) => (
-                <li key={milestone.seq} className="flex items-center gap-[8px]">
+              {plan.tasks.slice(0, MAX_ITEMS).map((task) => (
+                <li key={task.content} className="flex items-center gap-[8px]">
                   <img src={icCheck} alt="" className="size-[24px] shrink-0" />
-                  <span className="text-body-b7 font-semibold text-brand-main-80">{milestone.title}</span>
+                  <span className="text-body-b7 font-semibold text-brand-main-80">
+                    {task.content} <span className="font-normal text-black-gray60">· 주 {task.timesPerWeek}회</span>
+                  </span>
                 </li>
               ))}
             </ul>
