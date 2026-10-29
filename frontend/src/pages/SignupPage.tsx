@@ -10,6 +10,7 @@ import { signup, type SignupRequest } from '../features/auth/api'
 import { useToast } from '../hooks/useToast'
 import { paths } from '../paths'
 import icBack from '../assets/icons/ic_back.svg'
+import logoHama from '../assets/logo/logo_hama.svg'
 import icEyesNoSee from '../assets/icons/ic_eyes_nosee.svg'
 import icEyesSee from '../assets/icons/ic_eyes_see.svg'
 
@@ -94,8 +95,8 @@ export default function SignupPage() {
       <>
         <main className="flex w-full flex-1 flex-col items-center justify-center gap-[10px] p-[10px]">
           <div className="flex flex-col items-center gap-[20px]">
-            {/* TODO: 로고 이미지가 나오면 교체 (Figma 에는 '로고 자리' 텍스트만 있음, Heading/H3 400 #000000) */}
-            <span className="text-heading-h3 text-black">로고 자리</span>
+            {/* Figma 회원가입 완료(10/28 갱신본): 로고 Vector 214×40, 문구와 간격 20 */}
+            <img src={logoHama} alt="HAMA" width={214} height={40} className="h-[40px] w-[214px]" />
             <p className="text-heading-h3 font-bold text-brand-main-80">회원가입이 완료되었습니다</p>
           </div>
         </main>

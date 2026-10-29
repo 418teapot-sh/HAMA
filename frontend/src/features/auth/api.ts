@@ -89,3 +89,28 @@ export async function withdraw(password: string) {
   await api.post('/api/v1/users/me/withdraw', { password })
   useAuthStore.getState().clear()
 }
+
+/**
+ * 비밀번호 재설정 메일 요청. 가입 여부를 숨기려고 없는 이메일이어도 성공(200)합니다.
+ * 메일의 링크는 {프론트}/reset-password?token=... (30분, 한 번만 사용). 다시 요청하면 옛 링크는 무효가 됩니다.
+ * 실패: 400 VALIDATION_FAILED(fields.email), 이메일·IP 마다 15분에 5번 초과 시 429 TOO_MANY_REQUESTS
+ */
+export async function requestPasswordReset(email: string) {
+  await api.post('/api/v1/auth/password-reset', { email })
+}
+
+/**
+ * 새 비밀번호 설정. 성공하면 모든 기기의 refreshToken 이 지워져 새 비밀번호로 다시 로그인해야 합니다.
+ * 실패: 400 INVALID_PASSWORD_RESET_TOKEN(만료 · 이미 사용 · 새 메일로 바뀜), 400 VALIDATION_FAILED(fields.newPassword)
+ */
+export async function confirmPasswordReset(token: string, newPassword: string) {
+  await api.post('/api/v1/auth/password-reset/confirm', { token, newPassword })
+}
+
+/**
+ * 이메일 찾기 문의. 운영자가 확인해 답변 이메일로 안내합니다(자동으로 찾아주지 않음).
+ * 실패: 400 VALIDATION_FAILED(fields.name · fields.email), IP 마다 15분에 5번 초과 시 429 TOO_MANY_REQUESTS
+ */
+export async function submitEmailInquiry(name: string, email: string) {
+  await api.post('/api/v1/auth/email-inquiry', { name, email })
+}
