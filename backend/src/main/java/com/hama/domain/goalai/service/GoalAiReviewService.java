@@ -6,51 +6,72 @@ import com.hama.domain.checkin.entity.GoalCheckin;
 import com.hama.domain.checkin.repository.CheckinRepository;
 import com.hama.domain.goal.entity.Goal;
 import com.hama.domain.goal.entity.GoalStatus;
+import com.hama.domain.goal.exception.GoalErrorCode;
 import com.hama.domain.goal.repository.GoalRepository;
 import com.hama.domain.goal.repository.GoalTodoRepository;
 import com.hama.domain.goalai.dto.ReviewResponse;
 import com.hama.domain.goalai.entity.GoalReview;
+import com.hama.domain.goalai.entity.GoalReviewGeneration;
 import com.hama.domain.goalai.exception.GoalAiErrorCode;
+import com.hama.domain.goalai.repository.GoalReviewGenerationRepository;
 import com.hama.domain.goalai.repository.GoalReviewRepository;
 import com.hama.domain.payment.service.CreditService;
+import com.hama.domain.user.exception.UserErrorCode;
+import com.hama.domain.user.repository.UserRepository;
 import com.hama.global.ai.AiClient;
 import com.hama.global.ai.AiErrorCode;
 import com.hama.global.ai.AiMessage;
 import com.hama.global.ai.AiRequest;
+import com.hama.global.ai.LinerProperties;
 import com.hama.global.exception.BusinessException;
+import com.hama.global.exception.GlobalErrorCode;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.text.BreakIterator;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * END 체크인 뒤 목표 전체를 돌아보는 AI 리뷰. 목표당 1건이고, 다시 부르면 기존 리뷰와 목표의 resultStatus 를 덮어씁니다.
- * AI 호출(최대 수십 초) 동안 DB 커넥션을 잡지 않도록 읽기 → AI 호출 → 쓰기를 트랜잭션 두 개로 나눕니다.
- * 호출마다 크레딧 1개를 쓰고, 자격 검증을 통과한 뒤 실패(AI 실패·충돌)하면 돌려줍니다.
+ * AI 대기 동안 DB 커넥션을 잡지 않습니다. 만료 회수 → 예약 → AI 호출 → 저장은 독립된 짧은 단계입니다.
+ * 동일 입력은 무료 재사용합니다. 새 생성은 호출 전에 예약·차감하고 실패/만료 시 예약당 한 번만 환급합니다.
  */
+@Slf4j
 @Service
 public class GoalAiReviewService {
 
-    private static final int MAX_TEXT = 500;
+    private static final int MAX_LINE = 40;
+    private static final String ELLIPSIS = "…";
     private static final int MAX_NOTE_LENGTH = 300;
     private static final int MAX_MID_CHECKINS = 20;
 
     private static final String REVIEW_PROMPT = """
             너는 목표 달성 여부를 판정하고 성과를 비교해 멘트를 주는 코치야. 오늘은 %s(KST)야.
-            목표 정보(JSON: 지표 이름·단위·시작값·목표값, 투두 진행률, START/MID/END 체크인 기록, 사용자가 지금 입력한 상태)를 보고 판단해.
+            목표 정보(JSON: 목표 제목, 목표를 시작할 때 입력한 현재 상태(initialStatus), 투두 진행률, START/MID/END 체크인 기록,
+            지금(종료 시점) 입력한 상태(currentStatus))를 보고 판단해. initialStatus 와 currentStatus 는 자유 텍스트라 숫자가 아닐 수 있어.
             achieved 는 네가 스스로 판정해. END 체크인의 achieved 는 참고만 하고 그대로 따르지 마.
+            화면에 두 줄로 보여 주므로 comparison 과 message 는 각각 줄바꿈 없는 짧은 한 문장(공백·이모지 포함 %2$d자 이하)이어야 해.
+            답하기 전에 글자 수를 세어 보고, %2$d자를 넘으면 뜻은 그대로 두고 더 짧은 문장으로 다시 써. 넘는 부분은 잘려서 보이지 않아.
             반드시 아래 필드를 가진 JSON 객체 하나로만 답해.
             {"achieved": true 또는 false,
-             "comparison": 시작값·목표값·최종값을 숫자로 비교하는 한국어 문장(500자 이하),
-             "message": achieved 가 true 면 칭찬, false 면 격려하는 한국어 문장(500자 이하)}
+             "comparison": initialStatus·currentStatus·투두 진행률을 비교한 한 줄(예: "처음보다 100점 올랐어요!"),
+             "message": achieved 가 true 면 칭찬, false 면 격려하는 한 줄(예: "일정을 모두 소화했어요!")}
             """;
 
     private final GoalRepository goals;
@@ -61,11 +82,16 @@ public class GoalAiReviewService {
     private final CreditService credits;
     private final GoalAiJson json;
     private final TransactionTemplate transaction;
+    private final TransactionTemplate recovery;
     private final Clock clock;
+    private final UserRepository users;
+    private final GoalReviewGenerationRepository generations;
+    private final long leaseSeconds;
 
     public GoalAiReviewService(GoalRepository goals, CheckinRepository checkins, GoalReviewRepository reviews,
             GoalTodoRepository goalTodos, AiClient aiClient, CreditService credits, GoalAiJson json,
-            TransactionTemplate transaction, @Qualifier("be3Clock") Clock clock) {
+            TransactionTemplate transaction, @Qualifier("be3Clock") Clock clock, UserRepository users,
+            GoalReviewGenerationRepository generations, LinerProperties liner) {
         this.goals = goals;
         this.checkins = checkins;
         this.reviews = reviews;
@@ -73,58 +99,174 @@ public class GoalAiReviewService {
         this.aiClient = aiClient;
         this.credits = credits;
         this.json = json;
-        this.transaction = transaction;
+        this.transaction = new TransactionTemplate(transaction.getTransactionManager());
+        this.transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        this.recovery = new TransactionTemplate(transaction.getTransactionManager());
+        this.recovery.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        this.recovery.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.clock = clock;
+        this.users = users;
+        this.generations = generations;
+        this.leaseSeconds = Math.max(120L, (long) liner.timeoutSeconds() + 60L);
     }
 
-    public ReviewResponse create(Long userId, Long goalId, String currentStatus) {
-        LocalDate today = LocalDate.now(clock);
-        // 자격 확인 뒤 바로 크레딧을 쓴다. 검증에서 던지면 트랜잭션이 롤백되어 차감도 같이 취소된다(실패 요청은 공짜).
-        ReadSnapshot snapshot = transaction.execute(status -> {
-            Goal goal = requireReviewable(GoalAiPlanService.owned(goals.findActive(goalId), userId), today);
-            credits.use(userId);
-            return new ReadSnapshot(payload(goal, currentStatus), ReviewVersion.of(reviews.findByGoalId(goalId)));
-        });
-        ReviewPayload payload = snapshot.payload();
+    public Creation create(Long userId, Long goalId, String currentStatus) {
+        // 회수는 새 요청의 자격 오류/잔액 부족과 분리해 먼저 커밋합니다.
+        recoverExpired(userId, goalId);
+        ReadSnapshot snapshot = transaction.execute(status -> reserve(userId, goalId, currentStatus));
+        if (snapshot.cached() != null) {
+            return new Creation(snapshot.cached(), false);
+        }
 
         try {
-            ReviewAnswer answer = aiClient.chatForJson(AiRequest.of("goal-review", REVIEW_PROMPT.formatted(today),
-                    List.of(AiMessage.user(json.write(payload)))), ReviewAnswer.class);
+            ReviewAnswer answer = aiClient.chatForJson(AiRequest.of("goal-review",
+                    REVIEW_PROMPT.formatted(LocalDate.now(clock), MAX_LINE),
+                    List.of(AiMessage.user(json.write(snapshot.payload())))), ReviewAnswer.class);
             boolean achieved = validate(answer);
-            String comparison = cut(answer.comparison());
-            String message = cut(answer.message());
+            String comparison = oneLine(answer.comparison());
+            String message = oneLine(answer.message());
 
             return transaction.execute(status -> {
-                Goal goal = requireReviewable(GoalAiPlanService.owned(goals.findActiveForUpdate(goalId), userId),
-                        today);
-                // AI 가 답하는 동안(최대 수십 초) 목표나 체크인이 바뀌었으면 옛 데이터로 낸 판정을 버린다.
-                if (!payload(goal, currentStatus).equals(payload)) {
+                lockOwner(userId, goalId);
+                Goal goal = requireReviewable(GoalAiPlanService.owned(goals.findActive(goalId), userId),
+                        LocalDate.now(clock));
+                GoalReviewGeneration generation = generations.findByGoalId(goalId)
+                        .orElseThrow(() -> new BusinessException(GoalAiErrorCode.AI_REVIEW_OUTDATED));
+                if (!generation.owns(snapshot.token())
+                        || !fingerprint(payload(goal, currentStatus)).equals(snapshot.inputHash())) {
                     throw new BusinessException(GoalAiErrorCode.AI_REVIEW_OUTDATED);
                 }
                 Optional<GoalReview> existing = reviews.findByGoalId(goalId);
-                // 동시에 두 번 요청하면 goal 락은 순서만 정해줄 뿐 둘 다 통과할 수 있다. 읽을 때 본 리뷰 버전과
-                // (락을 잡고) 다시 읽은 버전이 다르면 그 사이 다른 요청이 먼저 저장한 것이니 여기서 멈춘다.
                 if (!Objects.equals(ReviewVersion.of(existing), snapshot.version())) {
                     throw new BusinessException(GoalAiErrorCode.AI_REVIEW_OUTDATED);
                 }
-                GoalReview review = existing
-                        .map(found -> {
-                            found.overwrite(achieved, comparison, message, currentStatus);
-                            return found;
-                        })
-                        .orElseGet(() -> reviews.save(GoalReview.create(goalId, achieved, comparison, message,
-                                currentStatus)));
+                String compared = snapshot.payload().currentStatus();
+                GoalReview review = existing.orElseGet(() -> GoalReview.create(goalId, achieved, comparison,
+                        message, compared));
+                existing.ifPresent(saved -> saved.overwrite(achieved, comparison, message, compared));
+                reviews.saveAndFlush(review);
                 goal.recordResult(achieved);
-                return ReviewResponse.from(goal, review);
+                generation.complete(snapshot.inputHash(), resultFingerprint(review));
+                return new Creation(ReviewResponse.from(goal, review), true);
             });
-        } catch (RuntimeException e) {
-            // 크레딧을 쓴 뒤 아무 리뷰도 만들지 못했으니 돌려준다(AI 실패, 응답 판정 실패, 충돌 모두 포함).
-            transaction.executeWithoutResult(status -> credits.giveBack(userId));
-            throw e;
+        } catch (RuntimeException original) {
+            try {
+                releaseFailed(userId, goalId, snapshot.token());
+            } catch (RuntimeException refundFailure) {
+                // 환급 UPDATE도 롤백되므로 예약은 남아 다음 만료 회수에서 재시도할 수 있습니다.
+                original.addSuppressed(refundFailure);
+                log.warn("[goal-review] refund failed goalId={} error={}", goalId,
+                        refundFailure.getClass().getSimpleName());
+            }
+            throw original;
         }
     }
 
+    private ReadSnapshot reserve(Long userId, Long goalId, String currentStatus) {
+        lockOwner(userId, goalId);
+        Goal goal = requireReviewable(GoalAiPlanService.owned(goals.findActive(goalId), userId), LocalDate.now(clock));
+        GoalReviewGeneration generation = generations.findByGoalId(goalId)
+                .orElseGet(() -> generations.save(GoalReviewGeneration.create(goalId)));
+        // 입력이 달라도 진행 중인 요청의 예약을 빼앗지 않습니다.
+        if (generation.reserved()) {
+            throw new BusinessException(GoalAiErrorCode.AI_REVIEW_GENERATING);
+        }
+        ReviewPayload payload = payload(goal, currentStatus);
+        String inputHash = fingerprint(payload);
+        Optional<GoalReview> existing = reviews.findByGoalId(goalId);
+        if (inputHash.equals(generation.getSuccessfulInputHash()) && existing.isPresent()
+                && resultFingerprint(existing.get()).equals(generation.getSuccessfulResultHash())) {
+            return new ReadSnapshot(payload, ReviewVersion.of(existing), inputHash, null,
+                    ReviewResponse.from(goal, existing.get()));
+        }
+        credits.use(userId);
+        String token = UUID.randomUUID().toString();
+        generation.reserve(token, inputHash, LocalDateTime.now(clock).plusSeconds(leaseSeconds));
+        return new ReadSnapshot(payload, ReviewVersion.of(existing), inputHash, token, null);
+    }
+
+    /** 사용자 → 목표 순서. 소프트 삭제 후 환급도 같은 순서로 직렬화합니다. */
+    private void lockOwner(Long userId, Long goalId) {
+        requireOwner(userId, goalId);
+        users.findByIdForUpdate(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        Long owner = generations.lockGoalOwner(goalId)
+                .orElseThrow(() -> new BusinessException(GoalErrorCode.GOAL_NOT_FOUND));
+        if (!owner.equals(userId)) {
+            // 삭제된 타인 목표도 기존 active 조회 계약대로 404입니다.
+            GoalAiPlanService.owned(goals.findActive(goalId), userId);
+        }
+    }
+
+    private void requireOwner(Long userId, Long goalId) {
+        var owner = generations.findGoalOwner(goalId)
+                .orElseThrow(() -> new BusinessException(GoalErrorCode.GOAL_NOT_FOUND));
+        if (!owner.getUserId().equals(userId)) {
+            throw new BusinessException(owner.getDeletedAt() == null
+                    ? GlobalErrorCode.FORBIDDEN : GoalErrorCode.GOAL_NOT_FOUND);
+        }
+    }
+
+    private void recoverExpired(Long userId, Long goalId) {
+        recovery.executeWithoutResult(status -> {
+            lockOwner(userId, goalId);
+            generations.findByGoalId(goalId).filter(g -> g.expired(LocalDateTime.now(clock)))
+                    .ifPresent(g -> refundAndRelease(userId, g));
+        });
+    }
+
+    private void releaseFailed(Long userId, Long goalId, String token) {
+        transaction.executeWithoutResult(status -> {
+            // 탈퇴가 끝났으면 사용자/예약을 복원하지 않습니다.
+            if (users.findByIdForUpdate(userId).isEmpty()) {
+                return;
+            }
+            if (generations.lockGoalOwner(goalId).filter(userId::equals).isEmpty()) {
+                return;
+            }
+            generations.findByGoalId(goalId).filter(g -> g.owns(token)).ifPresent(g -> refundAndRelease(userId, g));
+        });
+    }
+
+    private void refundAndRelease(Long userId, GoalReviewGeneration generation) {
+        if (generation.isCharged()) {
+            credits.giveBack(userId);
+        }
+        generation.release();
+    }
+
+    private String fingerprint(ReviewPayload payload) {
+        // 오늘 날짜는 사용자 입력이 아닙니다. 자정이 지났다는 이유로 같은 입력에 다시 과금하지 않습니다.
+        return hash(REVIEW_PROMPT + "\n" + json.write(payload));
+    }
+
+    private String resultFingerprint(GoalReview review) {
+        return hash(json.write(new ResultSnapshot(review.getId(), review.isAchieved(), review.getComparison(),
+                review.getMessage(), review.getCurrentStatus())));
+    }
+
+    private static String hash(String value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
+
+    public record Creation(ReviewResponse response, boolean created) {
+    }
+
+    private record ResultSnapshot(Long id, boolean achieved, String comparison, String message, String currentStatus) {
+    }
+
     public ReviewResponse get(Long userId, Long goalId) {
+        boolean expired = Boolean.TRUE.equals(transaction.execute(status -> {
+            requireOwner(userId, goalId);
+            return generations.findByGoalId(goalId).filter(g -> g.expired(LocalDateTime.now(clock))).isPresent();
+        }));
+        // 보통 GET은 잠그지 않습니다. 회수는 별도 커밋하여 아래의 리뷰 없음/삭제 목표 404에도 보존합니다.
+        if (expired) recoverExpired(userId, goalId);
         return transaction.execute(status -> {
             Goal goal = GoalAiPlanService.owned(goals.findActive(goalId), userId);
             GoalReview review = reviews.findByGoalId(goalId)
@@ -133,12 +275,15 @@ public class GoalAiReviewService {
         });
     }
 
-    /** 계획 중(PLANNING) → 종료일 미도달 → END 체크인 없음 순서로 막습니다. 종료 전이면 END 유무와 무관하게 먼저 걸립니다. */
+    /**
+     * 계획 중(PLANNING) → 종료일 미도달 → END 체크인 없음 순서로 막습니다. 종료 전이면 END 유무와 무관하게 먼저 걸립니다.
+     * 직접 완료(COMPLETED)한 목표는 종료일 전이어도 끝난 것으로 봅니다.
+     */
     private Goal requireReviewable(Goal goal, LocalDate today) {
         if (goal.getStatus() == GoalStatus.PLANNING) {
             throw new BusinessException(GoalAiErrorCode.AI_REVIEW_GOAL_NOT_STARTED);
         }
-        if (!goal.isPast(today)) {
+        if (!goal.isPast(today) && !goal.isCompleted()) {
             throw new BusinessException(GoalAiErrorCode.AI_REVIEW_GOAL_NOT_ENDED);
         }
         if (!checkins.existsByGoalIdAndType(goal.getId(), CheckinType.END)) {
@@ -147,13 +292,18 @@ public class GoalAiReviewService {
         return goal;
     }
 
+    /**
+     * initialStatus 는 생성 때 저장한 시작 상태라 PATCH current-status 로 바뀌지 않습니다.
+     * 요청에 currentStatus 가 없으면 마지막으로 저장한 현재 상태를 지금 상태로 씁니다.
+     */
     private ReviewPayload payload(Goal goal, String currentStatus) {
         List<GoalCheckin> all = checkins.findByGoalIdOrderByCheckedAtAscIdAsc(goal.getId());
         List<CheckinSnapshot> snapshots = limitMid(all, MAX_MID_CHECKINS).stream().map(CheckinSnapshot::from)
                 .toList();
         BigDecimal progressRate = goalTodos.countByGoal(goal.getId()).progressRate();
-        return new ReviewPayload(goal.getTitle(), goal.getMetricName(), goal.getUnit(), goal.getStartValue(),
-                goal.getTargetValue(), progressRate, snapshots, currentStatus);
+        String current = currentStatus == null || currentStatus.isBlank() ? goal.getCurrentStatus()
+                : currentStatus.strip();
+        return new ReviewPayload(goal.getTitle(), goal.getInitialStatus(), progressRate, snapshots, current);
     }
 
     /** MID 는 개수 제한이 없어 토큰 한도를 넘길 수 있습니다. 최근 maxMid 개만 남기고, START/END 는 항상 남깁니다. 순서는 그대로입니다. */
@@ -175,21 +325,39 @@ public class GoalAiReviewService {
         return answer.achieved();
     }
 
-    static String cut(String text) {
-        String stripped = text.strip();
-        return stripped.length() <= MAX_TEXT ? stripped : stripped.substring(0, MAX_TEXT);
+    /**
+     * 프롬프트를 어겨도 화면에 한 줄로 나가도록 줄바꿈·연속 공백을 공백 하나로 바꿉니다. MAX_LINE 글자를 넘으면
+     * MAX_LINE - 1 글자까지 남기고 … 를 붙입니다. 글자는 화면에 보이는 단위(grapheme)로 세서 👨‍👩‍👧 같은 조합 이모지가 깨지지 않습니다.
+     */
+    static String oneLine(String text) {
+        String flat = text.replaceAll("\\s+", " ").strip();
+        BreakIterator graphemes = BreakIterator.getCharacterInstance(Locale.ROOT);
+        graphemes.setText(flat);
+        int count = 0;
+        int keepEnd = 0;
+        for (int end = graphemes.next(); end != BreakIterator.DONE; end = graphemes.next()) {
+            count++;
+            if (count == MAX_LINE - 1) {
+                keepEnd = end;
+            }
+            if (count > MAX_LINE) {
+                return flat.substring(0, keepEnd).strip() + ELLIPSIS;
+            }
+        }
+        return flat;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record ReviewAnswer(Boolean achieved, String comparison, String message) {
     }
 
-    record ReviewPayload(String title, String metricName, String unit, BigDecimal startValue, BigDecimal targetValue,
-            BigDecimal progressRate, List<CheckinSnapshot> checkins, String currentStatus) {
+    record ReviewPayload(String title, String initialStatus, BigDecimal progressRate,
+            List<CheckinSnapshot> checkins, String currentStatus) {
     }
 
     /** 읽기 트랜잭션에서 본 목표 데이터(payload)와 그 시점의 기존 리뷰 버전을 함께 들고 다닙니다. */
-    record ReadSnapshot(ReviewPayload payload, ReviewVersion version) {
+    record ReadSnapshot(ReviewPayload payload, ReviewVersion version, String inputHash, String token,
+            ReviewResponse cached) {
     }
 
     /** 기존 리뷰의 식별자+수정시각. 쓰기 시점에 다시 읽은 값과 비교해 그 사이 다른 요청이 먼저 썼는지 판정합니다. */

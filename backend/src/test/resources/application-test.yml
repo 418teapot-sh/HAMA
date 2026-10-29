@@ -10,18 +10,19 @@ jwt:
   secret: test-only-secret-key-do-not-use-in-production-0123456789
 
 app:
+  goal-progress:
+    worker-enabled: false
   cookie:
     path: /api/v1/auth
     secure: false
     same-site: Lax
 
-# 키를 비워둬야 라이너·Paddle 클라이언트가 비활성 경로를 탑니다.
+# 키를 비워둬야 라이너 클라이언트가 비활성 경로를 탑니다.
 # 더미 값이라도 넣으면 테스트를 돌릴 때마다 실제 외부 API 로 요청이 나갑니다.
 liner:
   api-key:
 
 paddle:
-  api-key:
   # 웹훅 서명 검증은 외부 호출이 아니라서 값을 넣어 둡니다(PaymentWebhookIntegrationTest 가 이 키로 서명합니다).
   webhook-secret: test-only-webhook-secret
   credit-price-ids:

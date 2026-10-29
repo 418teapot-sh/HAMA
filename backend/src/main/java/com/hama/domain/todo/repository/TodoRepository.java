@@ -7,6 +7,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -66,4 +68,12 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
             order by t.todoDate, t.startTime, t.id
             """)
     List<Todo> findPendingGoalTasksForUpdate(@Param("goalId") Long goalId);
+    @Query("""
+            select t from Todo t where t.userId = :userId and t.goalId = :goalId
+              and t.category = com.hama.domain.todo.entity.TodoCategory.AI_GOAL_TASK
+              and t.status = com.hama.domain.todo.entity.TodoStatus.COMPLETED
+              and t.deletedAt is null and t.statusNote is not null
+            order by t.completedAt desc, t.id desc
+            """)
+    Page<Todo> findProgressRecords(Long userId, Long goalId, Pageable pageable);
 }

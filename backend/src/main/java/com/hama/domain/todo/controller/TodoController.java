@@ -38,7 +38,7 @@ public class TodoController {
 
     private final TodoService todoService;
 
-    @Operation(summary = "투두 생성", description = "TASK는 목표 ID가 없어야 합니다. AI_GOAL_TASK는 진행 중인 본인 목표와 기간 안의 날짜가 필요하며 periodGoalId는 선택입니다.")
+    @Operation(summary = "투두 생성", description = "TASK는 목표 ID가 없어야 합니다. AI_GOAL_TASK는 진행 중인 본인 목표와 기간 안의 날짜가 필요합니다.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<ApiResponse<TodoResponses.Created>> create(

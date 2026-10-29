@@ -87,52 +87,29 @@ public abstract class GoalAiTestSupport {
         return json.readTree(response);
     }
 
-    protected static String question(String reply, String expects) {
-        return """
-                {"reply":"%s","expects":"%s","ready":false,"draft":null}
-                """.formatted(reply, expects);
-    }
-
-    protected static final String READY_ANSWER = """
-            {"reply":"정리해 봤어요. 확인해 주세요.","expects":null,"ready":true,
-             "draft":{"title":"3개월 안에 토익 850점 달성","metricName":"토익 점수","unit":"점",
-                      "startValue":700,"targetValue":850,"startDate":"2026-10-01","endDate":"2026-12-31",
-                      "weeklyAvailableHours":10.0,"currentLevel":"LC 350 / RC 350"}}
-            """;
-
-    /** 10월(3회×60분)·11~12월(2회×120분) 플랜 A 와 매일 하는 플랜 B. A 는 투두 30개입니다. */
+    /**
+     * 플랜 A(여유형)는 매일 1개(92일 × 60분 = totalTodos 92, avgDailyMinutes 60).
+     * 플랜 B(집중형)는 매일 1개(90분) + 주 1회(120분) = totalTodos 106(92+14), avgDailyMinutes 108.
+     */
     protected static final String PLAN_ANSWER = """
             {"plans":[
-              {"variant":"A","title":"여유형","summary":"주 3일, 하루 1시간.",
-               "milestones":[{"title":"기초 다지기","startDate":"2026-10-01","endDate":"2026-10-31",
-                              "weeklyTasks":[{"content":"LC 파트2 문제 풀이","sessionsPerWeek":3,"minutes":60}]},
-                             {"title":"실전 연습","startDate":"2026-11-01","endDate":"2026-12-31",
-                              "weeklyTasks":[{"content":"모의고사 1회","sessionsPerWeek":2,"minutes":120}]}]},
-              {"variant":"B","title":"집중형","summary":"매일 1.5시간.",
-               "milestones":[{"title":"몰입","startDate":"2026-10-01","endDate":"2026-12-31",
-                              "weeklyTasks":[{"content":"RC 파트7 지문","sessionsPerWeek":7,"minutes":90}]}]}]}
+              {"variant":"A","title":"여유형","summary":"매일 영어 단어 30개씩 외우기 / 일주일에 모의고사 1번 보기",
+               "tasks":[{"content":"영어 단어 30개 외우기","timesPerWeek":7,"minutes":60}]},
+              {"variant":"B","title":"집중형","summary":"매일 영어 단어 50개씩 외우기 / 일주일에 모의고사 1번 보기",
+               "tasks":[{"content":"영어 단어 50개 외우기","timesPerWeek":7,"minutes":90},
+                        {"content":"모의고사 1회","timesPerWeek":1,"minutes":120}]}]}
             """;
 
-    /** 대화 → 확정까지 거친 PLANNING 목표(2026-10-01 ~ 2026-12-31). */
+    /** AI 없이 직접 만든 PLANNING 목표(2026-10-01 ~ 2026-12-31). */
     protected long planningGoal(User user) throws Exception {
-        long sessionId = readySession(user);
-        return call(post("/api/v1/goals/ai/sessions/" + sessionId + "/confirm"), user, null, 201)
-                .at("/data/goalId").asLong();
+        return call(post("/api/v1/goals"), user,
+                Map.of("title", "3개월 안에 토익 850점", "currentStatus", "700점", "startDate", "2026-10-01",
+                        "endDate", "2026-12-31"),
+                201).at("/data/goalId").asLong();
     }
 
     protected JsonNode generatePlans(User user, long goalId) throws Exception {
         AI.answer(PLAN_ANSWER);
         return call(post("/api/v1/goals/ai/plans"), user, Map.of("goalId", goalId), 201).get("data");
-    }
-
-    /** 세션을 만들고 답변 한 번으로 READY 까지 갑니다. */
-    protected long readySession(User user) throws Exception {
-        AI.answer(question("현재 토익 점수는 어느 정도인가요?", "CURRENT_LEVEL"));
-        long sessionId = call(post("/api/v1/goals/ai/sessions"), user,
-                Map.of("rawGoal", "3개월 안에 토익 850점 받고 싶어."), 201).at("/data/sessionId").asLong();
-        AI.answer(READY_ANSWER);
-        call(post("/api/v1/goals/ai/sessions/" + sessionId + "/messages"), user,
-                Map.of("content", "지금 700점 정도예요."), 200);
-        return sessionId;
     }
 }

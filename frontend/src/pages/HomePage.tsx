@@ -3,9 +3,8 @@ import { Link } from 'react-router'
 import icRightBlack from '../assets/icons/ic_right_black.svg'
 import Calendar, { type CalendarMark } from '../components/Calendar'
 import { getMonthCalendar, toCalendarMarks } from '../features/calendar/api'
-import { getCurrentGoal, getGoalTree, type GoalSummary, type GoalTree } from '../features/goal/api'
+import { getCurrentGoal, getGoalTasks, type GoalSummary, type GoalTask } from '../features/goal/api'
 import GoalSummaryCard from '../features/goal/components/GoalSummaryCard'
-import { getCurrentPeriodGoals } from '../features/goal/tree'
 import { paths } from '../paths'
 import { formatKoreanDate } from '../utils/date'
 
@@ -16,7 +15,7 @@ import { formatKoreanDate } from '../utils/date'
  */
 export default function HomePage() {
   const [goal, setGoal] = useState<GoalSummary | null>(null)
-  const [tree, setTree] = useState<GoalTree | null>(null)
+  const [tasks, setTasks] = useState<GoalTask[]>([])
   const [goalLoading, setGoalLoading] = useState(true)
 
   const [selectedDate, setSelectedDate] = useState(() => new Date())
@@ -33,10 +32,11 @@ export default function HomePage() {
     async function load() {
       try {
         const current = await getCurrentGoal()
-        const currentTree = current ? await getGoalTree(current.goalId) : null
+        // 체크 목록 = 선택한 플랜의 반복 할 일 (GET /goals/{id}/tasks)
+        const goalTasks = current ? await getGoalTasks(current.goalId) : null
         if (!ignore) {
           setGoal(current)
-          setTree(currentTree)
+          setTasks(goalTasks?.tasks ?? [])
         }
       } finally {
         if (!ignore) setGoalLoading(false)
@@ -75,7 +75,7 @@ export default function HomePage() {
             title={goal.title}
             startDate={goal.startDate}
             endDate={goal.endDate}
-            items={getCurrentPeriodGoals(tree)}
+            items={tasks.map((task) => task.content)}
           />
         ) : (
           <p className="text-body-b8 text-black-gray60">진행 중인 목표가 없어요.</p>

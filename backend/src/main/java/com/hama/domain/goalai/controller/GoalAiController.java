@@ -1,23 +1,16 @@
 package com.hama.domain.goalai.controller;
 
-import com.hama.domain.goalai.dto.DraftResponses;
 import com.hama.domain.goalai.dto.PlanRequests;
 import com.hama.domain.goalai.dto.PlanResponses;
-import com.hama.domain.goalai.dto.RealityResult;
 import com.hama.domain.goalai.dto.ReplanRequest;
 import com.hama.domain.goalai.dto.ReplanResponse;
 import com.hama.domain.goalai.dto.ReviewRequests;
 import com.hama.domain.goalai.dto.ReviewResponse;
 import com.hama.domain.goalai.dto.SelectResponse;
-import com.hama.domain.goalai.dto.SessionRequests;
-import com.hama.domain.goalai.dto.SessionResponses;
-import com.hama.domain.goalai.dto.UpdateGoalDraftRequest;
-import com.hama.domain.goalai.service.GoalAiDraftService;
 import com.hama.domain.goalai.service.GoalAiPlanService;
 import com.hama.domain.goalai.service.GoalAiReplanService;
 import com.hama.domain.goalai.service.GoalAiReviewService;
 import com.hama.domain.goalai.service.GoalAiSelectService;
-import com.hama.domain.goalai.service.GoalAiSessionService;
 import com.hama.global.auth.AuthUser;
 import com.hama.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,7 +22,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -38,7 +30,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "목표 AI", description = """
-        AI 와 대화해 목표를 구체화(세션) → 현실성 체크·초안 수정 → 확정(PLANNING 목표 생성) → A/B 플랜 생성·선택 → 재배치.
+        PLANNING 목표에 A/B 플랜 생성·선택 → 재배치 → 종료 리뷰. 목표 자체는 /api/v1/goals 에서 AI 없이 직접 만듭니다.
         AI 호출이 실패하면 429(AI_RATE_LIMIT) / 502(AI_UPSTREAM_ERROR) / 503(AI_NOT_CONFIGURED) 입니다.
         """)
 @RestController
@@ -46,87 +38,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class GoalAiController {
 
-    private final GoalAiSessionService sessionService;
-    private final GoalAiDraftService draftService;
     private final GoalAiPlanService planService;
     private final GoalAiSelectService selectService;
     private final GoalAiReplanService replanService;
     private final GoalAiReviewService reviewService;
-
-    @Operation(summary = "목표 입력 (세션 시작)",
-            description = """
-                    AI 가 첫 질문을 돌려줍니다. expects 는 다음 답변으로 기대하는 정보(CURRENT_LEVEL | PERIOD | AVAILABLE_TIME | OTHER)입니다.
-                    rawGoal 이 비었거나 500자를 넘으면 400(VALIDATION_FAILED).
-                    """)
-    @PostMapping("/sessions")
-    public ResponseEntity<ApiResponse<SessionResponses.Started>> start(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
-            @Valid @RequestBody SessionRequests.Start request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(sessionService.start(authUser.userId(), request.rawGoal())));
-    }
-
-    @Operation(summary = "AI 질문에 답변",
-            description = """
-                    정보가 다 모이면 status=READY 와 goalDraft 를, 수집 중이면 status=COLLECTING 과 goalDraft=null 을 돌려줍니다.
-                    확정된 세션은 409(AI_SESSION_CONFIRMED), 사용자 메시지가 10개(첫 목표 포함)에 이르면 409(AI_SESSION_TURN_LIMIT).
-                    없는 세션 404(AI_SESSION_NOT_FOUND), 다른 사람의 세션 403(FORBIDDEN).
-                    """)
-    @PostMapping("/sessions/{sessionId}/messages")
-    public ApiResponse<SessionResponses.Reply> reply(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
-            @PathVariable Long sessionId, @Valid @RequestBody SessionRequests.Message request) {
-        return ApiResponse.success(sessionService.reply(authUser.userId(), sessionId, request.content()));
-    }
-
-    @Operation(summary = "세션·대화 조회",
-            description = "대화 전체와 현재 초안·현실성 결과를 돌려줍니다. 404 / 403 은 답변과 같습니다.")
-    @GetMapping("/sessions/{sessionId}")
-    public ApiResponse<SessionResponses.Detail> get(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
-            @PathVariable Long sessionId) {
-        return ApiResponse.success(sessionService.get(authUser.userId(), sessionId));
-    }
-
-    @Operation(summary = "현실성 체크",
-            description = """
-                    초안의 달성 가능성을 평가합니다. availableHours 는 기간 일수 / 7 × 주간 가용시간, gapHours 는 max(0, 필요 - 가용)입니다.
-                    주간 가용시간이 없으면 availableHours·gapHours 는 null 입니다.
-                    suggestions[].patch 는 초안 수정(PATCH draft) 본문으로 그대로 보낼 수 있습니다.
-                    초안이 아직 없으면 409(AI_SESSION_NOT_READY), 확정된 세션은 409(AI_SESSION_CONFIRMED).
-                    """)
-    @PostMapping("/sessions/{sessionId}/reality-check")
-    public ApiResponse<RealityResult> realityCheck(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
-            @PathVariable Long sessionId) {
-        return ApiResponse.success(draftService.realityCheck(authUser.userId(), sessionId));
-    }
-
-    @Operation(summary = "초안 수정",
-            description = """
-                    바꿀 필드만 보냅니다. 수정하면 이전 현실성 결과는 지워집니다(세션 조회의 realityResult=null).
-                    기간이 잘못됐으면 400(GOAL_INVALID_PERIOD), 365일(시작일 포함)을 넘으면 400(GOAL_PERIOD_TOO_LONG), 409 는 현실성 체크와 같습니다.
-                    """)
-    @PatchMapping("/sessions/{sessionId}/draft")
-    public ApiResponse<DraftResponses.DraftView> updateDraft(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
-            @PathVariable Long sessionId, @Valid @RequestBody UpdateGoalDraftRequest request) {
-        return ApiResponse.success(draftService.updateDraft(authUser.userId(), sessionId, request));
-    }
-
-    @Operation(summary = "목표 확정",
-            description = """
-                    초안으로 PLANNING 목표를 만듭니다. 현실성 체크를 했다면 그 판정·코멘트도 함께 저장합니다.
-                    확정 사이 종료일이 지났으면 400(GOAL_INVALID_PERIOD), 기간이 365일(시작일 포함)을 넘으면 400(GOAL_PERIOD_TOO_LONG),
-                    409 는 현실성 체크와 같습니다.
-                    """)
-    @PostMapping("/sessions/{sessionId}/confirm")
-    public ResponseEntity<ApiResponse<DraftResponses.Confirmed>> confirm(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
-            @PathVariable Long sessionId) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(draftService.confirm(authUser.userId(), sessionId)));
-    }
 
     @Operation(summary = "A/B 플랜 생성",
             description = """
@@ -154,7 +69,7 @@ public class GoalAiController {
 
     @Operation(summary = "플랜 선택",
             description = """
-                    플랜대로 마일스톤·주간 목표·투두를 만들고 목표를 IN_PROGRESS 로 바꿉니다.
+                    플랜대로 투두를 만들고 목표를 IN_PROGRESS 로 바꿉니다.
                     투두는 그날 09:00~22:00 중 고정·개인 일정과 시간이 정해진 기존 투두를 피한 첫 빈 시간(10분 단위)에 둡니다.
                     빈 시간이 없으면 시간 없이 날짜만 두고 placement.unplacedTodos 에 담습니다.
                     없는 플랜 404(AI_PLAN_NOT_FOUND), 다른 사람의 플랜 403, 이미 고른 플랜 409(AI_PLAN_ALREADY_SELECTED),
@@ -188,22 +103,39 @@ public class GoalAiController {
     @Operation(summary = "목표 종료 AI 리뷰 생성",
             description = """
                     END 체크인 뒤 목표 전체(지표·투두 진행률·체크인 기록)를 AI 에 넘겨 달성 여부와 성과 비교·칭찬/격려 멘트를 돌려받습니다.
-                    achieved 는 AI 가 직접 판정하며 END 체크인의 achieved 는 참고만 합니다. 목표당 리뷰는 1건이고, 다시 부르면 덮어씁니다.
-                    호출마다 크레딧 1개를 쓰고(402 INSUFFICIENT_CREDITS), 실패하면 돌려줍니다.
-                    PLANNING 목표는 409(AI_REVIEW_GOAL_NOT_STARTED), 종료일이 지나지 않았으면 409(AI_REVIEW_GOAL_NOT_ENDED),
+                    comparison(성과 비교)과 message(칭찬/격려)는 화면에 두 줄로 보여 주도록 각각 줄바꿈 없는 40자 이하 한 줄입니다.
+                    achieved 는 AI 가 직접 판정하며 END 체크인의 achieved 는 참고만 합니다. 목표당 리뷰는 1건이고, 입력이 달라 새로 생성하면 덮어씁니다.
+                    동일 입력의 저장 결과는 200으로 재사용하며 추가 AI 호출·차감이 없습니다(잔액 0도 재사용 가능).
+                    신규 생성은 201이며 크레딧 1개를 쓰고(402 INSUFFICIENT_CREDITS), 실패하면 한 번만 돌려줍니다.
+                    생성 중에는 409(AI_REVIEW_GENERATING)이며 추가 호출·차감하지 않습니다.
+                    예약은 AI 타임아웃+60초(최소 120초) 후 만료하며 다음 조회/생성 요청에서 회수·환급합니다.
+                    아직 같은 토큰을 보유하고 입력이 유효한 응답은 만료만으로 폐기하지 않습니다.
+                    이전 리뷰는 입력 지문이 없어 최초 재생성 한 번은 신규 생성으로 처리됩니다.
+                    PLANNING 목표는 409(AI_REVIEW_GOAL_NOT_STARTED), 완료(COMPLETED)하지 않았고 종료일도 지나지 않았으면 409(AI_REVIEW_GOAL_NOT_ENDED),
                     END 체크인이 없으면 409(AI_REVIEW_END_REQUIRED), AI 응답을 기다리는 동안 목표·체크인이 바뀌면 409(AI_REVIEW_OUTDATED).
                     없는 목표 404(GOAL_NOT_FOUND), 다른 사람의 목표 403(FORBIDDEN).
                     """)
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+                    description = "동일 입력의 저장 결과 재사용·추가 차감 없음", useReturnTypeSchema = true),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201",
+                    description = "새 리뷰 생성·크레딧 1회 차감", useReturnTypeSchema = true)
+    })
     @PostMapping("/reviews")
     public ResponseEntity<ApiResponse<ReviewResponse>> createReview(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Valid @RequestBody ReviewRequests.Create request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
-                reviewService.create(authUser.userId(), request.goalId(), request.currentStatus())));
+        var result = reviewService.create(authUser.userId(), request.goalId(), request.currentStatus());
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+                .body(ApiResponse.success(result.response()));
     }
 
     @Operation(summary = "목표 종료 AI 리뷰 조회",
-            description = "가장 최근에 만든 리뷰를 돌려줍니다. 아직 리뷰가 없으면 404(AI_REVIEW_NOT_FOUND). 403 은 생성과 같습니다.")
+            description = """
+                    가장 최근에 만든 리뷰를 돌려줍니다. 만료된 생성 예약이 있으면 차감분을 한 번 환급합니다.
+                    이후 리뷰 없음404(AI_REVIEW_NOT_FOUND)·삭제 목표404여도 환급은 보존됩니다. 403은 생성과 같습니다.
+                    조회/생성 요청이 없을 때의 백그라운드 환급은 보장하지 않습니다. 잔액은 내 정보 API로 다시 확인하세요.
+                    """)
     @GetMapping("/reviews")
     public ApiResponse<ReviewResponse> review(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,

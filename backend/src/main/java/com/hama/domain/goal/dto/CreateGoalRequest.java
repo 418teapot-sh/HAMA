@@ -1,47 +1,28 @@
 package com.hama.domain.goal.dto;
 
 import com.hama.domain.goal.entity.GoalContent;
+import com.hama.domain.shared.json.StrictDeserializers;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Digits;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.util.List;
+import tools.jackson.databind.annotation.JsonDeserialize;
 
-@Schema(description = "목표 직접 생성 (AI 없이). AI 경로는 goals/ai/sessions/{id}/confirm 을 씁니다.")
+@Schema(description = "목표 직접 생성 (AI 없이).")
 public record CreateGoalRequest(
         @NotBlank(message = "목표 제목은 필수입니다.")
         @Size(max = 100, message = "목표 제목은 100자 이하입니다.")
-        @Schema(example = "매일 러닝 30분", maxLength = 100, requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(example = "매일 영어 공부", maxLength = 100, requiredMode = Schema.RequiredMode.REQUIRED)
         String title,
 
-        @Schema(example = "체력 기르기", description = "UTF-8 기준 65535바이트 이하. 넘으면 400(GOAL_DESCRIPTION_TOO_LONG).")
-        String description,
-
-        @Size(max = 50, message = "측정 지표명은 50자 이하입니다.")
-        @Schema(example = "체중", maxLength = 50)
-        String metricName,
-
-        @Size(max = 20, message = "단위는 20자 이하입니다.")
-        @Schema(example = "kg", maxLength = 20)
-        String unit,
-
-        @Digits(integer = 8, fraction = 2, message = "시작 수준은 정수 8자리, 소수 2자리 이하입니다.")
-        @Schema(example = "80.0")
-        BigDecimal startValue,
-
-        @Digits(integer = 8, fraction = 2, message = "목표값은 정수 8자리, 소수 2자리 이하입니다.")
-        @Schema(example = "74.0")
-        BigDecimal targetValue,
-
-        @DecimalMin(value = "0.0", inclusive = false, message = "주간 가용시간은 0보다 커야 합니다.")
-        @DecimalMax(value = "168.0", message = "주간 가용시간은 168시간 이하입니다.")
-        @Digits(integer = 3, fraction = 1, message = "주간 가용시간은 소수 첫째 자리까지입니다.")
-        @Schema(example = "5.0")
-        BigDecimal weeklyAvailableHours,
+        @Size(max = 200, message = "현재 상태는 200자 이하입니다.")
+        @JsonDeserialize(using = StrictDeserializers.Text.class)
+        @Schema(example = "토익 600점", maxLength = 200, description = "현재 상태를 직접 입력합니다. 생략 가능.")
+        String currentStatus,
 
         @NotNull(message = "시작일은 필수입니다.")
         @Schema(example = "2026-10-01", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -49,11 +30,29 @@ public record CreateGoalRequest(
 
         @NotNull(message = "종료일은 필수입니다.")
         @Schema(example = "2026-12-31", description = "오늘(KST) 이후여야 합니다.", requiredMode = Schema.RequiredMode.REQUIRED)
-        LocalDate endDate
+        LocalDate endDate,
+
+        @Valid
+        @Size(max = 7, message = "고정 일정은 요일마다 하나씩, 최대 7개입니다.")
+        @Schema(description = "요일마다 이미 바쁜 일정(예: 월요일 - 한국사 공부). A/B 플랜 생성 때 그 요일에는 투두를 두지 않습니다. 생략 가능.")
+        List<@NotNull(message = "고정 일정 항목이 비어 있습니다.") FixedSchedule> fixedSchedules
 ) {
 
+    @Schema(description = "요일 하나와 그 요일에 이미 하는 일.")
+    public record FixedSchedule(
+            @NotNull(message = "요일은 필수입니다.")
+            @Schema(example = "MONDAY", requiredMode = Schema.RequiredMode.REQUIRED)
+            DayOfWeek dayOfWeek,
+
+            @NotBlank(message = "일정 내용은 필수입니다.")
+            @Size(max = 100, message = "일정 내용은 100자 이하입니다.")
+            @JsonDeserialize(using = StrictDeserializers.Text.class)
+            @Schema(example = "한국사 공부", maxLength = 100, requiredMode = Schema.RequiredMode.REQUIRED)
+            String content
+    ) {
+    }
+
     public GoalContent toContent() {
-        return new GoalContent(title, description, metricName, unit, startValue, targetValue,
-                weeklyAvailableHours, startDate, endDate);
+        return new GoalContent(title, currentStatus, startDate, endDate);
     }
 }

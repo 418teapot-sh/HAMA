@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.hama.domain.goal.exception.GoalErrorCode;
 import com.hama.domain.goal.repository.GoalTodoCount;
 import com.hama.global.exception.BusinessException;
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -16,28 +15,19 @@ class GoalTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 4);
 
     private static GoalContent content(LocalDate start, LocalDate end) {
-        return new GoalContent("매일 러닝 30분", null, "체중", "kg",
-                new BigDecimal("80.0"), new BigDecimal("74.0"), new BigDecimal("5.0"), start, end);
-    }
-
-    private static GoalContent withDescription(String description) {
-        return new GoalContent("매일 러닝 30분", description, null, null, null, null, null,
-                TODAY, TODAY.plusDays(30));
+        return new GoalContent("매일 러닝 30분", "체중 80kg", start, end);
     }
 
     @Test
     void 목표_기간은_시작일_포함_최대_365일이다() {
         LocalDate lastAllowed = TODAY.plusDays(364);
-        Goal goal = Goal.createDirect(1L, content(TODAY, lastAllowed), TODAY);
+        Goal goal = Goal.create(1L, content(TODAY, lastAllowed), TODAY);
 
         assertThat(goal.getEndDate()).isEqualTo(lastAllowed);
-        assertThatThrownBy(() -> Goal.createDirect(1L, content(TODAY, TODAY.plusDays(365)), TODAY))
+        assertThatThrownBy(() -> Goal.create(1L, content(TODAY, TODAY.plusDays(365)), TODAY))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_PERIOD_TOO_LONG);
         assertThatThrownBy(() -> goal.revise(content(TODAY, LocalDate.of(9999, 12, 31)), TODAY))
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(GoalErrorCode.GOAL_PERIOD_TOO_LONG);
-        assertThatThrownBy(() -> Goal.createPlanning(1L, content(TODAY, TODAY.plusYears(2)), null, null, null, TODAY))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_PERIOD_TOO_LONG);
     }
@@ -51,61 +41,59 @@ class GoalTest {
     }
 
     @Test
-    void 직접_생성한_목표는_진행_중이다() {
-        Goal goal = Goal.createDirect(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+    void 직접_생성한_목표는_PLANNING으로_시작한다() {
+        Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
 
-        assertThat(goal.effectiveStatus(TODAY)).isEqualTo(GoalStatus.IN_PROGRESS);
+        assertThat(goal.effectiveStatus(TODAY)).isEqualTo(GoalStatus.PLANNING);
         assertThat(goal.isPast(TODAY)).isFalse();
     }
 
     @Test
-    void 종료일이_오늘이면_아직_진행_중이고_다음날부터_PAST() {
-        Goal goal = Goal.createDirect(1L, content(TODAY.minusDays(10), TODAY), TODAY);
+    void 플랜을_적용하면_진행_중이_되고_종료일이_오늘이면_다음날부터_PAST() {
+        Goal goal = Goal.create(1L, content(TODAY.minusDays(10), TODAY), TODAY);
+        goal.startPlan();
 
         assertThat(goal.effectiveStatus(TODAY)).isEqualTo(GoalStatus.IN_PROGRESS);
         assertThat(goal.effectiveStatus(TODAY.plusDays(1))).isEqualTo(GoalStatus.PAST);
     }
 
     @Test
+    void PLANNING이_아니면_플랜을_다시_적용할_수_없다() {
+        Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+        goal.startPlan();
+
+        assertThatThrownBy(goal::startPlan).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void 기간이_뒤집혔거나_종료일이_과거면_생성할_수_없다() {
-        assertThatThrownBy(() -> Goal.createDirect(1L, content(TODAY.plusDays(5), TODAY.plusDays(1)), TODAY))
+        assertThatThrownBy(() -> Goal.create(1L, content(TODAY.plusDays(5), TODAY.plusDays(1)), TODAY))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_INVALID_PERIOD);
-        assertThatThrownBy(() -> Goal.createDirect(1L, content(TODAY.minusDays(5), TODAY.minusDays(1)), TODAY))
+        assertThatThrownBy(() -> Goal.create(1L, content(TODAY.minusDays(5), TODAY.minusDays(1)), TODAY))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_INVALID_PERIOD);
     }
 
     @Test
-    void 직접_생성에는_시작일과_종료일이_필요하다() {
-        assertThatThrownBy(() -> Goal.createDirect(1L, content(null, TODAY), TODAY))
+    void 직접_생성에는_사용자와_시작일_종료일이_필요하다() {
+        assertThatThrownBy(() -> Goal.create(1L, content(null, TODAY), TODAY))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_INVALID_INPUT);
+        assertThatThrownBy(() -> Goal.create(null, content(TODAY, TODAY.plusDays(30)), TODAY))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_INVALID_INPUT);
     }
 
     @Test
-    void 설명은_UTF8_65535바이트까지만_받는다() {
-        Goal goal = Goal.createDirect(1L, withDescription("a".repeat(65535)), TODAY);
-
-        assertThat(goal.getDescription()).hasSize(65535);
-        // 한글은 3바이트라 21846자면 65538바이트입니다.
-        assertThatThrownBy(() -> Goal.createDirect(1L, withDescription("가".repeat(21846)), TODAY))
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(GoalErrorCode.GOAL_DESCRIPTION_TOO_LONG);
-        assertThatThrownBy(() -> goal.revise(withDescription("a".repeat(65536)), TODAY))
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(GoalErrorCode.GOAL_DESCRIPTION_TOO_LONG);
-    }
-
-    @Test
     void 연도가_1000에서_9999_밖인_날짜는_생성도_수정도_할_수_없다() {
-        Goal goal = Goal.createDirect(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+        Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
 
         for (GoalContent invalid : List.of(
                 content(LocalDate.of(999, 1, 1), TODAY.plusDays(30)),
                 content(TODAY, LocalDate.of(10000, 1, 1)))) {
-            assertThatThrownBy(() -> Goal.createDirect(1L, invalid, TODAY))
+            assertThatThrownBy(() -> Goal.create(1L, invalid, TODAY))
                     .extracting(e -> ((BusinessException) e).getErrorCode())
                     .isEqualTo(GoalErrorCode.GOAL_INVALID_PERIOD);
             assertThatThrownBy(() -> goal.revise(invalid, TODAY))
@@ -116,24 +104,111 @@ class GoalTest {
 
     @Test
     void 지난_목표는_수정할_수_없다() {
-        Goal goal = Goal.createDirect(1L, content(TODAY.minusDays(10), TODAY), TODAY);
+        Goal goal = Goal.create(1L, content(TODAY.minusDays(10), TODAY), TODAY);
+        goal.startPlan();
         LocalDate tomorrow = TODAY.plusDays(1);
 
         assertThatThrownBy(() -> goal.revise(content(TODAY.minusDays(10), TODAY.plusDays(30)), tomorrow))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_NOT_EDITABLE);
+        assertThatThrownBy(() -> goal.updateCurrentStatus("새 상태", tomorrow))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_NOT_EDITABLE);
+    }
+
+    @Test
+    void 진행_중인_목표를_완료하면_종료일이_지나도_COMPLETED이고_수정할_수_없지만_삭제할_수_있다() {
+        Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+        goal.startPlan();
+        assertThat(goal.isDeletable(TODAY)).isFalse();
+
+        goal.complete(TODAY.atTime(10, 0));
+
+        assertThat(goal.getCompletedAt()).isEqualTo(TODAY.atTime(10, 0));
+        assertThat(goal.effectiveStatus(TODAY)).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(goal.effectiveStatus(TODAY.plusDays(60))).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(goal.isPast(TODAY.plusDays(60))).isFalse();
+        assertThat(goal.isDeletable(TODAY)).isTrue();
+        assertThatThrownBy(() -> goal.revise(content(TODAY, TODAY.plusDays(40)), TODAY))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_NOT_EDITABLE);
+        assertThatThrownBy(() -> goal.updateCurrentStatus("새 상태", TODAY))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_NOT_EDITABLE);
+        assertThatThrownBy(() -> goal.complete(TODAY.atTime(11, 0)))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_NOT_IN_PROGRESS);
+        assertThat(goal.getCompletedAt()).isEqualTo(TODAY.atTime(10, 0));
+    }
+
+    @Test
+    void 고정_일정은_진행_중이면_종료일까지_완료하면_완료일까지_보인다() {
+        Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+        goal.startPlan();
+        assertThat(goal.scheduleEndDate()).isEqualTo(TODAY.plusDays(30));
+
+        goal.complete(TODAY.plusDays(5).atTime(23, 0));
+
+        assertThat(goal.scheduleEndDate()).isEqualTo(TODAY.plusDays(5));
+    }
+
+    @Test
+    void PLANNING이거나_지난_목표는_완료할_수_없다() {
+        Goal planning = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+        Goal past = Goal.create(1L, content(TODAY.minusDays(10), TODAY), TODAY);
+        past.startPlan();
+
+        assertThatThrownBy(() -> planning.complete(TODAY.atTime(10, 0)))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_NOT_IN_PROGRESS);
+        assertThatThrownBy(() -> past.complete(TODAY.plusDays(1).atStartOfDay()))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(GoalErrorCode.GOAL_NOT_IN_PROGRESS);
+        assertThat(past.effectiveStatus(TODAY.plusDays(1))).isEqualTo(GoalStatus.PAST);
+    }
+
+    @Test
+    void 시작_상태는_생성_때_값으로_남고_현재_상태를_바꿔도_그대로다() {
+        Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+
+        goal.updateCurrentStatus("체중 75kg", TODAY);
+        goal.revise(new GoalContent("새 제목", "체중 70kg", TODAY, TODAY.plusDays(40)), TODAY);
+
+        assertThat(goal.getInitialStatus()).isEqualTo("체중 80kg");
+        assertThat(goal.getCurrentStatus()).isEqualTo("체중 70kg");
+    }
+
+    @Test
+    void 공백만_보낸_상태는_null로_저장한다() {
+        Goal goal = Goal.create(1L, new GoalContent("목표", "   ", TODAY, TODAY.plusDays(30)), TODAY);
+        assertThat(goal.getCurrentStatus()).isNull();
+        assertThat(goal.getInitialStatus()).isNull();
+
+        goal.updateCurrentStatus("  \t ", TODAY);
+        assertThat(goal.getCurrentStatus()).isNull();
     }
 
     @Test
     void 수정은_전체_값을_바꾸고_제목_앞뒤_공백을_지운다() {
-        Goal goal = Goal.createDirect(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+        Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
 
-        goal.revise(new GoalContent("  토익 850  ", "설명", null, null, null, null, null,
-                TODAY, TODAY.plusDays(60)), TODAY);
+        goal.revise(new GoalContent("  토익 850  ", null, TODAY, TODAY.plusDays(60)), TODAY);
 
         assertThat(goal.getTitle()).isEqualTo("토익 850");
         assertThat(goal.getEndDate()).isEqualTo(TODAY.plusDays(60));
-        assertThat(goal.getMetricName()).isNull();
+        assertThat(goal.getCurrentStatus()).isNull();
+    }
+
+    @Test
+    void 현재_상태만_바꾸고_앞뒤_공백을_지운다() {
+        Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+
+        goal.updateCurrentStatus("  토익 700점  ", TODAY);
+        assertThat(goal.getCurrentStatus()).isEqualTo("토익 700점");
+        assertThat(goal.getTitle()).isEqualTo("매일 러닝 30분");
+
+        goal.updateCurrentStatus(null, TODAY);
+        assertThat(goal.getCurrentStatus()).isNull();
     }
 
     @Test

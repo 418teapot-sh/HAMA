@@ -29,6 +29,17 @@ public class CreditService {
         }
     }
 
+    /**
+     * 차감 없이 남은 크레딧이 있는지만 봅니다. 없으면 402 INSUFFICIENT_CREDITS 입니다.
+     * 목표 생성처럼 나중에 크레딧을 쓸 흐름의 입구에서 막는 용도라 사용자 행을 잠그지 않습니다.
+     */
+    @Transactional(readOnly = true)
+    public void requireAvailable(Long userId) {
+        if (!userRepository.existsByIdAndCreditsGreaterThan(userId, 0)) {
+            throw new BusinessException(PaymentErrorCode.INSUFFICIENT_CREDITS);
+        }
+    }
+
     /** 먼저 쓴 1회를 돌려줍니다. 실제로 한 일이 없을 때(재계산할 투두가 없음) 씁니다. */
     @Transactional(propagation = Propagation.MANDATORY)
     public void giveBack(Long userId) {
