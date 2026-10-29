@@ -1,10 +1,10 @@
 import Character from '../../components/Character'
 import { MeatballIcon, SparkleIcon, TodoCheckIcon } from '../../components/TodoIcons'
 import { AI_GENERATED_STYLE, getCategory } from './categories'
-import type { LocalTodo } from './mock'
+import type { TodoView } from './types'
 
 interface TodoItemProps {
-  todo: LocalTodo
+  todo: TodoView
   /** 체크박스를 눌렀을 때 (완료 ↔ 완료 취소). 없으면 누를 수 없음 (날짜 이동 중) */
   onToggle?: () => void
   /** … 버튼을 눌렀을 때 (더보기 시트 열기). 없으면 누를 수 없음 (날짜 이동 중) */
