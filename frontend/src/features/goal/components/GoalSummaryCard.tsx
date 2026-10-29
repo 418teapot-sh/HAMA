@@ -10,7 +10,7 @@ type GoalSummaryCardProps = {
   startDate: string
   /** 'YYYY-MM-DD' */
   endDate: string
-  /** 체크 표시와 함께 보여줄 이번 기간 목표들 */
+  /** 체크 표시와 함께 보여줄 할 일 (선택한 플랜의 반복 할 일) */
   items: string[]
   /** 연속 진행 일수. 백엔드에 아직 없어서 값이 없으면 뱃지를 숨김 */
   streakDays?: number

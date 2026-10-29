@@ -4,11 +4,14 @@ import icClose from '../assets/icons/ic_close.svg'
 import icMascot from '../assets/icons/ic_mascot.svg'
 import icSparkleMain from '../assets/icons/ic_sparkle_main.svg'
 import NavigationBar from '../components/NavigationBar'
-import { createGoalWithAi, generatePlans, selectPlan, type PlanView } from '../features/goal/aiApi'
+import { getApiError } from '../api/client'
+import { createGoalFromInput, generatePlans, selectPlan, type PlanView } from '../features/goal/aiApi'
 import type { GoalDetail } from '../features/goal/api'
 import FixedScheduleStep from '../features/goal/components/FixedScheduleStep'
 import { GoalStepCard, GoalStepInput, GoalStepValue } from '../features/goal/components/GoalStepCard'
 import PlanProposal from '../features/goal/components/PlanProposal'
+import { useAuthStore } from '../features/auth/store'
+import CreditShortageModal from '../features/payment/CreditShortageModal'
 import type { Weekday } from '../features/goal/weekdays'
 import { paths } from '../paths'
 
@@ -55,7 +58,8 @@ function GoalHeader({ title, center = false }: { title: string; center?: boolean
  * - 입력 4단계: 목표 → 현재 상태 → 진행 기간 → 고정 일정
  * - 화면 패딩 20·20·0·20, 머리말 ↔ 카드 간격 20, 카드 사이 간격 16
  *   - 안내 말풍선: 패딩 4·12 / 반경 12·12·12·2 / 배경 Brand/Main_40 / Body/B9 White/W1
- * - 마지막 "다음" → AI 목표 만들기 (aiApi.createGoalWithAi) 동안 진행 화면, 끝나면 완료 화면
+ * - 마지막 "다음" → 목표 만들기(POST /goals) + A/B 플랜 생성 동안 진행 화면, 끝나면 완료 화면
+ *   크레딧이 0이면(402) 크레딧 부족 팝업
  * - 완료 "다음" → 플랜 제안 (A 여유형 / B 집중형). 고르고 "진행하기"를 누르면 목표 시작 → 홈
  *   - 플랜 제안 아래 버튼: 이전으로(테두리) · 진행하기(Brand/Main, 고르기 전 Black/Gray20) 높이 48 / 반경 12 / Body/B3,
  *     그 아래 "플랜 다시 만들기" Body/B8 Black/Gray40
@@ -74,6 +78,10 @@ export default function GoalCreatePage() {
   const [fixedSchedules, setFixedSchedules] = useState<Partial<Record<Weekday, string[]>>>({})
   const [createdGoal, setCreatedGoal] = useState<GoalDetail | null>(null)
   const [plans, setPlans] = useState<PlanView[]>([])
+  /** 플랜을 더 만들 수 있는 횟수 (목표당 3번) */
+  const [remainingGenerations, setRemainingGenerations] = useState(0)
+  const [creditShortage, setCreditShortage] = useState(false)
+  const credits = useAuthStore((state) => state.user?.credits ?? 0)
   const [planIndex, setPlanIndex] = useState(0)
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null)
   const [starting, setStarting] = useState(false)
@@ -92,23 +100,37 @@ export default function GoalCreatePage() {
   const submit = async () => {
     setPhase('loading')
     try {
-      const result = await createGoalWithAi({
-        goal: goal.trim(),
-        currentLevel: currentLevel.trim(),
-        startDate: toApiDate(startDate),
-        endDate: toApiDate(endDate),
-        fixedSchedules: Object.fromEntries(Object.entries(fixedSchedules)),
-      })
-      setCreatedGoal(result.goal)
-      setPlans(result.plans)
+      // 목표는 이미 만들었고 플랜 생성만 실패했다면 목표를 다시 만들지 않음
+      const goalDetail =
+        createdGoal ??
+        (await createGoalFromInput({
+          goal: goal.trim(),
+          currentLevel: currentLevel.trim(),
+          startDate: toApiDate(startDate),
+          endDate: toApiDate(endDate),
+          fixedSchedules,
+        }))
+      setCreatedGoal(goalDetail)
+      const planList = await generatePlans(goalDetail.goalId)
+      setPlans(planList.plans)
+      setRemainingGenerations(planList.remainingGenerations)
       setPhase('done')
-    } catch {
-      setPhase('error')
+    } catch (error) {
+      if (getApiError(error)?.code === 'INSUFFICIENT_CREDITS') {
+        setPhase('input')
+        setCreditShortage(true)
+      } else {
+        setPhase('error')
+      }
     }
   }
 
   const handlePrev = () => {
-    if (phase === 'error') setPhase('input')
+    // 입력을 고치러 돌아가면 새 값으로 목표를 다시 만듦
+    if (phase === 'error') {
+      setCreatedGoal(null)
+      setPhase('input')
+    }
     else if (step === 0) navigate(-1)
     else setStep(step - 1)
   }
@@ -130,19 +152,21 @@ export default function GoalCreatePage() {
     else submit()
   }
 
-  /** 플랜 다시 만들기: 같은 목표로 A/B 플랜을 새로 받음 (고르지 않은 기존 플랜은 바뀜) */
+  /** 플랜 다시 만들기: 같은 목표로 A/B 플랜을 새로 받음 (목표당 3번, 고르지 않은 기존 플랜은 바뀜) */
   const regeneratePlans = async () => {
-    if (!createdGoal) return
+    if (!createdGoal || remainingGenerations <= 0) return
     setPhase('loading')
     setSelectedPlanId(null)
     setPlanIndex(0)
+    setPlanError(undefined)
     try {
-      setPlans(await generatePlans(createdGoal.goalId))
-      setPhase('plans')
+      const planList = await generatePlans(createdGoal.goalId)
+      setPlans(planList.plans)
+      setRemainingGenerations(planList.remainingGenerations)
     } catch {
       setPlanError('플랜을 다시 만들지 못했어요. 잠시 후 다시 시도해주세요.')
-      setPhase('plans')
     }
+    setPhase('plans')
   }
 
   /** 진행하기: 고른 플랜으로 목표 시작 (투두가 캘린더에 들어감) → 홈 */
@@ -153,8 +177,11 @@ export default function GoalCreatePage() {
     try {
       await selectPlan(selectedPlanId)
       navigate(paths.home, { replace: true })
-    } catch {
-      setPlanError('플랜을 시작하지 못했어요. 잠시 후 다시 시도해주세요.')
+    } catch (error) {
+      const code = getApiError(error)?.code
+      if (code === 'INSUFFICIENT_CREDITS') setCreditShortage(true)
+      else if (code === 'AI_PLAN_OUTDATED') setPlanError('플랜이 오래됐어요. 플랜을 다시 만들어주세요.')
+      else setPlanError('플랜을 시작하지 못했어요. 잠시 후 다시 시도해주세요.')
       setStarting(false)
     }
   }
@@ -286,8 +313,13 @@ export default function GoalCreatePage() {
           >
             {starting ? '시작하는 중…' : '진행하기'}
           </button>
-          <button type="button" onClick={regeneratePlans} className="text-body-b8 text-black-gray40 underline">
-            플랜 다시 만들기
+          <button
+            type="button"
+            onClick={regeneratePlans}
+            disabled={remainingGenerations <= 0}
+            className="text-body-b8 text-black-gray40 underline disabled:no-underline"
+          >
+            {remainingGenerations > 0 ? `플랜 다시 만들기 (${remainingGenerations}번 남음)` : '플랜을 더 만들 수 없어요'}
           </button>
         </div>
       ) : (
@@ -314,6 +346,8 @@ export default function GoalCreatePage() {
           </button>
         </div>
       )}
+
+      <CreditShortageModal open={creditShortage} credits={credits} onClose={() => setCreditShortage(false)} />
     </div>
   )
 }
