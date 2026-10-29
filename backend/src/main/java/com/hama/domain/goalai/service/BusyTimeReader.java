@@ -41,7 +41,7 @@ public class BusyTimeReader {
             LocalDate first = chunkFrom;
             LocalDate last = chunkTo;
             CalendarQuery schedules = new CalendarQuery(first, last, Set.of(CalendarType.FIXED, CalendarType.PERSONAL));
-            CalendarQuery tasks = new CalendarQuery(first, last, Set.of(CalendarType.TASK, CalendarType.AI_GOAL));
+            CalendarQuery tasks = new CalendarQuery(first, last, Set.of(CalendarType.TASK, CalendarType.OTHER, CalendarType.AI_GOAL));
 
             forEachPage(afterId -> calendar.schedules(userId, schedules, afterId), CalendarReadRepository.ScheduleCandidate::id,
                     schedule -> occurrences.forEach(schedule.source(), first, last,

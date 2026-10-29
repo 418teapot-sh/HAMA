@@ -79,7 +79,7 @@ public class GoalAiSelectService {
             if (slot == null) {
                 unplaced.add(new SelectResponse.UnplacedTodo(todoPlan.content(), todoPlan.date()));
             }
-            created.add(Todo.createGoalTask(userId, goal.getId(), todoPlan.content(), todoPlan.date(),
+            created.add(Todo.createAiGoalTask(userId, goal.getId(), todoPlan.content(), todoPlan.date(),
                     slot == null ? null : slot.start(), slot == null ? null : slot.end()));
         }
         todos.saveAll(created);

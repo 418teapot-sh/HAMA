@@ -23,9 +23,9 @@ public @interface ValidTodoGoalLink {
             if (request == null) return true;
             boolean valid = true;
             context.disableDefaultConstraintViolation();
-            if ("TASK".equals(request.category())) {
+            if ("TASK".equals(request.category()) || "OTHER".equals(request.category())) {
                 if (request.goalId() != null) {
-                    error(context, "goalId", "일반 TASK에는 목표를 연결할 수 없습니다."); valid = false;
+                    error(context, "goalId", "TASK/OTHER에는 목표를 연결할 수 없습니다."); valid = false;
                 }
             } else if ("AI_GOAL_TASK".equals(request.category()) && request.goalId() == null) {
                 error(context, "goalId", "목표 투두에는 goalId가 필요합니다."); valid = false;

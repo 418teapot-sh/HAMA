@@ -45,6 +45,11 @@ public class Todo extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private TodoCategory category;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 20)
+    private TodoOrigin origin;
+
     @Column(nullable = false, length = 255)
     private String content;
 
@@ -75,7 +80,7 @@ public class Todo extends BaseTimeEntity {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    /** 목표에 연결되지 않은 일반 TASK를 생성합니다. 목표 투두 생성은 BE2 계약 확정 후 추가합니다. */
+    /** 목표에 연결되지 않은 수동 TASK를 생성합니다. */
     public static Todo createTask(Long userId, String content, LocalDate todoDate,
             LocalTime startTime, LocalTime endTime) {
         if (userId == null || !isStorableDate(todoDate)) {
@@ -86,6 +91,7 @@ public class Todo extends BaseTimeEntity {
         Todo todo = new Todo();
         todo.userId = userId;
         todo.category = TodoCategory.TASK;
+        todo.origin = TodoOrigin.MANUAL;
         todo.content = content;
         todo.todoDate = todoDate;
         todo.startTime = startTime;
@@ -106,8 +112,45 @@ public class Todo extends BaseTimeEntity {
         return todo;
     }
 
+    public static Todo createAiGoalTask(Long userId, Long goalId, String content,
+            LocalDate date, LocalTime start, LocalTime end) {
+        Todo todo = createGoalTask(userId, goalId, content, date, start, end);
+        todo.origin = TodoOrigin.AI;
+        return todo;
+    }
+
+    public static Todo createOther(Long userId, String content, LocalDate date, LocalTime start, LocalTime end) {
+        Todo todo = createTask(userId, content, date, start, end);
+        todo.category = TodoCategory.OTHER;
+        return todo;
+    }
+
+    public void changeCategory(TodoCategory category) {
+        requirePending();
+        requireUserEditable();
+        if (this.category == TodoCategory.AI_GOAL_TASK || category == null || category == TodoCategory.AI_GOAL_TASK) {
+            throw new BusinessException(TodoErrorCode.TODO_CATEGORY_CHANGE_NOT_ALLOWED);
+        }
+        this.category = category;
+    }
+
+    public void requireUserEditable() {
+        if (origin == TodoOrigin.AI) {
+            throw new BusinessException(TodoErrorCode.TODO_AI_EDIT_NOT_ALLOWED);
+        }
+    }
+
+    public void requireConvertible() {
+        requirePending();
+        requireUserEditable();
+        if (category == TodoCategory.AI_GOAL_TASK) {
+            throw new BusinessException(TodoErrorCode.TODO_CATEGORY_CHANGE_NOT_ALLOWED);
+        }
+    }
+
     public void revise(String content, LocalTime startTime, LocalTime endTime) {
         requirePending();
+        requireUserEditable();
         validateContent(content);
         validateTimes(startTime, endTime);
         this.content = content;
@@ -143,6 +186,14 @@ public class Todo extends BaseTimeEntity {
         requirePending();
         this.status = TodoStatus.COMPLETED;
         this.completedAt = now;
+    }
+
+    public void undoComplete() {
+        if (status != TodoStatus.COMPLETED) {
+            throw new BusinessException(TodoErrorCode.TODO_NOT_COMPLETED);
+        }
+        this.status = TodoStatus.PENDING;
+        this.completedAt = null;
     }
 
     public void changeStatusNote(String note) {
