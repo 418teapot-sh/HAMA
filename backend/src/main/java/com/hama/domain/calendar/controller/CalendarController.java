@@ -54,7 +54,7 @@ public class CalendarController {
 
 
     @Operation(summary = "캘린더 통합 조회", description = "KST 날짜 from/to를 포함하여 최대 366일. types 생략 시 전체. "
-            + "반복·여러 날 일정은 날짜별로 반환하며 겹침은 계산하지 않습니다. 해석할 수 없는 저장 반복 규칙은 해당 일정만 제외합니다. 시간 없는 TASK/OTHER는 종일입니다. "
+            + "반복·여러 날 일정은 날짜별로 반환하며 일정의 status 및 발생 시작 일시 occurrenceStartAt을 제공합니다. 해석할 수 없는 저장 반복 규칙은 해당 일정만 제외합니다. 시간 없는 TASK/OTHER는 종일입니다. "
             + "날짜별로 분할한 최종 항목은 요청 기간 전체에서 최대 10,000개이며 초과하면 CALENDAR_RESULT_LIMIT_EXCEEDED(400)를 반환합니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "캘린더 조회 성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "기간/타입 오류 또는 요청 기간 전체 최종 항목 10,000개 초과",

@@ -8,6 +8,9 @@ import com.hama.domain.schedule.entity.Schedule;
 import com.hama.domain.schedule.entity.ScheduleType;
 import com.hama.domain.schedule.exception.ScheduleErrorCode;
 import com.hama.domain.schedule.repository.ScheduleRepository;
+import com.hama.domain.schedule.repository.ScheduleCompletionRepository;
+import com.hama.domain.schedule.recurrence.ScheduleRecurrence;
+import com.hama.domain.user.repository.UserRepository;
 import com.hama.domain.todo.entity.Todo;
 import com.hama.domain.todo.entity.TodoCategory;
 import com.hama.domain.todo.exception.TodoErrorCode;
@@ -27,12 +30,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class CategoryConversionService {
     private final TodoRepository todos;
     private final ScheduleRepository schedules;
+    private final ScheduleCompletionRepository completions;
+    private final UserRepository users;
     private final Clock clock;
 
     public CategoryConversionService(TodoRepository todos, ScheduleRepository schedules,
+            ScheduleCompletionRepository completions, UserRepository users,
             @Qualifier("be3Clock") Clock clock) {
         this.todos = todos;
         this.schedules = schedules;
+        this.completions = completions;
+        this.users = users;
         this.clock = clock;
     }
 
@@ -68,16 +76,25 @@ public class CategoryConversionService {
 
     private CategoryConversionResponse fromSchedule(Long userId, ConvertCategoryRequest request,
             CalendarType source, CalendarType target) {
+        users.findByIdForShare(userId).orElseThrow(() -> new BusinessException(ScheduleErrorCode.SCHEDULE_NOT_FOUND));
         Schedule schedule = schedules.findActiveForUpdate(request.refId())
                 .orElseThrow(() -> new BusinessException(ScheduleErrorCode.SCHEDULE_NOT_FOUND));
         requireOwner(schedule.getUserId(), userId);
         if (schedule.getType() != ScheduleType.PERSONAL || schedule.getRepeatRule() != null) throw notAllowed();
+        var recurrence = new ScheduleRecurrence();
+        var occurrence = new ScheduleRecurrence.Source(schedule.getStartAt(), schedule.getEndAt(), schedule.isAllDay(), null);
+        if (completions.findByScheduleId(schedule.getId()).stream().anyMatch(completion ->
+                completion.getOccurrenceDate().equals(schedule.getStartAt().toLocalDate())
+                        && recurrence.overlaps(occurrence, completion.getDisplayDate(), completion.getDisplayDate()))) {
+            throw new BusinessException(ScheduleErrorCode.SCHEDULE_COMPLETED_CONVERSION_NOT_ALLOWED);
+        }
         if (target == CalendarType.PERSONAL || request.todoDate() == null
                 || request.startAt() != null || request.endAt() != null) throw invalid();
         Todo todo = Todo.createFromCalendarConversion(userId, TodoCategory.valueOf(target.name()),
                 schedule.getTitle(), request.todoDate(), request.startTime(), request.endTime(), schedule.getCalendarUid());
         todo.changeStatusNote(schedule.getMemo());
         todos.save(todo);
+        completions.deleteAllForSchedule(schedule.getId());
         schedule.delete(now());
         return new CategoryConversionResponse(source, schedule.getId(), target, todo.getId());
     }

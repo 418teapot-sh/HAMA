@@ -3,6 +3,8 @@ package com.hama.domain.schedule.controller;
 import com.hama.domain.schedule.dto.CreateScheduleRequest;
 import com.hama.domain.schedule.dto.ScheduleResponses;
 import com.hama.domain.schedule.dto.UpdateScheduleRequest;
+import com.hama.domain.schedule.dto.ScheduleCompletionRequest;
+import com.hama.domain.schedule.service.ScheduleCompletionService;
 import com.hama.domain.schedule.service.ScheduleService;
 import com.hama.global.auth.AuthUser;
 import com.hama.global.response.ApiResponse;
@@ -31,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ScheduleController {
 
     private final ScheduleService service;
+    private final ScheduleCompletionService completionService;
 
     @Operation(summary = "고정·개인 일정 생성", description = "KST 일시. 종일 일정은 00:00부터 마지막 날 다음 날 00:00까지. "
             + "RRULE은 DAILY/WEEKLY, INTERVAL, COUNT 또는 UNTIL, WEEKLY BYDAY를 지원합니다. "
@@ -50,6 +53,23 @@ public class ScheduleController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long scheduleId) {
         return ApiResponse.success(service.get(authUser.userId(), scheduleId));
+    }
+
+    @Operation(summary = "일정 날짜별 완료", description = "캘린더의 date와 occurrenceStartAt으로 특정 날짜의 발생을 완료합니다. "
+            + "같은 날 겹친 반복 발생도 각각 처리하며, AI의 일정 점유와 ICS는 바뀌지 않습니다. 이미 완료하면 409입니다.")
+    @PatchMapping("/{scheduleId}/complete")
+    public ApiResponse<ScheduleCompletionService.Result> complete(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser user, @PathVariable Long scheduleId,
+            @Valid @RequestBody ScheduleCompletionRequest request) {
+        return ApiResponse.success(completionService.complete(user.userId(), scheduleId, request));
+    }
+
+    @Operation(summary = "일정 날짜별 완료 취소", description = "해당 날짜의 특정 발생 완료만 취소합니다. 미완료 상태면 409입니다.")
+    @PatchMapping("/{scheduleId}/uncomplete")
+    public ApiResponse<ScheduleCompletionService.Result> uncomplete(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser user, @PathVariable Long scheduleId,
+            @Valid @RequestBody ScheduleCompletionRequest request) {
+        return ApiResponse.success(completionService.uncomplete(user.userId(), scheduleId, request));
     }
 
     @Operation(summary = "일정 부분 수정", description = "생략 필드는 유지합니다. repeatRule/memo는 null로 지울 수 있고 "
