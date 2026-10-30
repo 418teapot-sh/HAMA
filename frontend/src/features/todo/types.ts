@@ -6,7 +6,7 @@ export type TodoApiCategory = 'TASK' | 'OTHER' | 'AI_GOAL_TASK'
 /**
  * 화면에 그리는 투두 한 줄 (features/todo/api 의 getDailyTodos 가 만듦)
  * - kind 'todo': 투두 API(/api/v1/todos)의 할일 · 기타 · AI 목표 투두
- * - kind 'schedule': 캘린더 API 의 개인(PERSONAL) · 고정(FIXED) 일정. 완료 체크가 없습니다.
+ * - kind 'schedule': 캘린더 API 의 개인(PERSONAL) · 고정(FIXED) 일정. 날짜(반복 발생)별로 완료 체크 (#236)
  * 투두 ID 와 일정 ID 는 숫자가 겹칠 수 있어, 화면에서는 key 로 구분합니다.
  */
 export interface TodoView {
@@ -22,6 +22,8 @@ export interface TodoView {
   apiCategory?: TodoApiCategory
   /** 일정일 때 종류 (고정 일정은 목표 만들 때 넣은 것이라 투두 화면에서 바꾸지 않습니다) */
   scheduleType?: 'PERSONAL' | 'FIXED'
+  /** 일정: 이 반복 발생의 시작 일시. 완료 · 완료 취소 요청에 date 와 함께 보냅니다 (#236) */
+  occurrenceStartAt?: string | null
   done: boolean
   /** 시간 'HH:mm'. 있으면 체크박스와 내용 사이에 보여 줍니다 (Figma 일정 '15:00') */
   time?: string

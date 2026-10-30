@@ -18,7 +18,10 @@ export interface CalendarItem {
   endTime: string | null
   allDay: boolean
   goalId: number | null
+  /** 투두 · 일정 모두 PENDING / COMPLETED (#236 부터 일정도 날짜별 완료) */
   status: string | null
+  /** 일정: 이 반복 발생의 시작 일시 'yyyy-MM-ddTHH:mm:ss' (완료 · 완료 취소 요청에 그대로 보냄). 투두는 null */
+  occurrenceStartAt?: string | null
 }
 
 const CATEGORY: Record<CalendarItemType, CalendarCategory> = {
