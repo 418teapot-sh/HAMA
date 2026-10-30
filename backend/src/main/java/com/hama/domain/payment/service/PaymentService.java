@@ -153,9 +153,10 @@ public class PaymentService {
         }
         Payment payment = paymentRepository.findByPaddleTransactionIdForUpdate(transactionId).orElse(null);
         if (payment == null) {
-            // 사용자를 못 찾아 충전하지 않은 결제(completeTransaction 의 ERROR 로그)라 회수할 크레딧이 없습니다.
-            log.warn("[Payment] 저장된 결제가 없는 환불이라 회수하지 않습니다 - adj: {}, txn: {}", adjustmentId, transactionId);
-            return;
+            // 결제 웹훅이 아직 실패 중(UNKNOWN_PRICE 등)일 수 있습니다. 200 으로 끝내면 나중에 결제가 처리될 때 환불이 빠지므로
+            // 실패로 응답해 재전송을 받습니다. 사용자를 못 찾아 저장하지 않은 결제면 Paddle 재시도가 끝날 때까지 이 로그만 반복됩니다.
+            log.warn("[Payment] 저장된 결제가 없는 환불이라 재전송을 기다립니다 - adj: {}, txn: {}", adjustmentId, transactionId);
+            throw new BusinessException(PaymentErrorCode.REFUND_BEFORE_PAYMENT);
         }
         // 이 결제의 환불 기록 한 번 조회로 중복 검사와 지금까지 회수한 횟수를 같이 봅니다.
         List<PaymentRefund> refunds = refundRepository.findByPaymentId(payment.getId());
