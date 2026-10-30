@@ -101,7 +101,8 @@ class GoalTodoCheckinIntegrationTest {
         assertThat(items.get(0).get("allDay").asBoolean()).isTrue();
         assertThat(items.get(0).get("status").asString()).isEqualTo("COMPLETED");
         String file=mvc.perform(get("/api/v1/calendar/export").param("from","2026-10-08").param("to","2026-10-08").param("types","AI_GOAL").header("Authorization","Bearer "+u.token())).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(file).contains("UID:hama-AI_GOAL-"+a+"@hama.app", "DTSTART;VALUE=DATE:20261008").doesNotContain("hama-AI_GOAL-"+c+"@");
+        assertThat(file).contains("UID:" + jdbc.queryForObject("select calendar_uid from todo where todo_id=?", String.class, a), "DTSTART;VALUE=DATE:20261008")
+                .doesNotContain(jdbc.queryForObject("select calendar_uid from todo where todo_id=?", String.class, c));
     }
 
     @Test void 생성은_본인_진행중_목표와_목표_기간을_검증한다() throws Exception {
@@ -400,8 +401,8 @@ class GoalTodoCheckinIntegrationTest {
     @Test void 목표투두도_일반투두와_같은_캘린더_예산을_공유한다() throws Exception {
         User u=user(); long g=goal(u);
         jdbc.batchUpdate("""
-                INSERT INTO todo(user_id,goal_id,category,content,todo_date,status,postponed_count,created_at,updated_at)
-                VALUES (?, ?, 'AI_GOAL_TASK', '할 일', '2026-10-08', 'PENDING', 0, NOW(), NOW())
+                INSERT INTO todo(calendar_uid, user_id,goal_id,category,content,todo_date,status,postponed_count,created_at,updated_at)
+                VALUES (CONCAT('hama-', UUID(), '@hama.app'), ?, ?, 'AI_GOAL_TASK', '할 일', '2026-10-08', 'PENDING', 0, NOW(), NOW())
                 """, java.util.stream.IntStream.range(0,10000).mapToObj(i -> new Object[]{u.id(),g}).toList());
         var range=get("/api/v1/calendar").param("from","2026-10-08").param("to","2026-10-08").param("types","AI_GOAL");
         assertThat(call(range,u,null,200).at("/data/items").size()).isEqualTo(10000);

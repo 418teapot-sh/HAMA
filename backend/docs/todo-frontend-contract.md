@@ -59,7 +59,7 @@ TASK/OTHER는 목표 ID를 받을 수 없습니다. OTHER는 일반 할일과 �
 
 ### 할일 ↔ 기타
 
-`PATCH /api/v1/todos/{todoId}`에 `{"category":"OTHER"}` 또는 `{"category":"TASK"}`를 보냅니다. 내용·시간 PATCH와 함께 보낼 수 있고 ID·날짜·메모·미룬 횟수는 유지합니다. 응답 data에 확정된 category가 추가됩니다. category 생략은 유지, null/미지원 값400. 목표 투두의 분류 변경은409이며 목표 연결을 분리하지 않습니다.
+`PATCH /api/v1/todos/{todoId}`에 `{"category":"OTHER"}` 또는 `{"category":"TASK"}`를 보냅니다. 내용·시간 PATCH와 함께 보낼 수 있고 ID·날짜·메모·미룬 횟수는 유지합니다. 응답 data에 확정된 category가 추가됩니다. category 생략은 유지, null/미지원 값400. 목표 투두의 분류 변경은 `409 TODO_CATEGORY_CHANGE_NOT_ALLOWED`이며 목표 연결을 분리하지 않습니다. AI 생성 투두의 내용·시간 수정은 `TODO_AI_EDIT_NOT_ALLOWED`입니다.
 
 ### 할일·기타 ↔ 개인 일정
 
@@ -96,12 +96,16 @@ TASK/OTHER는 목표 ID를 받을 수 없습니다. OTHER는 일반 할일과 �
 - 성공200: `data={sourceType,sourceRefId,type,refId}`. 후속 요청은 새 type/refId의 API를 사용하고 목록·캘린더를 재조회합니다.
 - TASK↔OTHER는 이 전환 API로도 가능하며 이 경우 ID를 유지합니다. 날짜/시간 변경은 기존 PATCH/미루기 API를 사용합니다.
 - 완료 투두는 완료 취소 후 전환합니다. 목표 연결 투두·FIXED·반복 일정 전환은 이번 범위에서 제외하며409로 보호합니다. 반복 일정 전체 수정/삭제는 기존 일정 API에서 가능합니다.
+- 미완료 TASK/OTHER 원본의 실제 분류와 sourceType이 다르면 `400 CALENDAR_CONVERSION_INVALID`입니다. 지원하지 않는 sourceType도 400이며, PERSONAL로 지정한 실제 고정/반복 일정은 409입니다. type과 refId를 함께 확인하세요.
 - 대상 검증 실패 시 원본은 그대로 유지합니다. 동시 전환은 원본 잠금으로 하나만 성공합니다. 교차 전환의 원본 재요청은404입니다. 통신 실패만 보고 POST를 자동 재전송하지 말고 캘린더를 재조회해 결과를 확인합니다.
 
 ## 캘린더·파일·연동 후 확인
 
 - `GET /api/v1/calendar` 및 `/api/v1/calendar/export`의 types에 OTHER를 추가합니다. 생략하면 기존 종류와 OTHER 전체입니다. 할일 TASK 필터에 OTHER를 자동 합치지 않습니다.
-- 시간 없는 OTHER는 종일 표시 및 하루 DATE 항목으로 ICS 내보내기 합니다. UID는 `hama-OTHER-{todoId}@hama.app`입니다.
+- 시간 없는 OTHER는 종일 표시 및 하루 DATE 항목으로 ICS 내보내기 합니다.
+- ICS UID는 저장된 불변 식별자를 사용합니다. V29 이전 행은 마이그레이션 시점의 `hama-{type}-{refId}@hama.app`을 보존하고, 신규 항목은 `hama-{UUID}@hama.app`을 발급합니다. TASK↔OTHER, FIXED↔PERSONAL 수정 및 개인 일정↔투두 전환에서 분류/ID가 달라져도 UID는 유지됩니다. 이전에 다른 UID로 가져온 중복은 외부 캘린더에서 수동 정리합니다.
 - 시간이 있는 OTHER는 기존 시간이 있는 TASK처럼 AI 빈 시간 탐색에서 피합니다. 시간이 없는 OTHER는 하루 전체를 점유하지 않습니다.
 - 366일·10,000개 상한, JSON 오류/ICS 파일 응답, 일정 반복·소유권은 유지합니다.
 - 배포 후 OpenAPI 타입 재생성, OTHER 목록/뱃지 매핑, aiGenerated 판별, 완료 토글, 분류 전환의 날짜·시각 입력 및 새ID 처리, 400/403/404/409 안내를 연결합니다.
+
+- 저장된 일정의 반복 규칙을 해석할 수 없으면 캘린더 조회·ICS와 AI 시간 계산에서 해당 일정을 제외하고 서버 로그에 일정 ID와 오류 종류를 남깁니다. 해당 시간이 AI 배치에서 빈 시간으로 취급될 수 있으므로 운영 시 누락된 일정을 확인해야 합니다. 원본 일정은 변경하지 않습니다.

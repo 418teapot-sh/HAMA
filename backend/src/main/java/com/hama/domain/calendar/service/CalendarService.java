@@ -63,7 +63,8 @@ public class CalendarService {
         while (true) {
             List<ScheduleCandidate> batch = reader.schedules(userId, query, cursor);
             if (batch.isEmpty()) return;
-            batch.forEach(consumer);
+            batch.stream().filter(schedule -> occurrences.hasReadableRepeatRule(schedule.id(), schedule.source()))
+                    .forEach(consumer);
             cursor = batch.getLast().id();
         }
     }
