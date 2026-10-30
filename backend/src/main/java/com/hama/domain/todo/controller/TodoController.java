@@ -79,7 +79,7 @@ public class TodoController {
         return ApiResponse.success(todoService.postpone(authUser.userId(), todoId, request));
     }
 
-    @Operation(summary = "투두 완료", description = "재완료는 409. TASK/OTHER의 goalProgressRate는 null, 목표 투두는 활성 투두 완료 비율(소수 첫째 자리)입니다.")
+    @Operation(summary = "투두 완료", description = "재완료는 409. TASK/OTHER의 goalProgressRate는 null, 목표 투두는 활성 투두 완료 비율(소수 첫째 자리)입니다. 목표 투두를 모두 완료하면 진행 중인 목표가 자동 완료됩니다.")
     @PatchMapping("/{todoId}/complete")
     public ApiResponse<TodoResponses.Completion> complete(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
@@ -89,7 +89,7 @@ public class TodoController {
 
     @Operation(summary = "투두 완료 취소", description = "완료 투두를 PENDING으로 바꾸고 completedAt을 비웁니다. "
             + "이미 미완료면 409 TODO_NOT_COMPLETED. 메모는 보존하고 완료 이력에서 숨기며 재완료하면 새 완료일을 사용합니다. "
-            + "목표 완료율·진행 요약도 갱신합니다. 목표 자체의 상태는 바꾸지 않습니다.")
+            + "목표 완료율·진행 요약도 갱신합니다. 자동 완료한 목표는 다시 진행 중으로 바뀝니다.")
     @PatchMapping("/{todoId}/uncomplete")
     public ApiResponse<TodoResponses.Completion> undoComplete(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
