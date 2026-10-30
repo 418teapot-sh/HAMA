@@ -48,7 +48,13 @@ export function refreshAccessToken(): Promise<string> {
         return token
       })
       .catch((error: unknown) => {
-        useAuthStore.getState().clear()
+        // 리프레시 토큰이 진짜 무효일 때(4xx)만 로그아웃합니다.
+        // 네트워크 오류 · 배포 중 502 같은 일시 오류는 로그인 상태를 지우지 않습니다.
+        // 단, 앱 시작 복구 중(unknown)이면 화면이 멈추지 않게 로그아웃 상태로 둡니다.
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined
+        const store = useAuthStore.getState()
+        const invalidToken = status !== undefined && status >= 400 && status < 500
+        if (invalidToken || store.status === 'unknown') store.clear()
         throw error
       })
       .finally(() => {

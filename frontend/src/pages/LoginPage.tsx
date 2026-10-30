@@ -5,6 +5,7 @@ import InputField from '../components/InputField'
 import NavigationBar from '../components/NavigationBar'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
+import { getApiError } from '../api/client'
 import { login } from '../features/auth/api'
 import { EMAIL_FORMAT_ERROR, isValidEmail } from '../features/auth/validation'
 import { paths } from '../paths'
@@ -13,6 +14,8 @@ import logoHama from '../assets/logo/logo_hama.svg'
 
 /** Figma 로그인 오류 화면의 토스트 문구 그대로 */
 const LOGIN_FAILED_MESSAGE = '로그인에 실패했어요. 다시 시도해 주세요'
+/** 15분에 5번 넘게 틀리면 잠깁니다 (429 TOO_MANY_PASSWORD_ATTEMPTS). 맞는 비밀번호도 실패하니 따로 알려 줍니다. */
+const LOGIN_LOCKED_MESSAGE = '비밀번호를 여러 번 틀렸어요. 15분 뒤에 다시 시도해 주세요'
 
 /**
  * 로그인 화면 (Figma > UI > 로그인 > 로그인 화면 / 로그인 오류(토스트) / 로그인 오류(이메일 형식))
@@ -49,9 +52,10 @@ export default function LoginPage() {
     try {
       await login({ email, password })
       navigate(from, { replace: true })
-    } catch {
-      // TODO: 401(정보 불일치)·429(시도 횟수 초과)·400(입력 누락)을 모두 같은 문구로 보여줄지 확인 필요
-      toast.show(LOGIN_FAILED_MESSAGE)
+    } catch (error) {
+      // 429(시도 횟수 초과)는 따로, 401(정보 불일치) · 400(입력 누락)은 같은 문구
+      const code = getApiError(error)?.code
+      toast.show(code === 'TOO_MANY_PASSWORD_ATTEMPTS' || code === 'TOO_MANY_REQUESTS' ? LOGIN_LOCKED_MESSAGE : LOGIN_FAILED_MESSAGE)
     } finally {
       setSubmitting(false)
     }

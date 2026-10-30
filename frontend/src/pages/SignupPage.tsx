@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { getApiError } from '../api/client'
 import Agreement, { type AgreementItem } from '../components/Agreement'
 import Button from '../components/Button'
@@ -172,7 +172,14 @@ export default function SignupPage() {
           <Agreement items={AGREEMENT_ITEMS} checked={agreements} onChange={setAgreements} />
         </main>
 
-        <div className="w-full p-[20px]">
+        <div className="flex w-full flex-col items-center gap-[12px] p-[20px]">
+          {/* Figma 626:9254: 이미 계정이 있는 사람용 로그인 링크 (회원가입 버튼 위) */}
+          <p className="text-body-b8 text-black-gray60">
+            이미 계정이 있나요?{' '}
+            <Link to={paths.login} className="font-semibold text-brand-main underline underline-offset-2">
+              로그인
+            </Link>
+          </p>
           <Button type="submit" disabled={!canSubmit}>
             회원가입
           </Button>

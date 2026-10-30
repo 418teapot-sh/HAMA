@@ -8,6 +8,10 @@ interface TodoMoreSheetProps {
   onDelete: () => void
   onMoveDate: () => void
   onClose: () => void
+  /** false 면 수정하기를 숨김 (완료한 투두: 먼저 완료 취소해야 수정 가능) */
+  canEdit?: boolean
+  /** false 면 날짜 변경을 숨김 (완료한 투두 · 일정) */
+  canMove?: boolean
 }
 
 /**
@@ -15,17 +19,29 @@ interface TodoMoreSheetProps {
  * 버튼 묶음 (간격 12): [수정하기 | 삭제하기] (가로 간격 12, 높이 96) / 날짜 변경 (높이 75)
  * 시트 모양과 닫기 버튼은 공용 BottomSheet 를 씁니다.
  */
-export default function TodoMoreSheet({ open, onEdit, onDelete, onMoveDate, onClose }: TodoMoreSheetProps) {
+export default function TodoMoreSheet({
+  open,
+  onEdit,
+  onDelete,
+  onMoveDate,
+  onClose,
+  canEdit = true,
+  canMove = true,
+}: TodoMoreSheetProps) {
   return (
     <BottomSheet open={open} onClose={onClose}>
       <div className="flex w-full flex-col gap-[12px]">
         <div className="flex h-[96px] w-full items-center gap-[12px]">
-          <SheetAction icon={<PenIcon className="size-[24px]" />} label="수정하기" bgClass="bg-category-schedule" onClick={onEdit} />
+          {canEdit && (
+            <SheetAction icon={<PenIcon className="size-[24px]" />} label="수정하기" bgClass="bg-category-schedule" onClick={onEdit} />
+          )}
           <SheetAction icon={<TrashIcon className="size-[24px]" />} label="삭제하기" bgClass="bg-category-task" onClick={onDelete} />
         </div>
-        <div className="flex h-[75px] w-full items-center">
-          <SheetAction icon={<ForwardArrowIcon className="size-[24px]" />} label="날짜 변경" bgClass="bg-category-etc" onClick={onMoveDate} />
-        </div>
+        {canMove && (
+          <div className="flex h-[75px] w-full items-center">
+            <SheetAction icon={<ForwardArrowIcon className="size-[24px]" />} label="날짜 변경" bgClass="bg-category-etc" onClick={onMoveDate} />
+          </div>
+        )}
       </div>
     </BottomSheet>
   )
