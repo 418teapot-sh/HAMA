@@ -27,6 +27,15 @@ export default function FindEmailPage() {
   const [submitting, setSubmitting] = useState(false)
   const [requested, setRequested] = useState(false)
 
+  /** 입력을 고치면 그 칸의 에러 문구만 지웁니다. */
+  function clearError(field: string) {
+    setErrors((prev) => {
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
   const canSubmit = name.trim().length > 0 && email.trim().length > 0 && !submitting
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -73,7 +82,7 @@ export default function FindEmailPage() {
             error={errors.name}
             onChange={(e) => {
               setName(e.target.value)
-              setErrors(({ name: _, ...rest }) => rest)
+              clearError('name')
             }}
           />
           <InputField
@@ -87,7 +96,7 @@ export default function FindEmailPage() {
             error={errors.email}
             onChange={(e) => {
               setEmail(e.target.value)
-              setErrors(({ email: _, ...rest }) => rest)
+              clearError('email')
             }}
           />
           <Button type="submit" disabled={!canSubmit}>

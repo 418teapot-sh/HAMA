@@ -1,4 +1,6 @@
 import { useNavigate } from 'react-router'
+import { restoreSession } from '../auth/api'
+import { useAuthStore } from '../auth/store'
 import { paths } from '../../paths'
 import LandingButton from './LandingButton'
 
@@ -13,7 +15,8 @@ const MOBILE = {
 /**
  * 랜딩 버튼 + "첫 1회는 무료 | 자동 결제 없음" (Figma 01 · 시작하기 / 04 · 요금제 아래)
  * 버튼은 모바일 너비 가득 · 데스크톱 hero 크기, 안내 문구 400 가운데 Black/Gray60
- * - hero(첫 화면): "회원가입하고 시작하기" → 회원가입 화면
+ * - hero(첫 화면): "회원가입하고 시작하기" → 회원가입 화면. 이미 로그인한 상태라면 회원가입 대신 홈으로 갑니다.
+ *   랜딩으로 바로 들어오면 로그인 상태를 아직 모르므로, 누를 때 refreshToken 쿠키로 한 번 확인합니다.
  * - pricing(요금제 아래): "결제하기" → 페이지 맨 위(첫 화면의 회원가입하고 시작하기)로 스크롤
  *   (Figma 온보딩 '프로토 타입' 프레임 · 프로토타입 영상, 디자이너 제안. 모바일도 같은 동작)
  * 데스크톱 버튼 · 안내 문구 사이 12 (프로토 타입 프레임. 이전 디자인은 8)
@@ -23,14 +26,18 @@ export default function SignupCta({ place }: { place: keyof typeof MOBILE }) {
   const navigate = useNavigate()
   const isPricing = place === 'pricing'
 
-  function handleClick() {
-    if (isPricing) window.scrollTo({ top: 0, behavior: 'smooth' })
-    else navigate(paths.signup)
+  async function handleClick() {
+    if (isPricing) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+    if (useAuthStore.getState().status === 'unknown') await restoreSession()
+    navigate(useAuthStore.getState().status === 'authenticated' ? paths.home : paths.signup)
   }
 
   return (
     <div className={`flex w-full flex-col items-center ${mobile.gap} desktop:gap-[12px]`}>
-      <LandingButton onClick={handleClick}>{isPricing ? '결제하기' : '회원가입하고 시작하기'}</LandingButton>
+      <LandingButton onClick={() => void handleClick()}>{isPricing ? '결제하기' : '회원가입하고 시작하기'}</LandingButton>
       <p className={`text-center text-black-gray60 ${mobile.note} desktop:text-[18px] desktop:leading-[25px]`}>
         첫 1회는 무료 | 자동 결제 없음
       </p>

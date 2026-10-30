@@ -210,7 +210,7 @@ export default function LandingPage() {
               <>
                 HAMA는 월 구독이 아니라,
                 <br />
-                쓴 횟수 만큼만 차감되는 <strong className="font-bold">크레딧 방식</strong>입니다.
+                쓴 횟수만큼만 차감되는 <strong className="font-bold">크레딧 방식</strong>입니다.
               </>
             }
           />
@@ -218,7 +218,7 @@ export default function LandingPage() {
           <div className="flex w-full flex-col gap-[18px] desktop:flex-row desktop:items-stretch desktop:gap-[28px]">
             <PlanCard
               title="1회"
-              description="한가지 목표에 집중할 때"
+              description="한 가지 목표에 집중할 때"
               price="1,200원"
               perUse="1회당 1,200원"
               borderClass="border-black-gray40 desktop:border-black-gray60"
@@ -271,7 +271,7 @@ export default function LandingPage() {
           </div>
           {/* 데스크톱 높이 126 · 내용 세로 가운데 (Figma 고정 높이) */}
           <InfoCard title="AI 기능에 대한 고지" desktopGrow={false} className="desktop:h-[126px] desktop:justify-center">
-            HAMA가 생성하는 일정과 제안은 참고용이며 정확성을 보장하지 않습니다. 의료,법률, 재무 등 전문 영역의 판단에
+            HAMA가 생성하는 일정과 제안은 참고용이며 정확성을 보장하지 않습니다. 의료, 법률, 재무 등 전문 영역의 판단에
             사용하도록 설계 되지 않았습니다.
           </InfoCard>
         </LandingSection>
