@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import icAdd from '../../../assets/icons/ic_add.svg'
 import Checkbox from '../../../components/Checkbox'
 import { WEEKDAYS, type Weekday } from '../weekdays'
@@ -9,7 +9,56 @@ type FixedScheduleStepProps = {
   onChange: (value: Partial<Record<Weekday, string[]>>) => void
 }
 
-/** 요일 하나의 고정 일정 목록 + 새 일정 입력칸 (Enter 로 추가) */
+/** 일정 제목 수정칸. Enter · 바깥 누르기로 저장, Esc 로 취소. 비우면 원래 제목을 유지 */
+function ScheduleTitleInput({
+  title,
+  label,
+  onSave,
+  onCancel,
+}: {
+  title: string
+  label: string
+  onSave: (title: string) => void
+  onCancel: () => void
+}) {
+  const [draft, setDraft] = useState(title)
+  /** Enter · Esc 뒤 입력칸이 사라지며 생기는 blur 로 또 처리하지 않습니다 */
+  const finished = useRef(false)
+
+  const save = () => {
+    if (finished.current) return
+    finished.current = true
+    const next = draft.trim()
+    if (next) onSave(next)
+    else onCancel()
+  }
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      save()
+    } else if (e.key === 'Escape') {
+      finished.current = true
+      onCancel()
+    }
+  }
+
+  return (
+    <input
+      type="text"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={handleKeyDown}
+      onBlur={save}
+      autoFocus
+      aria-label={label}
+      className="min-w-0 flex-1 bg-transparent text-black-black outline-none"
+    />
+  )
+}
+
+/** 요일 하나의 고정 일정 목록 + 새 일정 입력칸 (Enter 로 추가). 입력한 일정은 수정 · 삭제할 수 있음 */
 function DaySchedules({
   day,
   titles,
@@ -20,6 +69,8 @@ function DaySchedules({
   onChange: (titles: string[]) => void
 }) {
   const [draft, setDraft] = useState('')
+  /** 수정 중인 일정의 순서 */
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
 
   const add = () => {
     const title = draft.trim()
@@ -48,15 +99,37 @@ function DaySchedules({
         {titles.map((title, index) => (
           <li key={`${title}-${index}`} className="flex items-center gap-[8px] text-body-b8 text-black-black">
             <span aria-hidden>•</span>
-            <span className="flex-1">{title}</span>
-            <button
-              type="button"
-              aria-label={`${title} 삭제`}
-              className="text-body-b8 text-black-gray40"
-              onClick={() => onChange(titles.filter((_, i) => i !== index))}
-            >
-              삭제
-            </button>
+            {index === editingIndex ? (
+              <ScheduleTitleInput
+                title={title}
+                label={`${title} 수정`}
+                onSave={(next) => {
+                  onChange(titles.map((item, i) => (i === index ? next : item)))
+                  setEditingIndex(null)
+                }}
+                onCancel={() => setEditingIndex(null)}
+              />
+            ) : (
+              <>
+                <span className="flex-1">{title}</span>
+                <button
+                  type="button"
+                  aria-label={`${title} 수정`}
+                  className="text-body-b8 text-black-gray40"
+                  onClick={() => setEditingIndex(index)}
+                >
+                  수정
+                </button>
+                <button
+                  type="button"
+                  aria-label={`${title} 삭제`}
+                  className="text-body-b8 text-black-gray40"
+                  onClick={() => onChange(titles.filter((_, i) => i !== index))}
+                >
+                  삭제
+                </button>
+              </>
+            )}
           </li>
         ))}
         <li className="flex items-center gap-[8px] text-body-b8">
