@@ -33,9 +33,12 @@ public class AuthService {
     private final PasswordAttemptLimiter attemptLimiter;
     private final JwtProperties jwtProperties;
 
+    private final AuthLimitProperties limits;
+
     /** 가입과 동시에 로그인 처리합니다. */
     @Transactional
-    public AuthTokens signup(SignupRequest request) {
+    public AuthTokens signup(SignupRequest request, String clientIp) {
+        attemptLimiter.check("signup-ip:" + clientIp, AuthErrorCode.TOO_MANY_REQUESTS, limits.signupPerIp());
         if (userRepository.existsByEmail(request.email())) {
             throw new BusinessException(AuthErrorCode.EMAIL_ALREADY_EXISTS);
         }
@@ -58,6 +61,8 @@ public class AuthService {
      */
     @Transactional
     public AuthTokens login(LoginRequest request, String clientIp) {
+        // IP 를 먼저 셉니다. 성공해도 지우지 않아서, 자기 계정으로 한 번씩 성공하며 횟수를 초기화할 수 없습니다.
+        attemptLimiter.check("login-ip:" + clientIp, AuthErrorCode.TOO_MANY_PASSWORD_ATTEMPTS, limits.loginPerIp());
         String attemptKey = PasswordAttemptLimiter.loginKey(request.email(), clientIp);
         attemptLimiter.check(attemptKey);
 

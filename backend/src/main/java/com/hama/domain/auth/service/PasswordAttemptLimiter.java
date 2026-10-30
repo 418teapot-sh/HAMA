@@ -42,12 +42,17 @@ public class PasswordAttemptLimiter {
 
     /** 비밀번호가 아닌 요청(재설정 메일·이메일 찾기 문의)도 같은 방식으로 세고, 넘으면 {@code errorCode} 로 429 를 던집니다. */
     public void check(String key, AuthErrorCode errorCode) {
+        check(key, errorCode, MAX_ATTEMPTS);
+    }
+
+    /** IP 처럼 여러 사람이 나눠 쓸 수 있는 키는 {@link #MAX_ATTEMPTS} 보다 넉넉하게 셉니다. */
+    public void check(String key, AuthErrorCode errorCode, int maxAttempts) {
         AtomicBoolean blocked = new AtomicBoolean(false);
         attempts.compute(key, (ignored, existing) -> {
             Attempt current = (existing == null || existing.isExpired())
                     ? new Attempt(new AtomicInteger(0), Instant.now())
                     : existing;
-            if (current.count().get() >= MAX_ATTEMPTS) {
+            if (current.count().get() >= maxAttempts) {
                 blocked.set(true);
             } else {
                 current.count().incrementAndGet();
