@@ -75,4 +75,11 @@ public class GoalPlan extends BaseTimeEntity {
     public void select() {
         this.selected = true;
     }
+
+    public void selectNormalized(String detailJson, int totalTodos, int avgDailyMinutes) {
+        this.detailJson = detailJson;
+        this.totalTodos = totalTodos;
+        this.avgDailyMinutes = avgDailyMinutes;
+        this.selected = true;
+    }
 }

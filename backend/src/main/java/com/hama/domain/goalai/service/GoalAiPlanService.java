@@ -88,13 +88,15 @@ public class GoalAiPlanService {
             throw new BusinessException(GoalErrorCode.GOAL_INVALID_PERIOD);
         }
         List<GoalFixedSchedule> goalFixedSchedules = fixedSchedules.findByGoalIdOrderByDayOfWeekAsc(goalId);
+        Set<DayOfWeek> busyDays = days(goalFixedSchedules);
+        if (!PlanExpander.hasAvailableDay(planStart, goal.getEndDate(), busyDays)) {
+            throw new BusinessException(GoalAiErrorCode.AI_PLAN_NO_AVAILABLE_DAY);
+        }
 
         PlanExpander.AiPlans answer = aiClient.chatForJson(AiRequest.of("goal-plan",
                 PLAN_PROMPT.formatted(today, preference.prompt()),
                 List.of(AiMessage.user(json.write(goalInfo(goal, planStart, goalFixedSchedules))))),
                 PlanExpander.AiPlans.class);
-        Set<DayOfWeek> busyDays = goalFixedSchedules.stream().map(GoalFixedSchedule::getDayOfWeek)
-                .collect(Collectors.toCollection(() -> EnumSet.noneOf(DayOfWeek.class)));
         List<PlanExpander.Expanded> expanded = expandBoth(answer, goal.getStartDate(), planStart, goal.getEndDate(),
                 busyDays);
 
@@ -121,12 +123,25 @@ public class GoalAiPlanService {
     public PlanResponses.PlanList list(Long userId, Long goalId) {
         return transaction.execute(status -> {
             Goal goal = owned(goals.findActive(goalId), userId);
+            Set<DayOfWeek> busyDays = days(fixedSchedules.findByGoalIdOrderByDayOfWeekAsc(goalId));
             return new PlanResponses.PlanList(goal.remainingPlanGenerations(),
                     plans.findByGoalIdOrderByIdAsc(goalId).stream()
-                            .map(plan -> PlanResponses.PlanView.of(plan,
-                                    json.read(plan.getDetailJson(), PlanDetail.class)))
+                            .map(plan -> view(plan, busyDays))
                             .toList());
         });
+    }
+
+    private PlanResponses.PlanView view(GoalPlan plan, Set<DayOfWeek> busyDays) {
+        PlanDetail detail = json.read(plan.getDetailJson(), PlanDetail.class);
+        if (plan.isSelected()) return PlanResponses.PlanView.of(plan, detail);
+        PlanExpander.Expanded normalized = PlanExpander.normalize(detail, plan.getTitle(), plan.getSummary(), busyDays);
+        if (normalized == null) return PlanResponses.PlanView.of(plan, detail);
+        return PlanResponses.PlanView.of(plan, normalized.detail(), normalized.totalTodos(), normalized.avgDailyMinutes());
+    }
+
+    static Set<DayOfWeek> days(List<GoalFixedSchedule> schedules) {
+        return schedules.stream().map(GoalFixedSchedule::getDayOfWeek)
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(DayOfWeek.class)));
     }
 
     private static Goal requireGenerationLeft(Goal goal) {

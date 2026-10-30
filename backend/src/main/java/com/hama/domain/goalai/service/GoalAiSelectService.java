@@ -3,6 +3,7 @@ package com.hama.domain.goalai.service;
 import com.hama.domain.goal.entity.Goal;
 import com.hama.domain.goal.entity.GoalStatus;
 import com.hama.domain.goal.repository.GoalRepository;
+import com.hama.domain.goal.repository.GoalFixedScheduleRepository;
 import com.hama.domain.goalai.dto.PlanDetail;
 import com.hama.domain.goalai.dto.SelectResponse;
 import com.hama.domain.goalai.entity.GoalPlan;
@@ -28,17 +29,19 @@ public class GoalAiSelectService {
 
     private final GoalRepository goals;
     private final GoalPlanRepository plans;
+    private final GoalFixedScheduleRepository fixedSchedules;
     private final TodoRepository todos;
     private final BusyTimeReader busyTimes;
     private final GoalAiJson json;
     private final CreditService credits;
     private final Clock clock;
 
-    public GoalAiSelectService(GoalRepository goals, GoalPlanRepository plans, TodoRepository todos,
+    public GoalAiSelectService(GoalRepository goals, GoalPlanRepository plans, GoalFixedScheduleRepository fixedSchedules, TodoRepository todos,
             BusyTimeReader busyTimes, GoalAiJson json, CreditService credits,
             @Qualifier("be3Clock") Clock clock) {
         this.goals = goals;
         this.plans = plans;
+        this.fixedSchedules = fixedSchedules;
         this.todos = todos;
         this.busyTimes = busyTimes;
         this.json = json;
@@ -69,6 +72,12 @@ public class GoalAiSelectService {
                 || detail.planStartDate().isBefore(today)) {
             throw new BusinessException(GoalAiErrorCode.AI_PLAN_OUTDATED);
         }
+        PlanExpander.Expanded normalized = PlanExpander.normalize(detail, plan.getTitle(), plan.getSummary(),
+                GoalAiPlanService.days(fixedSchedules.findByGoalIdOrderByDayOfWeekAsc(goal.getId())));
+        if (normalized == null || normalized.totalTodos() == 0) {
+            throw new BusinessException(GoalAiErrorCode.AI_PLAN_NO_AVAILABLE_DAY);
+        }
+        detail = normalized.detail();
 
         TimeSlotPlacer placer = new TimeSlotPlacer(
                 busyTimes.read(userId, detail.planStartDate(), detail.goalEndDate(), Set.of()));
@@ -84,7 +93,7 @@ public class GoalAiSelectService {
         }
         todos.saveAll(created);
         goal.startPlan();
-        plan.select();
+        plan.selectNormalized(json.write(detail), normalized.totalTodos(), normalized.avgDailyMinutes());
 
         return new SelectResponse(goal.getId(), goal.getStatus(), new SelectResponse.Created(created.size()),
                 new SelectResponse.Placement(created.size() - unplaced.size(), unplaced.size(), unplaced));

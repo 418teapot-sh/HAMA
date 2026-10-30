@@ -31,6 +31,17 @@ public final class TimeSlotPlacer {
         busy.forEach((date, intervals) -> this.busy.put(date, new ArrayList<>(intervals)));
     }
 
+    TimeSlotPlacer copy() {
+        return new TimeSlotPlacer(busy);
+    }
+
+    /** 충돌이 있어도 원래 보존할 시간 전체를 점유로 등록합니다. */
+    void block(LocalDate date, LocalTime start, LocalTime end) {
+        int s = start.getHour() * 60 + start.getMinute();
+        int e = end.getHour() * 60 + end.getMinute() + (end.getSecond() > 0 || end.getNano() > 0 ? 1 : 0);
+        busy.computeIfAbsent(date, d -> new ArrayList<>()).add(new Interval(s, e));
+    }
+
     /** 09:00~22:00 안에서 minutes 가 들어가는 첫 빈 시간(10분 단위 시작). 없으면 null. */
     public Slot place(LocalDate date, int minutes) {
         List<Interval> intervals = busy.computeIfAbsent(date, d -> new ArrayList<>());
