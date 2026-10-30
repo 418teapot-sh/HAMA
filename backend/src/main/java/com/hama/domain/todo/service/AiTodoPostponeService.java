@@ -2,7 +2,9 @@ package com.hama.domain.todo.service;
 
 import com.hama.domain.calendar.dto.PostponeDayResponse;
 import com.hama.domain.goal.entity.Goal;
+import com.hama.domain.goal.entity.GoalFixedSchedule;
 import com.hama.domain.goal.entity.GoalStatus;
+import com.hama.domain.goal.repository.GoalFixedScheduleRepository;
 import com.hama.domain.goal.repository.GoalRepository;
 import com.hama.domain.goalai.service.BusyTimeReader;
 import com.hama.domain.goalai.service.TimeSlotPlacer;
@@ -15,6 +17,7 @@ import com.hama.domain.todo.repository.TodoRepository;
 import com.hama.global.exception.BusinessException;
 import com.hama.global.exception.GlobalErrorCode;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -37,13 +40,15 @@ public class AiTodoPostponeService {
     private static final LocalDate MAX_DATE = LocalDate.of(9999, 12, 31);
     private final TodoRepository todos;
     private final GoalRepository goals;
+    private final GoalFixedScheduleRepository fixedSchedules;
     private final BusyTimeReader busy;
     private final Clock clock;
 
-    public AiTodoPostponeService(TodoRepository todos, GoalRepository goals, BusyTimeReader busy,
-            @Qualifier("be3Clock") Clock clock) {
+    public AiTodoPostponeService(TodoRepository todos, GoalRepository goals,
+            GoalFixedScheduleRepository fixedSchedules, BusyTimeReader busy, @Qualifier("be3Clock") Clock clock) {
         this.todos = todos;
         this.goals = goals;
+        this.fixedSchedules = fixedSchedules;
         this.busy = busy;
         this.clock = clock;
     }
@@ -62,7 +67,9 @@ public class AiTodoPostponeService {
             return;
         }
         var slots = new AiPostponeSlots(busy, todo.getUserId(), Set.of(todo.getId()), now);
-        if (!automatic(todo, goal, false, now, slots)) throw new BusinessException(TodoErrorCode.TODO_POSTPONE_NO_SLOT);
+        Set<DayOfWeek> excludedDays = fixedSchedules.findByGoalIdOrderByDayOfWeekAsc(goal.getId()).stream()
+                .map(GoalFixedSchedule::getDayOfWeek).collect(Collectors.toSet());
+        if (!automatic(todo, goal, false, now, slots, excludedDays)) throw new BusinessException(TodoErrorCode.TODO_POSTPONE_NO_SLOT);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -91,6 +98,10 @@ public class AiTodoPostponeService {
                 .thenComparing(Todo::getId));
         LocalDateTime now = LocalDateTime.now(clock);
         var slots = new AiPostponeSlots(busy, userId, targets.stream().map(Todo::getId).collect(Collectors.toSet()), now);
+        Map<Long, Set<DayOfWeek>> excludedDays = lockedGoals.isEmpty() ? Map.of()
+                : fixedSchedules.findByGoalIdInOrderByGoalIdAsc(lockedGoals.keySet()).stream()
+                        .collect(Collectors.groupingBy(GoalFixedSchedule::getGoalId,
+                                Collectors.mapping(GoalFixedSchedule::getDayOfWeek, Collectors.toSet())));
         var moved = new ArrayList<PostponeDayResponse.Moved>();
         var unplaced = new ArrayList<PostponeDayResponse.Unplaced>();
         for (Todo todo : targets) {
@@ -101,7 +112,8 @@ public class AiTodoPostponeService {
             }
             LocalDate fromDate = todo.getTodoDate();
             LocalDateTime from = todo.getStartTime() == null ? null : fromDate.atTime(todo.getStartTime());
-            if (automatic(todo, goal, "NEXT_DAY".equals(strategy), now, slots)) {
+            if (automatic(todo, goal, "NEXT_DAY".equals(strategy), now, slots,
+                    excludedDays.getOrDefault(todo.getGoalId(), Set.of()))) {
                 moved.add(new PostponeDayResponse.Moved(todo.getId(), fromDate, from,
                         todo.getTodoDate().atTime(todo.getStartTime())));
             } else {
@@ -130,9 +142,11 @@ public class AiTodoPostponeService {
         }
     }
 
-    private boolean automatic(Todo todo, Goal goal, boolean nextDayOnly, LocalDateTime now, AiPostponeSlots slots) {
+    private boolean automatic(Todo todo, Goal goal, boolean nextDayOnly, LocalDateTime now, AiPostponeSlots slots,
+            Set<DayOfWeek> excludedDays) {
         if (!todo.getTodoDate().isBefore(MAX_DATE) || goal.getStartDate() == null || goal.getEndDate() == null) return false;
         LocalDate first = todo.getTodoDate().plusDays(1);
+        if (nextDayOnly && (first.isBefore(now.toLocalDate()) || first.isBefore(goal.getStartDate()))) return false;
         if (first.isBefore(now.toLocalDate())) first = now.toLocalDate();
         if (first.isBefore(goal.getStartDate())) first = goal.getStartDate();
         LocalDate last = first.plusDays(nextDayOnly ? 0 : 365);
@@ -143,6 +157,7 @@ public class AiTodoPostponeService {
         if (minutes > 13 * 60) return false;
         slots.load(first, last);
         for (LocalDate day = first; !day.isAfter(last); day = day.plusDays(1)) {
+            if (excludedDays.contains(day.getDayOfWeek())) continue;
             var slot = slots.place(day, minutes);
             if (slot != null) {
                 todo.postpone(day, slot.start(), slot.end());

@@ -5,6 +5,7 @@ import com.hama.domain.todo.entity.TodoStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Schema(name = "CalendarResponse")
@@ -14,6 +15,7 @@ public record CalendarResponse(List<Item> items) {
     public record Item(CalendarType type, Long refId, String title, LocalDate date,
             @JsonFormat(pattern = "HH:mm") LocalTime startTime,
             @JsonFormat(pattern = "HH:mm") LocalTime endTime,
-            boolean allDay, Long goalId, TodoStatus status) {
+            boolean allDay, Long goalId, TodoStatus status,
+            @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime occurrenceStartAt) {
     }
 }

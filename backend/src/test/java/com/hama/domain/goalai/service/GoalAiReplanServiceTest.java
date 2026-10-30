@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.time.DayOfWeek;
 import org.junit.jupiter.api.Test;
 
 class GoalAiReplanServiceTest {
@@ -65,7 +67,7 @@ class GoalAiReplanServiceTest {
     }
 
     @Test
-    void 종료일까지_빈_시간이_없으면_날짜만_두고_unplaced_로_센다() {
+    void 종료일까지_빈_시간이_없으면_원본을_보존하고_unplaced_로_센다() {
         Todo overdue = todo(FROM.minusDays(1), "09:00", "10:00");
         Map<LocalDate, List<Interval>> full = new java.util.HashMap<>();
         for (LocalDate day = FROM; !day.isAfter(END); day = day.plusDays(1)) {
@@ -74,9 +76,54 @@ class GoalAiReplanServiceTest {
 
         ReplanResponse result = GoalAiReplanService.rearrange(List.of(overdue), new TimeSlotPlacer(full), FROM, END);
 
+        assertThat(result).isEqualTo(new ReplanResponse(0, 1));
+        assertThat(overdue.getTodoDate()).isEqualTo(FROM.minusDays(1));
+        assertThat(overdue.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+    }
+
+    @Test
+    void 고정요일은_기존_위치도_이동하고_실패한_원본_시간을_침범하지_않는다() {
+        Todo blocked = todo(FROM, "09:00", "10:00");
+        Todo other = todo(FROM, "09:00", "10:00");
+        var result = GoalAiReplanService.rearrange(List.of(blocked, other),
+                new TimeSlotPlacer(Map.of(FROM.plusDays(1), List.of(new Interval(0, 24 * 60)))),
+                FROM, FROM.plusDays(1), Set.of(DayOfWeek.THURSDAY));
+        assertThat(result).isEqualTo(new ReplanResponse(0, 2));
+        assertThat(blocked.getTodoDate()).isEqualTo(FROM);
+        assertThat(other.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+    }
+
+    @Test
+    void 고정요일에_있던_투두도_다음_허용요일로_옮긴다() {
+        Todo sunday = todo(LocalDate.of(2026, 10, 4), "09:00", "10:00");
+        var result = GoalAiReplanService.rearrange(List.of(sunday), new TimeSlotPlacer(Map.of()), FROM, END,
+                Set.of(DayOfWeek.SUNDAY));
+        assertThat(result).isEqualTo(new ReplanResponse(1, 0));
+        assertThat(sunday.getTodoDate()).isEqualTo(LocalDate.of(2026, 10, 5));
+    }
+
+    @Test
+    void 배치실패한_원본_시간은_충돌이_있어도_다른_투두가_차지하지_않는다() {
+        Todo longTask = todo(FROM, "09:00", "11:00");
+        Todo untimed = todo(FROM, null, null);
+        var result = GoalAiReplanService.rearrange(List.of(longTask, untimed),
+                new TimeSlotPlacer(Map.of(FROM, List.of(new Interval(10 * 60, 22 * 60)))), FROM, FROM);
+        assertThat(result).isEqualTo(new ReplanResponse(0, 2));
+        assertThat(longTask.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(untimed.getStartTime()).isNull();
+    }
+
+    @Test
+    void 실패_원본을_반영해_다시_계산하면_다른_투두만_다음날에_배치한다() {
+        Todo tooLong = todo(FROM, "08:00", "23:00");
+        Todo movable = todo(FROM, null, null);
+        var result = GoalAiReplanService.rearrange(List.of(tooLong, movable),
+                new TimeSlotPlacer(Map.of(FROM, List.of(new Interval(22 * 60, 23 * 60)))), FROM, FROM.plusDays(1));
         assertThat(result).isEqualTo(new ReplanResponse(1, 1));
-        assertThat(overdue.getTodoDate()).isEqualTo(FROM);
-        assertThat(overdue.getStartTime()).isNull();
+        assertThat(tooLong.getTodoDate()).isEqualTo(FROM);
+        assertThat(tooLong.getStartTime()).isEqualTo(LocalTime.of(8, 0));
+        assertThat(movable.getTodoDate()).isEqualTo(FROM.plusDays(1));
+        assertThat(movable.getStartTime()).isEqualTo(LocalTime.of(9, 0));
     }
 
     @Test

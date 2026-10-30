@@ -34,7 +34,7 @@ public class UserService {
                     "goal_progress_summary");
     /** user_id 로 지우는 테이블. 자식을 다 지운 뒤 이 순서대로 지웁니다. */
     static final List<String> USER_TABLES =
-            List.of("todo", "schedule", "goal", "refresh_token", "password_reset_token", "users");
+            List.of("todo", "schedule_completion", "schedule", "goal", "refresh_token", "password_reset_token", "users");
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;

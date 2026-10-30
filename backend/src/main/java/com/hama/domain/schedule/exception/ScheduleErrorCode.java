@@ -9,6 +9,11 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum ScheduleErrorCode implements BaseErrorCode {
     SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "일정을 찾을 수 없습니다."),
+    SCHEDULE_OCCURRENCE_NOT_FOUND(HttpStatus.BAD_REQUEST, "해당 날짜에 일치하는 일정 발생이 없습니다."),
+    SCHEDULE_OCCURRENCE_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "해당 날짜의 일정 발생이 너무 많습니다."),
+    SCHEDULE_ALREADY_COMPLETED(HttpStatus.CONFLICT, "이미 완료한 일정입니다."),
+    SCHEDULE_NOT_COMPLETED(HttpStatus.CONFLICT, "완료한 일정만 완료 취소할 수 있습니다."),
+    SCHEDULE_COMPLETED_CONVERSION_NOT_ALLOWED(HttpStatus.CONFLICT, "완료 체크를 모두 해제한 뒤 분류를 전환해 주세요."),
     SCHEDULE_INVALID_INPUT(HttpStatus.BAD_REQUEST, "일정의 필수 정보가 올바르지 않습니다."),
     SCHEDULE_INVALID_TIME(HttpStatus.BAD_REQUEST, "시작·종료 일시는 1000~9999년 범위이며 시작보다 늦게 종료해야 합니다."),
     SCHEDULE_INVALID_ALL_DAY(HttpStatus.BAD_REQUEST, "종일 일정은 시작일 00:00부터 마지막 날 다음 날 00:00까지 입력해야 합니다."),

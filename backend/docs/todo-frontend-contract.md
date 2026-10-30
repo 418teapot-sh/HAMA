@@ -1,6 +1,6 @@
 # 투두·일정 프론트 연동 계약
 
-인증·ApiResponse는 기존 계약을 유지합니다. 날짜/일시는 KST입니다. 이 문서는 #222 구현 기준이며 실제 사용은 해당 백엔드 배포 후 가능합니다. 팀 프론트 변경은 별도입니다.
+인증·ApiResponse는 기존 계약을 유지합니다. 날짜/일시는 KST입니다. 일정 완료 기능은 #235 백엔드 배포 후 사용할 수 있으며 팀 프론트 연동은 별도입니다.
 
 ## 분류와 생성
 
@@ -9,7 +9,7 @@
 | 할일 | `POST /api/v1/todos` | `category: TASK` | 가능 |
 | 기타 | `POST /api/v1/todos` | `category: OTHER` | 가능 |
 | AI 칸의 직접 추가 | `POST /api/v1/todos` | `category: AI_GOAL_TASK`, `goalId` 필수 | 가능 |
-| 일정 | `POST /api/v1/calendar/schedules` | `type: PERSONAL` (고정은 FIXED) | 현재 없음 |
+| 일정 | `POST /api/v1/calendar/schedules` | `type: PERSONAL` (고정은 FIXED) | 날짜·발생별 완료/취소 |
 
 TASK/OTHER는 목표 ID를 받을 수 없습니다. OTHER는 일반 할일과 같은 수정·완료·취소·미루기·삭제 동작을 지원하며 목표 진행률에 포함되지 않습니다. 목표 투두 직접 추가는 진행 중 본인 목표의 기간 안 날짜를 받습니다.
 
@@ -28,6 +28,15 @@ TASK/OTHER는 목표 ID를 받을 수 없습니다. OTHER는 일반 할일과 �
 ```
 
 일정 시작·종료는 필수이고 시작 < 종료입니다. 반복 지원/종일 종료 경계는 기존 OpenAPI를 따릅니다. 투두/기타의 선택 시간은 둘 다 지정하거나 둘 다 비워야 합니다.
+
+## 일정 완료 및 완료 취소
+
+- `GET /api/v1/calendar` 일정 항목의 `status`는 `PENDING` 또는 `COMPLETED`이고, `occurrenceStartAt`은 해당 반복 발생의 시작 일시(KST)입니다. 투두 항목의 `occurrenceStartAt`은 null입니다.
+- `PATCH /api/v1/calendar/schedules/{scheduleId}/complete` 또는 `/uncomplete`에 해당 일정 항목의 값을 그대로 보냅니다: `{"date":"2026-10-06","occurrenceStartAt":"2026-10-05T23:00:00"}`. 성공은 공통 응답 200이며 일정 ID·date·occurrenceStartAt·status·completedAt을 반환합니다.
+- 같은 일정의 반복 발생이 같은 날짜에 겹칠 수 있으므로 화면 항목 키와 요청 식별에 `refId`, `date`, `occurrenceStartAt`을 모두 사용합니다. 여러 날 일정의 각 날짜와 겹친 발생은 독립적으로 체크합니다. 성공 후 캘린더를 재조회하세요.
+- 존재하지 않는 발생·날짜는 400 `SCHEDULE_OCCURRENCE_NOT_FOUND`, 이미 완료한 항목의 완료는 409 `SCHEDULE_ALREADY_COMPLETED`, 미완료 항목의 취소는 409 `SCHEDULE_NOT_COMPLETED`입니다. 타인 일정은 403, 없는/삭제된 일정은 404입니다.
+- 일정의 시작일·종료일·반복 규칙이 변경되면 기존 체크를 초기화합니다. 날짜가 그대로인 시간 변경 및 제목·메모 변경은 유지합니다. 개인 일정을 할일·기타로 전환하려면 표시 중인 완료 체크를 모두 해제해야 합니다.
+- 완료 체크는 표시 상태이며 AI의 바쁜 시간 계산과 ICS UID·RRULE에는 영향을 주지 않습니다. 반복 일정의 기존 수정·삭제는 여전히 전체 시리즈에 적용됩니다.
 
 ## AI 생성 출처
 
@@ -106,6 +115,8 @@ TASK/OTHER는 목표 ID를 받을 수 없습니다. OTHER는 일반 할일과 �
 - ICS UID는 저장된 불변 식별자를 사용합니다. V29 이전 행은 마이그레이션 시점의 `hama-{type}-{refId}@hama.app`을 보존하고, 신규 항목은 `hama-{UUID}@hama.app`을 발급합니다. TASK↔OTHER, FIXED↔PERSONAL 수정 및 개인 일정↔투두 전환에서 분류/ID가 달라져도 UID는 유지됩니다. 이전에 다른 UID로 가져온 중복은 외부 캘린더에서 수동 정리합니다.
 - 시간이 있는 OTHER는 기존 시간이 있는 TASK처럼 AI 빈 시간 탐색에서 피합니다. 시간이 없는 OTHER는 하루 전체를 점유하지 않습니다.
 - 366일·10,000개 상한, JSON 오류/ICS 파일 응답, 일정 반복·소유권은 유지합니다.
+- 목표 고정요일은 해당 목표의 AI 플랜·자동 미루기·재배치에서 제외하며 사용자가 날짜를 직접 지정하면 예외를 허용합니다. 배치가 불가능한 기존 투두는 원본을 유지하고 일괄 미루기의 unplaced 또는 재배치의 unplacedCount에 포함합니다. 재배치에서 실제 변경이 없으면 크레딧을 돌려줍니다.
+- 플랜 전체 기간에 가능한 날이 없으면 생성·선택에서 409 `AI_PLAN_NO_AVAILABLE_DAY`를 반환합니다. 미선택 플랜 조회의 재계산 결과가 0건이면 선택하지 않도록 안내합니다. 이미 선택된 플랜은 소급 변경하지 않습니다.
 - 배포 후 OpenAPI 타입 재생성, OTHER 목록/뱃지 매핑, aiGenerated 판별, 완료 토글, 분류 전환의 날짜·시각 입력 및 새ID 처리, 400/403/404/409 안내를 연결합니다.
 
 - 저장된 일정의 반복 규칙을 해석할 수 없으면 캘린더 조회·ICS와 AI 시간 계산에서 해당 일정을 제외하고 서버 로그에 일정 ID와 오류 종류를 남깁니다. 해당 시간이 AI 배치에서 빈 시간으로 취급될 수 있으므로 운영 시 누락된 일정을 확인해야 합니다. 원본 일정은 변경하지 않습니다.
