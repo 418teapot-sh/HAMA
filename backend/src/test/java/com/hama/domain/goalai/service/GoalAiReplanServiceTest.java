@@ -114,6 +114,19 @@ class GoalAiReplanServiceTest {
     }
 
     @Test
+    void 실패_원본을_반영해_다시_계산하면_다른_투두만_다음날에_배치한다() {
+        Todo tooLong = todo(FROM, "08:00", "23:00");
+        Todo movable = todo(FROM, null, null);
+        var result = GoalAiReplanService.rearrange(List.of(tooLong, movable),
+                new TimeSlotPlacer(Map.of(FROM, List.of(new Interval(22 * 60, 23 * 60)))), FROM, FROM.plusDays(1));
+        assertThat(result).isEqualTo(new ReplanResponse(1, 1));
+        assertThat(tooLong.getTodoDate()).isEqualTo(FROM);
+        assertThat(tooLong.getStartTime()).isEqualTo(LocalTime.of(8, 0));
+        assertThat(movable.getTodoDate()).isEqualTo(FROM.plusDays(1));
+        assertThat(movable.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+    }
+
+    @Test
     void 완료한_투두는_재배치할_수_없다() {
         Todo done = todo(FROM, "09:00", "10:00");
         done.complete(LocalDateTime.of(2026, 10, 1, 10, 0));
