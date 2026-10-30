@@ -120,7 +120,6 @@ class GoalTest {
     void 진행_중인_목표를_완료하면_종료일이_지나도_COMPLETED이고_수정할_수_없지만_삭제할_수_있다() {
         Goal goal = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
         goal.startPlan();
-        assertThat(goal.isDeletable(TODAY)).isFalse();
 
         goal.complete(TODAY.atTime(10, 0));
 
@@ -128,7 +127,6 @@ class GoalTest {
         assertThat(goal.effectiveStatus(TODAY)).isEqualTo(GoalStatus.COMPLETED);
         assertThat(goal.effectiveStatus(TODAY.plusDays(60))).isEqualTo(GoalStatus.COMPLETED);
         assertThat(goal.isPast(TODAY.plusDays(60))).isFalse();
-        assertThat(goal.isDeletable(TODAY)).isTrue();
         assertThatThrownBy(() -> goal.revise(content(TODAY, TODAY.plusDays(40)), TODAY))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(GoalErrorCode.GOAL_NOT_EDITABLE);

@@ -15,6 +15,8 @@ import com.hama.domain.goal.repository.GoalTodoCount;
 import com.hama.domain.goal.repository.GoalTodoRepository;
 import com.hama.domain.goalai.repository.GoalPlanRepository;
 import com.hama.domain.goalai.service.GoalProgressChanged;
+import com.hama.domain.goalai.service.GoalAiReplanService;
+import com.hama.domain.goal.entity.GoalStatus;
 import com.hama.domain.payment.service.CreditService;
 import com.hama.domain.todo.repository.TodoRepository;
 import com.hama.global.exception.BusinessException;
@@ -31,6 +33,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -53,11 +56,12 @@ public class GoalService {
     private final Clock clock;
     private final ApplicationEventPublisher events;
     private final CreditService credits;
+    private final GoalAiReplanService replan;
 
     public GoalService(GoalRepository goalRepository, GoalFixedScheduleRepository fixedScheduleRepository,
             GoalPlanRepository goalPlanRepository, GoalTodoRepository goalTodoRepository,
             TodoRepository todoRepository, @Qualifier("be3Clock") Clock clock, ApplicationEventPublisher events,
-            CreditService credits) {
+            CreditService credits, GoalAiReplanService replan) {
         this.goalRepository = goalRepository;
         this.fixedScheduleRepository = fixedScheduleRepository;
         this.goalPlanRepository = goalPlanRepository;
@@ -66,6 +70,7 @@ public class GoalService {
         this.clock = clock;
         this.events = events;
         this.credits = credits;
+        this.replan = replan;
     }
 
     /** 크레딧은 플랜 선택 때 쓰지만, 0이면 플랜을 고를 수 없는 PLANNING 목표만 남으므로 생성 단계에서 막습니다. */
@@ -137,9 +142,14 @@ public class GoalService {
     @Transactional
     public GoalResponses.Detail update(Long userId, Long goalId, UpdateGoalRequest request) {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
+        LocalDate oldStart = goal.getStartDate();
+        LocalDate oldEnd = goal.getEndDate();
         goal.revise(request.mergeInto(goal.content()), today());
+        var adjustment = goal.getStatus() == GoalStatus.IN_PROGRESS
+                && (!Objects.equals(oldStart, goal.getStartDate()) || !Objects.equals(oldEnd, goal.getEndDate()))
+                ? replan.adjustForPeriodChange(userId, goal) : null;
         events.publishEvent(new GoalProgressChanged(goalId));
-        return detail(goal);
+        return detail(goal).withPeriodAdjustment(adjustment);
     }
 
     @Transactional
@@ -165,13 +175,10 @@ public class GoalService {
         return detail(goal, true);
     }
 
-    /** 지난 목표·완료한 목표·PLANNING 목표만 삭제할 수 있고, 연결된 투두도 함께 소프트 삭제합니다. */
+    /** 모든 상태의 목표를 삭제할 수 있고, 연결된 투두도 함께 소프트 삭제합니다. */
     @Transactional
     public void delete(Long userId, Long goalId) {
         Goal goal = owned(goalRepository.findActiveForUpdate(goalId), userId);
-        if (!goal.isDeletable(today())) {
-            throw new BusinessException(GoalErrorCode.GOAL_NOT_DELETABLE);
-        }
         LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.SECONDS);
         goal.delete(now);
         // SQL UPDATE 로 지우면 같은 트랜잭션에서 이미 불러온 Todo 가 flush 때 deleted_at 을 되돌립니다.
