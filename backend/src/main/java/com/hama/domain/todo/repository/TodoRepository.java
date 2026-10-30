@@ -18,7 +18,7 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     @Query("""
             select t from Todo t
             where t.userId = :userId and t.todoDate = :date and t.deletedAt is null
-              and (t.category = com.hama.domain.todo.entity.TodoCategory.TASK or exists
+              and (t.category in (com.hama.domain.todo.entity.TodoCategory.TASK, com.hama.domain.todo.entity.TodoCategory.OTHER) or exists
                   (select g.id from Goal g where g.id = t.goalId and g.userId = :userId and g.deletedAt is null))
               and (:category is null or t.category = :category)
             order by t.id

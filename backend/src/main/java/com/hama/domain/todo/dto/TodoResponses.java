@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.hama.domain.todo.entity.Todo;
 import com.hama.domain.todo.entity.TodoCategory;
 import com.hama.domain.todo.entity.TodoStatus;
+import com.hama.domain.todo.entity.TodoOrigin;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -32,27 +34,29 @@ public final class TodoResponses {
     public record Pending(Long todoId, TodoCategory category, String content,
             Long goalId, String goalTitle,
             @JsonFormat(pattern = "HH:mm") LocalTime startTime,
-            @JsonFormat(pattern = "HH:mm") LocalTime endTime, int postponedCount) {
+            @JsonFormat(pattern = "HH:mm") LocalTime endTime, int postponedCount, TodoOrigin origin,
+            @Schema(description = "true=AI, false=사용자, null=기존 출처 미확인", nullable = true) Boolean aiGenerated) {
         static Pending from(Todo todo, Map<Long, String> goalTitles) {
             return new Pending(todo.getId(), todo.getCategory(), todo.getContent(), todo.getGoalId(), goalTitles.get(todo.getGoalId()),
-                    todo.getStartTime(), todo.getEndTime(), todo.getPostponedCount());
+                    todo.getStartTime(), todo.getEndTime(), todo.getPostponedCount(), todo.getOrigin(), todo.getOrigin().aiGenerated());
         }
     }
 
     public record Completed(Long todoId, TodoCategory category, String content,
             @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime completedAt,
-            String statusNote) {
+            String statusNote, TodoOrigin origin,
+            @Schema(description = "true=AI, false=사용자, null=기존 출처 미확인", nullable = true) Boolean aiGenerated) {
         static Completed from(Todo todo) {
             return new Completed(todo.getId(), todo.getCategory(), todo.getContent(),
-                    todo.getCompletedAt(), todo.getStatusNote());
+                    todo.getCompletedAt(), todo.getStatusNote(), todo.getOrigin(), todo.getOrigin().aiGenerated());
         }
     }
 
-    public record Updated(Long todoId, String content,
+    public record Updated(Long todoId, TodoCategory category, String content,
             @JsonFormat(pattern = "HH:mm") LocalTime startTime,
             @JsonFormat(pattern = "HH:mm") LocalTime endTime) {
         public static Updated from(Todo todo) {
-            return new Updated(todo.getId(), todo.getContent(), todo.getStartTime(), todo.getEndTime());
+            return new Updated(todo.getId(), todo.getCategory(), todo.getContent(), todo.getStartTime(), todo.getEndTime());
         }
     }
 

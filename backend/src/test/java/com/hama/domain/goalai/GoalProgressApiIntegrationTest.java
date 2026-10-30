@@ -101,6 +101,31 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
     }
 
     @Test
+    void 완료취소는_완료율과_요약을_갱신하고_상태원문은_재완료까지_보존한다() throws Exception {
+        User user = user();
+        long goalId = goal(user);
+        long id = record(user, goalId, "700점");
+        answer("처음 요약");
+        worker.process(goalId);
+        String previousAt = records(user, goalId).at("/content/0/completedAt").asString();
+        var result = call(patch("/api/v1/todos/" + id + "/uncomplete"), user, null, 200);
+        assertThat(result.at("/data/goalProgressRate").asDouble()).isZero();
+        assertThat(records(user, goalId).get("totalElements").asLong()).isZero();
+        var empty = summary(user, goalId);
+        assertThat(empty.get("status").asString()).isEqualTo("EMPTY");
+        assertThat(empty.get("summary").isNull()).isTrue();
+        TIME.advance(60);
+        var completed = call(patch("/api/v1/todos/" + id + "/complete"), user, null, 200);
+        assertThat(completed.at("/data/goalProgressRate").asDouble()).isEqualTo(100.0);
+        var record = records(user, goalId).at("/content/0");
+        assertThat(record.get("statusNote").asString()).isEqualTo("700점");
+        assertThat(record.get("completedAt").asString()).isNotEqualTo(previousAt);
+        answer("재완료 요약");
+        worker.process(goalId);
+        assertThat(summary(user, goalId).get("summary").asString()).isEqualTo("재완료 요약");
+    }
+
+    @Test
     void 이벤트_없는_원본_변경도_GET이_감지하되_호출_간격을_보존한다() throws Exception {
         User user = user();
         long goalId = goal(user);

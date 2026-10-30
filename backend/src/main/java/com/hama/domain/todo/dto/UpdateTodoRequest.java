@@ -22,6 +22,21 @@ public class UpdateTodoRequest extends TodoTimePatch {
         this.content = content;
     }
 
+    @Pattern(regexp = "TASK|OTHER", message = "변경할 카테고리는 TASK 또는 OTHER입니다.")
+    @JsonDeserialize(using = StrictDeserializers.Text.class)
+    @Schema(description = "TASK↔OTHER만 변경 가능. 목표 투두는 변경 불가. 일정 전환은 별도 API 사용.",
+            allowableValues = {"TASK", "OTHER"})
+    private String category;
+
+    @JsonSetter(value = "category", nulls = Nulls.FAIL)
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
     public String getContent() {
         return content;
     }

@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "투두", description = "일반 TASK 및 목표 투두 관리.")
+@Tag(name = "투두", description = "일반 TASK·기타 OTHER 및 목표 투두 관리.")
 @RestController
 @RequestMapping("/api/v1/todos")
 @RequiredArgsConstructor
@@ -38,7 +38,7 @@ public class TodoController {
 
     private final TodoService todoService;
 
-    @Operation(summary = "투두 생성", description = "TASK는 목표 ID가 없어야 합니다. AI_GOAL_TASK는 진행 중인 본인 목표와 기간 안의 날짜가 필요합니다.")
+    @Operation(summary = "투두 생성", description = "TASK/OTHER는 목표 ID가 없어야 합니다. 생성 출처는 서버에서 MANUAL로 기록합니다. AI_GOAL_TASK는 진행 중인 본인 목표와 기간 안의 날짜가 필요합니다.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<ApiResponse<TodoResponses.Created>> create(
@@ -57,7 +57,7 @@ public class TodoController {
         return ApiResponse.success(todoService.list(authUser.userId(), date, category));
     }
 
-    @Operation(summary = "투두 수정", description = "완료된 투두는 409. 생략한 필드는 유지합니다.")
+    @Operation(summary = "투두 수정", description = "완료된 투두와 AI 생성 투두의 수정은 409. TASK↔OTHER 변경 가능, 생략한 필드는 유지합니다.")
     @PatchMapping("/{todoId}")
     public ApiResponse<TodoResponses.Updated> update(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
@@ -66,11 +66,11 @@ public class TodoController {
     }
 
     @Operation(summary = "투두 미루기",
-            description = "TASK는 날짜 생략 시 다음 날, 시간 생략 시 유지. AI는 빈 요청 시 다음 빈 시간으로 자동 배치합니다. "
+            description = "TASK/OTHER는 날짜 생략 시 다음 날, 시간 생략 시 유지. AI는 빈 요청 시 다음 빈 시간으로 자동 배치합니다. "
                     + "AI 직접 지정은 targetDate 필수, 시간 생략은 유지·null은 지움이며 충돌 시 409입니다. "
                     + "자동 배치는 다음 날부터(밀린 투두는 오늘 현재시각 이후) 09~22시·10분 단위이며 기존 소요시간(무시간 30분)을 유지합니다. "
                     + "최대 366일과 큰 목표 종료일 중 빠른 날까지 찾고, 빈 시간이 없으면 409 TODO_POSTPONE_NO_SLOT. "
-                    + "완료/비진행 목표는 409. 기간 목표 연결은 유지합니다.")
+                    + "완료/비진행 목표는 409. 목표 연결은 유지하며 AI 출처와 무관하게 미루기는 허용합니다.")
     @PatchMapping("/{todoId}/postpone")
     public ApiResponse<TodoResponses.Postponed> postpone(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
@@ -78,12 +78,22 @@ public class TodoController {
         return ApiResponse.success(todoService.postpone(authUser.userId(), todoId, request));
     }
 
-    @Operation(summary = "투두 완료", description = "재완료는 409. 일반 TASK의 goalProgressRate는 null, 목표 투두는 활성 투두 완료 비율(소수 첫째 자리)입니다.")
+    @Operation(summary = "투두 완료", description = "재완료는 409. TASK/OTHER의 goalProgressRate는 null, 목표 투두는 활성 투두 완료 비율(소수 첫째 자리)입니다.")
     @PatchMapping("/{todoId}/complete")
     public ApiResponse<TodoResponses.Completion> complete(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long todoId) {
         return ApiResponse.success(todoService.complete(authUser.userId(), todoId));
+    }
+
+    @Operation(summary = "투두 완료 취소", description = "완료 투두를 PENDING으로 바꾸고 completedAt을 비웁니다. "
+            + "이미 미완료면 409 TODO_NOT_COMPLETED. 메모는 보존하고 완료 이력에서 숨기며 재완료하면 새 완료일을 사용합니다. "
+            + "목표 완료율·진행 요약도 갱신합니다. 목표 자체의 상태는 바꾸지 않습니다.")
+    @PatchMapping("/{todoId}/uncomplete")
+    public ApiResponse<TodoResponses.Completion> undoComplete(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long todoId) {
+        return ApiResponse.success(todoService.undoComplete(authUser.userId(), todoId));
     }
 
     @Operation(summary = "투두 상태 메모 수정",
@@ -95,7 +105,7 @@ public class TodoController {
         return ApiResponse.success(todoService.updateNote(authUser.userId(), todoId, request));
     }
 
-    @Operation(summary = "투두 삭제", description = "소프트 삭제. 성공 시 HTTP 200, 공통 응답의 data는 null.")
+    @Operation(summary = "투두 삭제", description = "AI 생성 투두는 409 TODO_AI_EDIT_NOT_ALLOWED. 소프트 삭제. 성공 시 HTTP 200, 공통 응답의 data는 null.")
     @DeleteMapping("/{todoId}")
     public ApiResponse<Void> delete(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
