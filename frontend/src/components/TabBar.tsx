@@ -1,5 +1,9 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import icAdd from '../assets/icons/ic_add.svg'
+import { loadMe } from '../features/auth/api'
+import { useAuthStore } from '../features/auth/store'
+import CreditShortageModal from '../features/payment/CreditShortageModal'
 import { paths } from '../paths'
 import { HomeIcon, MyPageIcon, ReportIcon, TodoIcon } from './TabIcons'
 import TabItem from './TabItem'
@@ -16,41 +20,54 @@ import TabItem from './TabItem'
  */
 export default function TabBar() {
   const navigate = useNavigate()
+  const [creditShortage, setCreditShortage] = useState(false)
+
+  const handleAdd = async () => {
+    // 저장된 크레딧이 0이면 결제 직후일 수 있어 다시 불러와 확인합니다
+    if (useAuthStore.getState().user?.credits === 0) await loadMe()
+    if (useAuthStore.getState().user?.credits === 0) setCreditShortage(true)
+    else navigate(paths.goalNew)
+  }
 
   return (
-    <nav
-      aria-label="하단 메뉴"
-      className="fixed bottom-0 left-1/2 flex w-full max-w-[402px] -translate-x-1/2 flex-col gap-[5px] rounded-t-[40px] bg-card-back px-[20px] pt-[10px] shadow-shadow ring-1 ring-stroke ring-inset backdrop-blur-[10px]"
-    >
-      <div className="flex w-full items-center justify-center gap-[12px]">
-        <div className="flex shrink-0 gap-[5px]">
-          <TabItem to={paths.home} label="홈" icon={HomeIcon} end />
-          <TabItem to={paths.todos} label="투두리스트" icon={TodoIcon} />
+    <>
+      <nav
+        aria-label="하단 메뉴"
+        className="fixed bottom-0 left-1/2 flex w-full max-w-[402px] -translate-x-1/2 flex-col gap-[5px] rounded-t-[40px] bg-card-back px-[20px] pt-[10px] shadow-shadow ring-1 ring-stroke ring-inset backdrop-blur-[10px]"
+      >
+        <div className="flex w-full items-center justify-center gap-[12px]">
+          <div className="flex shrink-0 gap-[5px]">
+            <TabItem to={paths.home} label="홈" icon={HomeIcon} end />
+            <TabItem to={paths.todos} label="투두리스트" icon={TodoIcon} />
+          </div>
+
+          {/*
+            + 버튼 (Figma 컴포넌트: Frame 2085668201)
+            68×68 고정 / 반경 100 / 배경 Brand/Main_20(#C2E8FF) / 테두리 1px Stroke(안쪽)
+            효과 Card_Shadow(Y15 흐림48 #5480AE 8%) + 배경 흐림 20 / 아이콘 ic_add 48×48 가운데
+            누르면 목표 추가 화면(paths.goalNew)으로 이동. 크레딧이 0이면 크레딧 부족 팝업
+          */}
+          <button
+            type="button"
+            aria-label="추가"
+            onClick={handleAdd}
+            className="flex size-[68px] shrink-0 items-center justify-center rounded-[100px] bg-brand-main-20 shadow-card-shadow ring-1 ring-stroke ring-inset backdrop-blur-[10px]"
+          >
+            <img src={icAdd} alt="" className="size-[48px]" />
+          </button>
+
+          <div className="flex shrink-0 gap-[5px]">
+            <TabItem to={paths.report} label="리포트" icon={ReportIcon} />
+            <TabItem to={paths.mypage} label="마이페이지" icon={MyPageIcon} />
+          </div>
         </div>
 
-        {/*
-          + 버튼 (Figma 컴포넌트: Frame 2085668201)
-          68×68 고정 / 반경 100 / 배경 Brand/Main_20(#C2E8FF) / 테두리 1px Stroke(안쪽)
-          효과 Card_Shadow(Y15 흐림48 #5480AE 8%) + 배경 흐림 20 / 아이콘 ic_add 48×48 가운데
-          누르면 목표 추가 화면(paths.goalNew)으로 이동
-        */}
-        <button
-          type="button"
-          aria-label="추가"
-          onClick={() => navigate(paths.goalNew)}
-          className="flex size-[68px] shrink-0 items-center justify-center rounded-[100px] bg-brand-main-20 shadow-card-shadow ring-1 ring-stroke ring-inset backdrop-blur-[10px]"
-        >
-          <img src={icAdd} alt="" className="size-[48px]" />
-        </button>
+        {/* Home Bar 자리 (402×32) */}
+        <div className="h-[32px] shrink-0" aria-hidden />
+      </nav>
 
-        <div className="flex shrink-0 gap-[5px]">
-          <TabItem to={paths.report} label="리포트" icon={ReportIcon} />
-          <TabItem to={paths.mypage} label="마이페이지" icon={MyPageIcon} />
-        </div>
-      </div>
-
-      {/* Home Bar 자리 (402×32) */}
-      <div className="h-[32px] shrink-0" aria-hidden />
-    </nav>
+      {/* nav 의 transform 안에서는 fixed 가 화면 기준이 아니라서 바깥에 둡니다 */}
+      <CreditShortageModal open={creditShortage} credits={0} onClose={() => setCreditShortage(false)} />
+    </>
   )
 }

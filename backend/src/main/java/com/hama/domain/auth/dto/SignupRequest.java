@@ -15,6 +15,7 @@ public record SignupRequest(
                 requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank(message = "이메일은 필수입니다.")
         @Email(message = "이메일 형식이 아닙니다.")
+        @Pattern(regexp = ASCII_ONLY, message = "이메일은 영문·숫자·기호로만 입력해주세요.")
         String email,
 
         @Schema(description = "비밀번호. 영문·숫자·특수문자를 각각 1개 이상 포함한 8~20자 (공백·한글 불가)",
@@ -53,6 +54,12 @@ public record SignupRequest(
     /** 영문·숫자·특수문자(ASCII 기호)를 각각 하나 이상, 출력 가능한 ASCII 만 8~20자. 디자인의 회원가입 화면 규칙입니다. */
     public static final String PASSWORD_RULE =
             "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[!-/:-@\\[-`{-~])[!-~]{8,20}$";
+
+    /**
+     * 이메일은 ASCII 만 받습니다. users 테이블(utf8mb4_unicode_ci)은 악센트를 무시해 hamá 와 hama 를 같은 이메일로 찾는데,
+     * 횟수 제한 키는 둘을 따로 세서 hamá·hamà… 로 바꿔 가며 한 계정에 계속 시도할 수 있습니다.
+     */
+    public static final String ASCII_ONLY = "\\p{ASCII}*";
 
     /** 대소문자만 다른 이메일로 중복 가입되지 않도록 소문자로 맞춥니다. */
     public SignupRequest {

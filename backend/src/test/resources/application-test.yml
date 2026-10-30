@@ -10,6 +10,10 @@ jwt:
   secret: test-only-secret-key-do-not-use-in-production-0123456789
 
 app:
+  # 테스트는 전부 127.0.0.1 에서 가입·로그인하므로 IP 기준 제한을 사실상 끕니다(AuthLimitProperties).
+  auth-limit:
+    signup-per-ip: 100000
+    login-per-ip: 100000
   goal-progress:
     worker-enabled: false
   cookie:

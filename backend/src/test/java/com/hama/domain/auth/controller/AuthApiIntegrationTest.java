@@ -116,6 +116,18 @@ class AuthApiIntegrationTest {
                 .andExpect(jsonPath("$.error.fields.password").exists());
     }
 
+    /** DB 는 악센트를 무시해 hamá 로도 hama 계정을 찾으므로, 횟수 제한을 피하지 못하게 ASCII 가 아니면 받지 않습니다. */
+    @Test
+    void 이메일에_ASCII_가_아닌_문자가_있으면_로그인_요청을_400_으로_막는다() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "email": "hamá@hama.com", "password": "password1234!" }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields.email").exists());
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"abcd123!", "Abcdefghij1234567@#~"})
     void 비밀번호_규칙의_경계값은_가입된다(String password) throws Exception {

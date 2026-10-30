@@ -351,6 +351,21 @@ class PaymentWebhookIntegrationTest {
     }
 
     @Test
+    void 결제보다_먼저_온_환불은_실패해서_재전송을_받고_결제가_처리된_뒤에_회수한다() throws Exception {
+        User user = newUser();
+        String transactionId = "txn_" + UUID.randomUUID();
+        String refund = approvedRefund(transactionId, "full", "4950");
+
+        sendWebhook(refund, SECRET).andExpect(status().isInternalServerError());
+
+        sendWebhook(completedEvent(transactionId, String.valueOf(user.getId())), SECRET).andExpect(status().isOk());
+        sendWebhook(refund, SECRET).andExpect(status().isOk());
+
+        assertThat(credits(user.getId())).isEqualTo(User.SIGNUP_FREE_CREDITS);
+        assertThat(refundedCredits(transactionId)).isEqualTo(5);
+    }
+
+    @Test
     void 부분_환불은_환불_금액을_1회_가격으로_나눈_만큼_회수한다() throws Exception {
         User user = newUser();
         String transactionId = paidFiveCredits(user);
@@ -504,11 +519,6 @@ class PaymentWebhookIntegrationTest {
         assertThat(jdbc.queryForObject("""
                 select count(*) from payment_refund r join payment p on p.payment_id = r.payment_id
                 where p.paddle_transaction_id = ? and r.credits = 0""", Integer.class, transactionId)).isEqualTo(1);
-    }
-
-    @Test
-    void 저장된_결제가_없는_환불은_200_으로_넘긴다() throws Exception {
-        sendWebhook(approvedRefund("txn_" + UUID.randomUUID(), "full", "4950"), SECRET).andExpect(status().isOk());
     }
 
     @Test

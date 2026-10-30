@@ -1,6 +1,6 @@
 import { api } from '../../api/client'
 import type { ApiResponse } from '../../api/types'
-import { createGoal, getGoal, type DayOfWeek } from './api'
+import { createGoal, type DayOfWeek } from './api'
 import type { Weekday } from './weekdays'
 
 /** 요청·응답 형식은 Swagger(https://api.todohama.site/swagger-ui/index.html) 기준입니다. */
@@ -84,8 +84,8 @@ function toFixedSchedules(fixedSchedules: GoalAiInput['fixedSchedules']) {
 }
 
 /**
- * 목표 추가 화면에서 입력한 값으로 목표를 만듭니다 (PLANNING). 플랜은 generatePlans 로 따로 받습니다.
- * 플랜 생성만 실패했을 때 목표를 또 만들지 않도록 둘을 나눠 둡니다.
+ * 목표 추가 화면에서 입력한 값으로 목표를 만들고 goalId 를 돌려줍니다 (PLANNING).
+ * 상세 조회 · 플랜 생성은 따로 합니다. 그쪽만 실패했을 때 목표를 또 만들지 않도록 나눠 둡니다.
  */
 export async function createGoalFromInput(input: GoalAiInput) {
   const { goalId } = await createGoal({
@@ -95,5 +95,5 @@ export async function createGoalFromInput(input: GoalAiInput) {
     endDate: input.endDate,
     fixedSchedules: toFixedSchedules(input.fixedSchedules),
   })
-  return getGoal(goalId)
+  return goalId
 }

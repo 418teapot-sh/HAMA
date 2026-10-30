@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { getApiError } from '../api/client'
 import icMascot from '../assets/icons/ic_mascot.svg'
 import Modal from '../components/Modal'
 import NavigationBar from '../components/NavigationBar'
 import Toast from '../components/Toast'
+import { loadMe } from '../features/auth/api'
 import {
   deleteGoal,
   getGoalReview,
@@ -16,6 +17,7 @@ import {
   type GoalTask,
 } from '../features/goal/api'
 import GoalMoreSheet from '../features/goal/components/GoalMoreSheet'
+import ReplanScreen from '../features/goal/components/ReplanScreen'
 import ReportGoalCard from '../features/goal/components/ReportGoalCard'
 import { useAuthStore } from '../features/auth/store'
 import CreditShortageModal from '../features/payment/CreditShortageModal'
@@ -29,6 +31,9 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'IN_PROGRESS', label: '진행중인 목표' },
   { value: 'ENDED', label: '완료한 목표' },
 ]
+
+/** 완료한 목표 탭에서 상태별로 불러올 개수 (백엔드 최대 100) */
+const ENDED_PAGE_SIZE = 100
 
 type ReportItem = { goal: GoalSummary; tasks: GoalTask[]; aiSummary: string[] | null }
 
@@ -55,7 +60,7 @@ async function loadGoals(tab: Tab): Promise<ReportItem[]> {
   const goals =
     tab === 'IN_PROGRESS'
       ? await getGoals('IN_PROGRESS')
-      : (await Promise.all([getGoals('COMPLETED'), getGoals('PAST')])).flat()
+      : (await Promise.all([getGoals('COMPLETED', ENDED_PAGE_SIZE), getGoals('PAST', ENDED_PAGE_SIZE)])).flat()
   return Promise.all(
     goals.map(async (goal) => {
       const [goalTasks, aiSummary] = await Promise.all([
@@ -86,36 +91,41 @@ export default function ReportPage() {
   const [failed, setFailed] = useState(false)
   const [moreGoal, setMoreGoal] = useState<GoalSummary | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<GoalSummary | null>(null)
+  const [replanTarget, setReplanTarget] = useState<GoalSummary | null>(null)
   const [replanningId, setReplanningId] = useState<number | null>(null)
   const [creditShortage, setCreditShortage] = useState(false)
   const credits = useAuthStore((state) => state.user?.credits ?? 0)
 
+  /** 마지막 목록 요청 번호. 탭을 바꾼 뒤 늦게 온 이전 응답을 버리는 데 씁니다 */
+  const requestId = useRef(0)
+
   const reload = useCallback(async (target: Tab) => {
+    const id = ++requestId.current
     setItems(null)
     setFailed(false)
     try {
-      setItems(await loadGoals(target))
+      const result = await loadGoals(target)
+      if (id === requestId.current) setItems(result)
     } catch {
-      setFailed(true)
-      setItems([])
+      if (id === requestId.current) {
+        setFailed(true)
+        setItems([])
+      }
     }
   }, [])
 
   useEffect(() => {
-    let ignore = false
+    const id = ++requestId.current
     loadGoals(tab)
       .then((result) => {
-        if (!ignore) setItems(result)
+        if (id === requestId.current) setItems(result)
       })
       .catch(() => {
-        if (!ignore) {
+        if (id === requestId.current) {
           setFailed(true)
           setItems([])
         }
       })
-    return () => {
-      ignore = true
-    }
   }, [tab])
 
   const changeTab = (next: Tab) => {
@@ -125,10 +135,22 @@ export default function ReportPage() {
     setTab(next)
   }
 
-  const handleReplan = async (goalId: number) => {
+  /** 일정 재계산 버튼. 크레딧이 0이면 부족 팝업, 있으면 확인 화면 (Figma 캡션) */
+  const openReplan = async (goal: GoalSummary) => {
+    // 저장된 크레딧이 0이면 결제 직후일 수 있어 다시 불러와 확인합니다
+    if (useAuthStore.getState().user?.credits === 0) await loadMe()
+    if (useAuthStore.getState().user?.credits === 0) setCreditShortage(true)
+    else setReplanTarget(goal)
+  }
+
+  const handleReplan = async () => {
+    if (!replanTarget) return
+    const { goalId } = replanTarget
+    setReplanTarget(null)
     setReplanningId(goalId)
     try {
       const result = await replanGoal(goalId)
+      loadMe()
       toast.show(result.movedCount > 0 ? `투두 ${result.movedCount}개를 다시 배치했어요.` : '다시 배치할 투두가 없어요.')
     } catch (error) {
       // 일정 재계산은 크레딧 1회를 씀 (옮긴 투두가 없으면 차감 안 됨)
@@ -204,7 +226,7 @@ export default function ReportPage() {
                   tasks={tasks}
                   aiSummary={aiSummary}
                   onMore={() => setMoreGoal(goal)}
-                  onReplan={goal.status === 'IN_PROGRESS' ? () => handleReplan(goal.goalId) : undefined}
+                  onReplan={goal.status === 'IN_PROGRESS' ? () => openReplan(goal) : undefined}
                   replanning={replanningId === goal.goalId}
                 />
               </li>
@@ -237,6 +259,15 @@ export default function ReportPage() {
         onCancel={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
       />
+
+      {replanTarget && (
+        <ReplanScreen
+          goal={replanTarget}
+          credits={credits}
+          onBack={() => setReplanTarget(null)}
+          onConfirm={handleReplan}
+        />
+      )}
 
       <CreditShortageModal open={creditShortage} credits={credits} onClose={() => setCreditShortage(false)} />
 
