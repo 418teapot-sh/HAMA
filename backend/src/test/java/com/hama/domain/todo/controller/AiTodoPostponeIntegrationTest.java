@@ -85,7 +85,8 @@ class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
         assertThat(items.size()).isOne();
         String ics = mvc.perform(get("/api/v1/calendar/export").param("from","2026-10-05").param("to","2026-10-05")
                 .header("Authorization","Bearer " + u.token())).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(ics).contains("hama-AI_GOAL-"+t+"@hama.app","20261005T090000","20261005T101500");
+        String uid = jdbc.queryForObject("select calendar_uid from todo where todo_id=?", String.class, t);
+        assertThat(ics).contains("UID:" + uid,"20261005T090000","20261005T101500");
     }
 
     @Test void 밀린_무시간_투두는_오늘_현재시각부터_30분_배치한다() throws Exception {

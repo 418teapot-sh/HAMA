@@ -292,8 +292,8 @@ class UserWithdrawApiIntegrationTest {
                                        avg_daily_minutes, selected, created_at, updated_at)
                 VALUES (?, 'A', '여유형', '주 3일', 'BALANCED', '{}', 0, 0, 0, NOW(6), NOW(6))""", goalId);
         insert("""
-                INSERT INTO schedule (user_id, type, title, start_at, end_at, all_day, created_at, updated_at)
-                VALUES (?, 'FIXED', '학원 아르바이트', '2026-10-10 18:00:00', '2026-10-10 21:00:00', 0, NOW(6), NOW(6))""",
+                INSERT INTO schedule (calendar_uid, user_id, type, title, start_at, end_at, all_day, created_at, updated_at)
+                VALUES (CONCAT('hama-', UUID(), '@hama.app'), ?, 'FIXED', '학원 아르바이트', '2026-10-10 18:00:00', '2026-10-10 21:00:00', 0, NOW(6), NOW(6))""",
                 session.userId());
         return new Seeded(goalId);
     }

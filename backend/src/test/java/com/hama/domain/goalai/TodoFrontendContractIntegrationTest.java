@@ -52,8 +52,9 @@ class TodoFrontendContractIntegrationTest extends GoalAiTestSupport {
         long id = task(user, "TASK");
         call(patch("/api/v1/todos/" + id), user, Map.of("category", "OTHER", "startTime", "19:00"), 400);
         assertThat(daily(user).at("/pending/0/category").asString()).isEqualTo("TASK");
-        convert(user, Map.of("sourceType", "OTHER", "refId", id, "targetType", "PERSONAL",
-                "startAt", "2026-10-01T15:00:00", "endAt", "2026-10-01T16:00:00"), 409);
+        assertThat(convert(user, Map.of("sourceType", "OTHER", "refId", id, "targetType", "PERSONAL",
+                "startAt", "2026-10-01T15:00:00", "endAt", "2026-10-01T16:00:00"), 400)
+                .at("/error/code").asString()).isEqualTo("CALENDAR_CONVERSION_INVALID");
         convert(user, Map.of("sourceType", "TASK", "refId", id, "targetType", "PERSONAL",
                 "startAt", "2026-10-01T16:00:00", "endAt", "2026-10-01T15:00:00"), 400);
         assertThat(todos.findById(id).orElseThrow().getDeletedAt()).isNull();
@@ -68,7 +69,64 @@ class TodoFrontendContractIntegrationTest extends GoalAiTestSupport {
         String file = mvc.perform(get("/api/v1/calendar/export").param("from", "2026-10-01").param("to", "2026-10-01")
                 .param("types", "OTHER").header("Authorization", "Bearer " + user.token()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        assertThat(file).contains("UID:hama-OTHER-" + other + "@hama.app", "DTSTART;VALUE=DATE:20261001", "DTEND;VALUE=DATE:20261002");
+        assertThat(file).contains("UID:" + jdbc.queryForObject("select calendar_uid from todo where todo_id=?", String.class, other), "DTSTART;VALUE=DATE:20261001", "DTEND;VALUE=DATE:20261002");
+    }
+
+    @Test
+    void 잘못된_반복규칙만_조회_내보내기_시간계산에서_제외하고_원본은_보존한다() throws Exception {
+        User user = user();
+        long badId = call(post("/api/v1/calendar/schedules"), user, Map.of("type", "PERSONAL", "title", "잘못된 반복",
+                "startAt", "2026-10-01T10:00:00", "endAt", "2026-10-01T11:00:00", "repeatRule", "FREQ=DAILY"), 201)
+                .at("/data/scheduleId").asLong();
+        long goodId = call(post("/api/v1/calendar/schedules"), user, Map.of("type", "FIXED", "title", "정상 일정",
+                "startAt", "2026-10-01T09:00:00", "endAt", "2026-10-01T10:00:00"), 201)
+                .at("/data/scheduleId").asLong();
+        long mismatchId = call(post("/api/v1/calendar/schedules"), user, Map.of("type", "PERSONAL", "title", "요일 불일치",
+                "startAt", "2026-10-01T12:00:00", "endAt", "2026-10-01T13:00:00", "repeatRule", "FREQ=DAILY"), 201)
+                .at("/data/scheduleId").asLong();
+        jdbc.update("update schedule set repeat_rule='FREQ=INVALID' where schedule_id=?", badId);
+        jdbc.update("update schedule set repeat_rule='FREQ=WEEKLY;BYDAY=MO' where schedule_id=?", mismatchId);
+        var updatedAt = jdbc.queryForObject("select updated_at from schedule where schedule_id=?", java.sql.Timestamp.class, badId);
+        var items = call(get("/api/v1/calendar").param("from", "2026-10-01").param("to", "2026-10-01"),
+                user, null, 200).at("/data/items");
+        assertThat(items.size()).isOne();
+        assertThat(items.get(0).get("refId").asLong()).isEqualTo(goodId);
+        String ics = mvc.perform(get("/api/v1/calendar/export").param("from", "2026-10-01").param("to", "2026-10-01")
+                .header("Authorization", "Bearer " + user.token())).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(ics).contains("UID:" + jdbc.queryForObject("select calendar_uid from schedule where schedule_id=?", String.class, goodId), "END:VCALENDAR")
+                .doesNotContain(jdbc.queryForObject("select calendar_uid from schedule where schedule_id=?", String.class, badId),
+                        jdbc.queryForObject("select calendar_uid from schedule where schedule_id=?", String.class, mismatchId));
+        var busy = busyTimes.read(user.id(), LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-01"), Set.of());
+        assertThat(busy.get(LocalDate.parse("2026-10-01")))
+                .containsExactly(new com.hama.domain.goalai.service.TimeSlotPlacer.Interval(540, 600));
+        assertThat(jdbc.queryForObject("select repeat_rule from schedule where schedule_id=?", String.class, badId)).isEqualTo("FREQ=INVALID");
+        assertThat(jdbc.queryForObject("select updated_at from schedule where schedule_id=?", java.sql.Timestamp.class, badId)).isEqualTo(updatedAt);
+    }
+
+    @Test
+    void 카테고리_및_일정_타입_전환은_ICS_UID를_이어가고_새_항목은_구별된다() throws Exception {
+        User user = user();
+        long todoId = task(user, "TASK");
+        String uid = jdbc.queryForObject("select calendar_uid from todo where todo_id=?", String.class, todoId);
+        assertThat(uid).startsWith("hama-").endsWith("@hama.app");
+        call(patch("/api/v1/todos/" + todoId), user, Map.of("category", "OTHER"), 200);
+        assertThat(jdbc.queryForObject("select calendar_uid from todo where todo_id=?", String.class, todoId)).isEqualTo(uid);
+        long scheduleId = convert(user, Map.of("sourceType", "OTHER", "refId", todoId, "targetType", "PERSONAL",
+                "startAt", "2026-10-01T15:00:00", "endAt", "2026-10-01T16:00:00"), 200).at("/data/refId").asLong();
+        assertThat(jdbc.queryForObject("select calendar_uid from schedule where schedule_id=?", String.class, scheduleId)).isEqualTo(uid);
+        call(patch("/api/v1/calendar/schedules/" + scheduleId), user, Map.of("type", "FIXED"), 200);
+        call(patch("/api/v1/calendar/schedules/" + scheduleId), user, Map.of("type", "PERSONAL"), 200);
+        long otherId = convert(user, Map.of("sourceType", "PERSONAL", "refId", scheduleId, "targetType", "OTHER",
+                "todoDate", "2026-10-01"), 200).at("/data/refId").asLong();
+        assertThat(jdbc.queryForObject("select calendar_uid from todo where todo_id=?", String.class, otherId)).isEqualTo(uid);
+        long separateId = task(user, "OTHER");
+        assertThat(jdbc.queryForObject("select calendar_uid from todo where todo_id=?", String.class, separateId)).isNotEqualTo(uid);
+        String file = mvc.perform(get("/api/v1/calendar/export").param("from", "2026-10-01").param("to", "2026-10-01")
+                .header("Authorization", "Bearer " + user.token())).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(file).contains("UID:" + uid);
+        assertThat(file.split("UID:" + uid, -1)).hasSize(2);
     }
 
     @Test
@@ -110,7 +168,7 @@ class TodoFrontendContractIntegrationTest extends GoalAiTestSupport {
         String file = mvc.perform(get("/api/v1/calendar/export").param("from", "2026-10-01").param("to", "2026-10-01")
                 .param("types", "OTHER").header("Authorization", "Bearer " + user.token()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        assertThat(file).contains("UID:hama-OTHER-" + id + "@hama.app");
+        assertThat(file).contains("UID:" + jdbc.queryForObject("select calendar_uid from todo where todo_id=?", String.class, id));
         assertThat(busyTimes.read(user.id(), LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 1), Set.of())
                 .get(LocalDate.of(2026, 10, 1))).anySatisfy(interval -> {
                     assertThat(interval.start()).isEqualTo(540);
@@ -157,6 +215,8 @@ class TodoFrontendContractIntegrationTest extends GoalAiTestSupport {
         assertThat(call(patch("/api/v1/todos/" + id), other, Map.of("content", "수정"), 403).at("/error/code").asString()).isEqualTo("FORBIDDEN");
         assertThat(call(patch("/api/v1/todos/" + id), user, Map.of("content", "수정"), 409).at("/error/code").asString())
                 .isEqualTo("TODO_AI_EDIT_NOT_ALLOWED");
+        assertThat(call(patch("/api/v1/todos/" + id), user, Map.of("category", "TASK"), 409).at("/error/code").asString())
+                .isEqualTo("TODO_CATEGORY_CHANGE_NOT_ALLOWED");
         assertThat(call(delete("/api/v1/todos/" + id), user, null, 409).at("/error/code").asString()).isEqualTo("TODO_AI_EDIT_NOT_ALLOWED");
         call(patch("/api/v1/todos/" + id + "/complete"), user, null, 200);
         call(patch("/api/v1/todos/state/" + id), user, Map.of("statusNote", "오늘 상태"), 200);
@@ -256,6 +316,9 @@ class TodoFrontendContractIntegrationTest extends GoalAiTestSupport {
     void 실패한_전환은_원본을_유지하고_완료_고정_반복_목표투두를_보호한다() throws Exception {
         User user = user();
         long id = task(user, "TASK");
+        assertThat(convert(user, Map.of("sourceType", "OTHER", "refId", id, "targetType", "TASK"), 400)
+                .at("/error/code").asString()).isEqualTo("CALENDAR_CONVERSION_INVALID");
+        assertThat(todos.findById(id).orElseThrow().getCategory().name()).isEqualTo("TASK");
         call(patch("/api/v1/todos/" + id), user, Map.of("content", "가".repeat(101)), 200);
         convert(user, Map.of("sourceType", "TASK", "refId", id, "targetType", "PERSONAL",
                 "startAt", "2026-10-01T15:00:00", "endAt", "2026-10-01T16:00:00"), 400);

@@ -27,7 +27,7 @@ class BusyTimeReaderTest {
     private TimeSlotPlacer occupied(String start, String end, boolean allDay, String repeat) {
         var source = new ScheduleRecurrence.Source(LocalDateTime.parse(start), LocalDateTime.parse(end), allDay, repeat);
         when(calendar.schedules(eq(1L), any(), eq(0L))).thenReturn(List.of(
-                new CalendarReadRepository.ScheduleCandidate(1L, CalendarType.FIXED, "일정", source, null)));
+                new CalendarReadRepository.ScheduleCandidate(1L, CalendarType.FIXED, "일정", source, null, "hama-test@hama.app")));
         return new TimeSlotPlacer(reader.read(1L, day, day, Set.of()));
     }
 

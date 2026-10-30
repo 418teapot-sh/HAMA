@@ -26,7 +26,7 @@ public class CategoryConversionController {
             + "일정으로 전환할 때 startAt/endAt(KST)이 필수이며 내용은 기존 일정 규칙인 100자 이하여야 합니다. "
             + "일정에서 전환할 때 todoDate 필수, startTime/endTime은 함께 지정하거나 생략합니다. 제목·메모는 보존합니다. "
             + "완료된 투두는 완료 취소 후 가능. 목표 투두·고정·반복 일정은 전환 불가. "
-            + "동일 요청을 자동 재전송하지 말고 응답 유실 시 캘린더를 재조회합니다. 성공은 200, 상태 제한409, 입력400, 타인403, 없는 원본404.")
+            + "TASK/OTHER 원본의 실제 분류와 sourceType이 다르면 400 CALENDAR_CONVERSION_INVALID. 동일 요청을 자동 재전송하지 말고 응답 유실 시 캘린더를 재조회합니다. 성공은 200, 상태 제한409, 입력400, 타인403, 없는 원본404.")
     @PostMapping
     public ApiResponse<CategoryConversionResponse> convert(
             @AuthenticationPrincipal AuthUser user, @Valid @RequestBody ConvertCategoryRequest request) {

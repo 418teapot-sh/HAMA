@@ -99,7 +99,10 @@ export default function MyPage() {
         <div className="flex flex-col gap-[8px]">
           <InfoCard className="gap-[8px] px-[28px] py-[20px]">
             <h2 className="text-heading-h2 text-brand-main-80">남은 크레딧</h2>
-            <p className="text-heading-h4 text-category-task">{user ? `${user.credits}회` : '-'}</p>
+            {/* Figma: 0회는 회색(Black/Gray60), 1회 이상은 빨강 (디자이너 답변) */}
+            <p className={`text-heading-h4 ${user && user.credits > 0 ? 'text-category-task' : 'text-black-gray60'}`}>
+              {user ? `${user.credits}회` : '-'}
+            </p>
           </InfoCard>
           <Link
             to={paths.charge}
