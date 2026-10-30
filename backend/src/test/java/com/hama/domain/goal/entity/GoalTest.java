@@ -7,12 +7,31 @@ import com.hama.domain.goal.exception.GoalErrorCode;
 import com.hama.domain.goal.repository.GoalTodoCount;
 import com.hama.global.exception.BusinessException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class GoalTest {
 
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 4);
+
+    @Test
+    void 자동_완료한_목표만_완료취소시_다시_열린다() {
+        Goal automatic = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+        automatic.startPlan();
+        automatic.completeAutomatically(TODAY.atTime(10, 0));
+        automatic.reopenAutomaticallyCompleted();
+        assertThat(automatic.getStatus()).isEqualTo(GoalStatus.IN_PROGRESS);
+        assertThat(automatic.getCompletedAt()).isNull();
+
+        Goal manual = Goal.create(1L, content(TODAY, TODAY.plusDays(30)), TODAY);
+        manual.startPlan();
+        LocalDateTime completedAt = TODAY.atTime(10, 0);
+        manual.complete(completedAt);
+        manual.reopenAutomaticallyCompleted();
+        assertThat(manual.getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(manual.getCompletedAt()).isEqualTo(completedAt);
+    }
 
     private static GoalContent content(LocalDate start, LocalDate end) {
         return new GoalContent("매일 러닝 30분", "체중 80kg", start, end);
