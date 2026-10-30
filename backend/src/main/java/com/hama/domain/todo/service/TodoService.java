@@ -4,6 +4,7 @@ import com.hama.domain.goal.entity.Goal;
 import com.hama.domain.goal.entity.GoalStatus;
 import com.hama.domain.goal.exception.GoalErrorCode;
 import com.hama.domain.goal.repository.GoalRepository;
+import com.hama.domain.goal.repository.GoalTodoCount;
 import com.hama.domain.goal.repository.GoalTodoRepository;
 import com.hama.domain.goalai.service.GoalProgressChanged;
 import com.hama.domain.todo.dto.CreateTodoRequest;
@@ -126,9 +127,10 @@ public class TodoService {
         Todo todo = ownedForUpdate(userId, todoId);
         todo.complete(now());
         todoRepository.flush();
+        var count = todo.getGoalId() == null ? null : counts.countByGoal(todo.getGoalId());
+        completeGoalIfAllTasksDone(userId, todo, count);
         progressChanged(todo);
-        return TodoResponses.Completion.from(todo, todo.getGoalId() == null ? null
-                : counts.countByGoal(todo.getGoalId()).progressRate());
+        return TodoResponses.Completion.from(todo, count == null ? null : count.progressRate());
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -136,6 +138,9 @@ public class TodoService {
         Todo todo = ownedForUpdate(userId, todoId);
         todo.undoComplete();
         todoRepository.flush();
+        if (todo.getGoalId() != null) {
+            lockGoal(userId, todo.getGoalId()).reopenAutomaticallyCompleted();
+        }
         progressChanged(todo);
         return TodoResponses.Completion.from(todo, todo.getGoalId() == null ? null
                 : counts.countByGoal(todo.getGoalId()).progressRate());
@@ -159,7 +164,20 @@ public class TodoService {
         Todo todo = ownedForUpdate(userId, todoId);
         todo.requireUserEditable();
         todo.delete(now());
+        if (todo.getGoalId() != null) {
+            todoRepository.flush();
+            completeGoalIfAllTasksDone(userId, todo, counts.countByGoal(todo.getGoalId()));
+        }
         progressChanged(todo);
+    }
+
+    private void completeGoalIfAllTasksDone(Long userId, Todo todo, GoalTodoCount count) {
+        if (count != null && count.total() > 0 && count.total() == count.completed()) {
+            Goal goal = lockGoal(userId, todo.getGoalId());
+            if (goal.effectiveStatus(LocalDate.now(clock)) == GoalStatus.IN_PROGRESS) {
+                goal.completeAutomatically(now());
+            }
+        }
     }
 
     private void progressChanged(Todo todo) {

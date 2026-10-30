@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.hama.domain.goal.entity.Goal;
 import com.hama.domain.goal.entity.GoalFixedSchedule;
 import com.hama.domain.goal.entity.GoalStatus;
+import com.hama.domain.goalai.dto.ReplanResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
@@ -27,7 +28,8 @@ public final class GoalResponses {
             @Schema(description = "A/B 플랜 생성·선택으로 만들어진 목표인지 여부")
             boolean aiPlanApplied,
             List<FixedScheduleView> fixedSchedules,
-            @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime createdAt) {
+            @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime createdAt,
+            @Schema(description = "기간 수정 시 투두 재배치 결과. 기간 변경이 없으면 null") ReplanResponse periodAdjustment) {
 
         public static Detail from(Goal goal, LocalDate today, BigDecimal progressRate, boolean aiPlanApplied,
                 List<GoalFixedSchedule> fixedSchedules) {
@@ -35,7 +37,12 @@ public final class GoalResponses {
                     goal.getStartDate(),
                     goal.getEndDate(), goal.effectiveStatus(today), progressRate, goal.getResultStatus(),
                     aiPlanApplied, fixedSchedules.stream().map(FixedScheduleView::from).toList(),
-                    goal.getCreatedAt());
+                    goal.getCreatedAt(), null);
+        }
+
+        public Detail withPeriodAdjustment(ReplanResponse adjustment) {
+            return new Detail(goalId, title, initialStatus, currentStatus, startDate, endDate, status, progressRate,
+                    resultStatus, aiPlanApplied, fixedSchedules, createdAt, adjustment);
         }
     }
 

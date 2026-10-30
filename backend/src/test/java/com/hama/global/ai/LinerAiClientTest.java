@@ -89,21 +89,42 @@ class LinerAiClientTest {
     }
 
     @Test
-    void JSON_모드는_response_format_을_켜고_DTO_로_파싱한다() {
+    void JSON_응답은_response_format_없이_프롬프트로_지시하고_DTO_로_파싱한다() {
         AiClient client = clientReturning(HttpStatus.OK, completion("{\"verdict\":\"FEASIBLE\",\"requiredHours\":120}"));
 
         Verdict verdict = client.chatForJson(AiRequest.of("test", "현실성을 판단해", "토익 850"), Verdict.class);
 
         assertThat(verdict).isEqualTo(new Verdict("FEASIBLE", 120));
         JsonNode body = sentBody();
-        assertThat(body.get("response_format").get("type").asString()).isEqualTo("json_object");
-        // json_object 모드는 메시지에 "JSON" 단어가 없으면 라이너가 거절합니다.
+        // 라이너 JSON 모드는 일부 입력을 400 invalid_request 로 거절해서(#241) 보내지 않습니다.
+        assertThat(body.has("response_format")).isFalse();
         assertThat(body.get("messages").get(0).get("content").asString()).contains("JSON");
     }
 
     @Test
+    void JSON_앞뒤에_울타리나_설명이_붙어도_JSON_객체만_잘라_파싱한다() {
+        String object = "{\"verdict\":\"FEASIBLE\",\"requiredHours\":120}";
+        for (String content : List.of("```json " + object + " ```", "다음은 결과입니다: " + object + " 끝.")) {
+            AiClient client = clientReturning(HttpStatus.OK, completion(content));
+
+            assertThat(client.chatForJson(AiRequest.of("test", null, "hi"), Verdict.class))
+                    .isEqualTo(new Verdict("FEASIBLE", 120));
+        }
+    }
+
+    @Test
+    void JSON_객체가_없는_응답은_502() {
+        AiClient client = clientReturning(HttpStatus.OK, completion("죄송해요, 지금은 답할 수 없어요."));
+
+        assertThatThrownBy(() -> client.chatForJson(AiRequest.of("test", null, "hi"), Verdict.class))
+                .satisfies(e -> assertErrorCode(e, AiErrorCode.AI_UPSTREAM_ERROR))
+                .cause()
+                .hasMessageContaining("JSON 객체가 없습니다");
+    }
+
+    @Test
     void JSON_파싱에_실패하면_502() {
-        AiClient client = clientReturning(HttpStatus.OK, completion("JSON 이 아닙니다"));
+        AiClient client = clientReturning(HttpStatus.OK, completion("{\"verdict\": 이건 JSON 이 아닙니다}"));
 
         assertThatThrownBy(() -> client.chatForJson(AiRequest.of("test", null, "hi"), Verdict.class))
                 .isInstanceOf(BusinessException.class)
