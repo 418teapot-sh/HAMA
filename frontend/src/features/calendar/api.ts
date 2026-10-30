@@ -3,8 +3,8 @@ import type { ApiResponse } from '../../api/types'
 import type { CalendarCategory, CalendarMark } from '../../components/Calendar'
 import { toDateKey } from '../../utils/date'
 
-/** FIXED·PERSONAL = 고정·개인 일정, AI_GOAL = AI 목표 투두, TASK = 일반 할일 */
-export type CalendarItemType = 'FIXED' | 'PERSONAL' | 'AI_GOAL' | 'TASK'
+/** FIXED·PERSONAL = 고정·개인 일정, AI_GOAL = AI 목표 투두, TASK = 일반 할일, OTHER = 기타 */
+export type CalendarItemType = 'FIXED' | 'PERSONAL' | 'AI_GOAL' | 'TASK' | 'OTHER'
 
 /** 캘린더 항목 (GET /api/v1/calendar). 반복·여러 날 일정은 날짜별로 나눠서 옴 */
 export interface CalendarItem {
@@ -26,6 +26,7 @@ const CATEGORY: Record<CalendarItemType, CalendarCategory> = {
   FIXED: 'schedule',
   PERSONAL: 'schedule',
   AI_GOAL: 'ai',
+  OTHER: 'etc',
 }
 
 /** 그 달(1일~말일) 캘린더 항목. month 는 1~12 */
