@@ -73,22 +73,27 @@ function isAiGenerated(todo: { aiGenerated?: boolean | null }) {
   return todo.aiGenerated === true
 }
 
+/** 일정 → 화면 항목. 같은 일정의 반복 발생이 같은 날 겹칠 수 있어 key 에 발생 시작 일시를 넣습니다 */
+function toScheduleView(item: CalendarItem, date: string): TodoView {
+  return {
+    key: `schedule-${item.refId}-${item.occurrenceStartAt ?? item.startTime ?? ''}`,
+    kind: 'schedule',
+    id: item.refId,
+    date,
+    title: item.title,
+    category: 'schedule',
+    scheduleType: item.type === 'FIXED' ? 'FIXED' : 'PERSONAL',
+    occurrenceStartAt: item.occurrenceStartAt ?? null,
+    done: item.status === 'COMPLETED',
+    time: item.allDay ? undefined : toTime(item.startTime),
+  }
+}
+
 /** 응답 → 화면 투두. 시간 있는 일정 · 투두는 시간순, 미완료 먼저 · 완료는 아래 (디자이너 답변) */
 function toTodoViews({ date, pending, completed }: DailyTodos, schedules: CalendarItem[]): TodoView[] {
+  const scheduleViews = schedules.map((item) => toScheduleView(item, date))
   const pendingViews: TodoView[] = [
-    ...schedules.map(
-      (item): TodoView => ({
-        key: `schedule-${item.refId}`,
-        kind: 'schedule',
-        id: item.refId,
-        date,
-        title: item.title,
-        category: 'schedule',
-        scheduleType: item.type === 'FIXED' ? 'FIXED' : 'PERSONAL',
-        done: false,
-        time: item.allDay ? undefined : toTime(item.startTime),
-      }),
-    ),
+    ...scheduleViews.filter((item) => !item.done),
     ...pending.map(
       (todo): TodoView => ({
         key: `todo-${todo.todoId}`,
@@ -113,6 +118,7 @@ function toTodoViews({ date, pending, completed }: DailyTodos, schedules: Calend
   return [
     ...timed,
     ...untimed,
+    ...scheduleViews.filter((item) => item.done),
     ...completed.map(
       (todo): TodoView => ({
         key: `todo-${todo.todoId}`,
@@ -188,6 +194,18 @@ export async function createSchedule(title: string, date: string, startTime: str
 /** 일정 제목 수정 (PATCH /api/v1/calendar/schedules/{id}). 생략한 값은 유지 */
 export async function updateScheduleTitle(scheduleId: number, title: string) {
   await api.patch(`/api/v1/calendar/schedules/${scheduleId}`, { title })
+}
+
+/**
+ * 일정 완료 · 완료 취소 (PATCH /api/v1/calendar/schedules/{id}/complete · /uncomplete, #236).
+ * 캘린더 항목의 date 와 occurrenceStartAt 을 그대로 보냅니다. 반복 일정은 날짜(발생)별로 따로 체크됩니다.
+ * 409 SCHEDULE_ALREADY_COMPLETED / SCHEDULE_NOT_COMPLETED, 400 SCHEDULE_OCCURRENCE_NOT_FOUND
+ */
+export async function setScheduleDone(schedule: Pick<TodoView, 'id' | 'date' | 'occurrenceStartAt'>, done: boolean) {
+  await api.patch(`/api/v1/calendar/schedules/${schedule.id}/${done ? 'complete' : 'uncomplete'}`, {
+    date: schedule.date,
+    occurrenceStartAt: schedule.occurrenceStartAt,
+  })
 }
 
 /** 일정 삭제 (DELETE /api/v1/calendar/schedules/{id}) */
