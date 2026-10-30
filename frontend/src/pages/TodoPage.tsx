@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router'
 import { getApiError } from '../api/client'
 import Calendar, { type CalendarMark } from '../components/Calendar'
 import Toast from '../components/Toast'
@@ -22,6 +23,7 @@ import {
   deleteTodo,
   getDailyTodos,
   moveTodo,
+  setScheduleDone,
   toDateTime,
   uncompleteTodo,
   updateScheduleTitle,
@@ -47,6 +49,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   TODO_AI_EDIT_NOT_ALLOWED: 'AI 목표는 수정 및 삭제가 불가능합니다.',
   TODO_ALREADY_COMPLETED: '완료한 투두는 체크를 풀고 수정해 주세요.',
   TODO_NOT_COMPLETED: '이미 완료하지 않은 투두예요.',
+  SCHEDULE_ALREADY_COMPLETED: '이미 완료한 일정이에요.',
+  SCHEDULE_NOT_COMPLETED: '아직 완료하지 않은 일정이에요.',
 }
 
 function errorMessage(error: unknown) {
@@ -82,11 +86,29 @@ function toTodoCategory(key: TodoCategoryKey): 'TASK' | 'OTHER' {
  *   완료한 투두는 삭제만, 일정은 수정 · 삭제만 (날짜 변경 없음)
  * AI 가 만든 투두는 … 대신 sparkle → AI 목표 상태수정 시트 → 현재 상태 입력 (PATCH /todos/state/{id})
  */
+/**
+ * 홈에서 넘어올 때 받는 값 (location.state)
+ * - date: 보여 줄 날짜 'YYYY-MM-DD' (홈에서 고른 날짜)
+ * - stateTodoId: 들어오자마자 현재 상태 입력을 열 AI 목표 투두 (홈에서 완료 팝업 · sparkle 을 누른 경우)
+ */
+export interface TodoPageState {
+  date?: string
+  stateTodoId?: number
+}
+
+/** 'YYYY-MM-DD' → 그 날 0시 Date */
+function fromDateKey(key: string) {
+  const [y, m, d] = key.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
 export default function TodoPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [entry] = useState(() => (location.state ?? {}) as TodoPageState)
   const [today] = useState(startOfToday)
-  const [selectedDate, setSelectedDate] = useState(today)
-  /** 캘린더에 보이는 달 */
-  const [month, setMonth] = useState({ year: today.getFullYear(), month: today.getMonth() + 1 })
+  const [selectedDate, setSelectedDate] = useState(() => (entry.date ? fromDateKey(entry.date) : today))
+  const [month, setMonth] = useState({ year: selectedDate.getFullYear(), month: selectedDate.getMonth() + 1 })
   const [category, setCategory] = useState<TodoCategoryKey | null>(null)
   /** AI 칸에서 고른 목표 */
   const [goal, setGoal] = useState<GoalSummary | null>(null)
@@ -116,11 +138,26 @@ export default function TodoPage() {
   /** 늘리면 목록 · 캘린더를 다시 불러옵니다 (추가 · 수정 · 완료 · 이동 · 삭제 뒤) */
   const [reloadKey, setReloadKey] = useState(0)
 
+  // 홈에서 "상태 입력하기" · sparkle 로 넘어온 경우: 목록을 불러온 뒤 그 투두의 현재 상태 입력을 한 번 엽니다.
+  const pendingStateId = useRef(entry.stateTodoId ?? null)
+
   useEffect(() => {
     let ignore = false
     getDailyTodos(selectedKey)
       .then((items) => {
-        if (!ignore) setTodos(items)
+        if (ignore) return
+        setTodos(items)
+        const id = pendingStateId.current
+        if (id !== null) {
+          pendingStateId.current = null
+          // 뒤로 갔다 다시 와도 또 열리지 않게 넘겨받은 값을 지웁니다.
+          navigate(location.pathname, { replace: true, state: null })
+          const todo = items.find((item) => item.kind === 'todo' && item.id === id)
+          if (todo) {
+            setStateTodo(todo)
+            setCategory(null)
+          }
+        }
       })
       .catch((error: unknown) => {
         if (!ignore) showToast(errorMessage(error))
@@ -131,7 +168,8 @@ export default function TodoPage() {
     return () => {
       ignore = true
     }
-  }, [selectedKey, reloadKey, showToast])
+  }, [selectedKey, reloadKey, showToast, navigate, location.pathname])
+
 
   useEffect(() => {
     let ignore = false
@@ -213,8 +251,12 @@ export default function TodoPage() {
     return run(() => createTodo(toTodoCategory(category), content, selectedKey))
   }
 
-  /** 체크박스: 완료 ↔ 완료 취소. AI 목표 투두를 완료하면 현재 상태 입력 팝업 */
+  /** 체크박스: 완료 ↔ 완료 취소. AI 목표 투두를 완료하면 현재 상태 입력 팝업. 일정은 날짜(발생)별 완료 (#236) */
   async function handleToggle(todo: TodoView) {
+    if (todo.kind === 'schedule') {
+      await run(() => setScheduleDone(todo, !todo.done))
+      return
+    }
     if (todo.done) {
       await run(() => uncompleteTodo(todo.id))
       return
@@ -415,7 +457,7 @@ export default function TodoPage() {
                   <TodoItem
                     key={todo.key}
                     todo={todo}
-                    onToggle={todo.kind === 'todo' ? () => void handleToggle(todo) : undefined}
+                    onToggle={() => void handleToggle(todo)}
                     onMore={todo.scheduleType === 'FIXED' ? undefined : () => setMoreKey(todo.key)}
                     onSparkle={() => setSparkleKey(todo.key)}
                   />
