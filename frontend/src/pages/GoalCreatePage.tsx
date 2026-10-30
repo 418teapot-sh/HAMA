@@ -1,22 +1,34 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import icClose from '../assets/icons/ic_close.svg'
-import icMascot from '../assets/icons/ic_mascot.svg'
-import icSparkleMain from '../assets/icons/ic_sparkle_main.svg'
 import NavigationBar from '../components/NavigationBar'
 import { getApiError } from '../api/client'
 import { createGoalFromInput, generatePlans, selectPlan, type PlanView } from '../features/goal/aiApi'
-import type { GoalDetail } from '../features/goal/api'
+import { deleteGoal, getGoal, type GoalDetail } from '../features/goal/api'
 import FixedScheduleStep from '../features/goal/components/FixedScheduleStep'
 import { GoalStepCard, GoalStepInput, GoalStepValue } from '../features/goal/components/GoalStepCard'
+import GoalHeader from '../features/goal/components/GoalHeader'
 import PlanProposal from '../features/goal/components/PlanProposal'
+import { loadMe } from '../features/auth/api'
 import { useAuthStore } from '../features/auth/store'
 import CreditShortageModal from '../features/payment/CreditShortageModal'
 import type { Weekday } from '../features/goal/weekdays'
 import { paths } from '../paths'
+import { toDateKey } from '../utils/date'
 
 /** 'YYYY.MM.DD' 형식인지 */
 const DATE_PATTERN = /^\d{4}\.\d{2}\.\d{2}$/
+
+/** 목표 기간 최대 일수 (시작일 포함, 백엔드 기준) */
+const MAX_PERIOD_DAYS = 365
+
+/** 'YYYY.MM.DD' 형식이고 달력에 있는 날짜인지 (2월 30일 등을 걸러냄) */
+function isValidDate(value: string) {
+  if (!DATE_PATTERN.test(value)) return false
+  const [year, month, day] = value.split('.').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.getMonth() === month - 1 && date.getDate() === day
+}
 
 /** 'YYYY.MM.DD' → 'YYYY-MM-DD' (API 형식) */
 const toApiDate = (date: string) => date.replaceAll('.', '-')
@@ -34,23 +46,25 @@ type Phase = 'input' | 'loading' | 'done' | 'error' | 'plans'
 /** 날짜 입력칸 오류 문구. 아직 건드리지 않았으면 표시하지 않음 */
 function dateError(label: string, value: string) {
   if (!value) return `${label}을 입력해주세요.`
-  if (!DATE_PATTERN.test(value)) return '예: 2026.08.08 처럼 입력해주세요.'
+  if (!isValidDate(value)) return '예: 2026.08.08 처럼 입력해주세요.'
   return undefined
 }
 
-/** 머리말: [마스코트 36 + 반짝이 24, 간격 8] ↔ 제목 간격 8. 제목은 Heading/H1 + 그라데이션 */
-function GoalHeader({ title, center = false }: { title: string; center?: boolean }) {
-  return (
-    <div className={`flex flex-col gap-[8px] ${center ? 'items-center text-center' : ''}`}>
-      <div className="flex items-center gap-[8px]">
-        <img src={icMascot} alt="" className="size-[36px]" />
-        <img src={icSparkleMain} alt="" className="size-[24px]" />
-      </div>
-      <h1 className="bg-[linear-gradient(94deg,var(--color-brand-main)_-4.11%,var(--color-brand-main-40)_36.8%,var(--color-brand-main-60)_54.09%)] bg-clip-text text-heading-h1 whitespace-pre-line text-transparent">
-        {title}
-      </h1>
-    </div>
-  )
+/** 시작일 포함 며칠짜리 기간인지. 둘 다 'YYYY.MM.DD' */
+function periodDays(startDate: string, endDate: string) {
+  const toUtc = (value: string) => {
+    const [year, month, day] = value.split('.').map(Number)
+    return Date.UTC(year, month - 1, day)
+  }
+  return (toUtc(endDate) - toUtc(startDate)) / 86_400_000 + 1
+}
+
+/** 기간 오류 문구. 백엔드 GOAL_INVALID_PERIOD · GOAL_PERIOD_TOO_LONG 과 같은 기준 */
+function periodError(startDate: string, endDate: string) {
+  if (endDate < startDate) return '종료일은 시작일 이후여야 해요.'
+  if (toApiDate(endDate) < toDateKey(new Date())) return '종료일은 오늘 이후여야 해요.'
+  if (periodDays(startDate, endDate) > MAX_PERIOD_DAYS) return '목표 기간은 최대 1년이에요.'
+  return undefined
 }
 
 /**
@@ -76,7 +90,11 @@ export default function GoalCreatePage() {
   const [endDate, setEndDate] = useState('')
   const [touched, setTouched] = useState({ start: false, end: false })
   const [fixedSchedules, setFixedSchedules] = useState<Partial<Record<Weekday, string[]>>>({})
+  /** 만든 목표 id. 뒤 단계가 실패해 다시 시도해도 목표를 또 만들지 않도록 따로 둠 */
+  const [createdGoalId, setCreatedGoalId] = useState<number | null>(null)
   const [createdGoal, setCreatedGoal] = useState<GoalDetail | null>(null)
+  /** 서버가 거절한 기간 오류. 날짜를 고치면 지움 */
+  const [serverPeriodError, setServerPeriodError] = useState<string>()
   const [plans, setPlans] = useState<PlanView[]>([])
   /** 플랜을 더 만들 수 있는 횟수 (목표당 3번) */
   const [remainingGenerations, setRemainingGenerations] = useState(0)
@@ -88,21 +106,21 @@ export default function GoalCreatePage() {
   const [planError, setPlanError] = useState<string>()
 
   const startError = touched.start ? dateError('시작일', startDate) : undefined
+  const datesValid = isValidDate(startDate) && isValidDate(endDate)
   const endError = touched.end
-    ? (dateError('종료일', endDate) ??
-      (DATE_PATTERN.test(startDate) && endDate < startDate ? '종료일은 시작일 이후여야 해요.' : undefined))
+    ? (dateError('종료일', endDate) ?? (datesValid ? periodError(startDate, endDate) : undefined) ?? serverPeriodError)
     : undefined
 
-  const periodValid = DATE_PATTERN.test(startDate) && DATE_PATTERN.test(endDate) && startDate <= endDate
+  const periodValid = datesValid && !periodError(startDate, endDate)
   const canNext = [goal.trim().length > 0, currentLevel.trim().length > 0, periodValid, true][step]
   const nextBlocked = phase === 'loading' || (phase === 'input' && !canNext)
 
   const submit = async () => {
     setPhase('loading')
     try {
-      // 목표는 이미 만들었고 플랜 생성만 실패했다면 목표를 다시 만들지 않음
-      const goalDetail =
-        createdGoal ??
+      // 목표는 이미 만들었고 상세 조회나 플랜 생성만 실패했다면 목표를 다시 만들지 않음
+      const goalId =
+        createdGoalId ??
         (await createGoalFromInput({
           goal: goal.trim(),
           currentLevel: currentLevel.trim(),
@@ -110,15 +128,25 @@ export default function GoalCreatePage() {
           endDate: toApiDate(endDate),
           fixedSchedules,
         }))
-      setCreatedGoal(goalDetail)
-      const planList = await generatePlans(goalDetail.goalId)
+      setCreatedGoalId(goalId)
+      setCreatedGoal(await getGoal(goalId))
+      const planList = await generatePlans(goalId)
       setPlans(planList.plans)
       setRemainingGenerations(planList.remainingGenerations)
       setPhase('done')
     } catch (error) {
-      if (getApiError(error)?.code === 'INSUFFICIENT_CREDITS') {
+      const code = getApiError(error)?.code
+      if (code === 'INSUFFICIENT_CREDITS') {
+        loadMe()
         setPhase('input')
         setCreditShortage(true)
+      } else if (code === 'GOAL_INVALID_PERIOD' || code === 'GOAL_PERIOD_TOO_LONG') {
+        setServerPeriodError(
+          code === 'GOAL_PERIOD_TOO_LONG' ? '목표 기간은 최대 1년이에요.' : '기간을 다시 확인해주세요.',
+        )
+        setTouched((prev) => ({ ...prev, end: true }))
+        setStep(2)
+        setPhase('input')
       } else {
         setPhase('error')
       }
@@ -126,8 +154,10 @@ export default function GoalCreatePage() {
   }
 
   const handlePrev = () => {
-    // 입력을 고치러 돌아가면 새 값으로 목표를 다시 만듦
+    // 입력을 고치러 돌아가면 새 값으로 목표를 다시 만듦. 먼저 만든 목표는 화면에 안 보여서 지움
     if (phase === 'error') {
+      if (createdGoalId !== null) deleteGoal(createdGoalId).catch(() => {})
+      setCreatedGoalId(null)
       setCreatedGoal(null)
       setPhase('input')
     }
@@ -154,7 +184,7 @@ export default function GoalCreatePage() {
 
   /** 플랜 다시 만들기: 같은 목표로 A/B 플랜을 새로 받음 (목표당 3번, 고르지 않은 기존 플랜은 바뀜) */
   const regeneratePlans = async () => {
-    if (!createdGoal || remainingGenerations <= 0) return
+    if (!createdGoal || remainingGenerations <= 0 || starting) return
     setPhase('loading')
     setSelectedPlanId(null)
     setPlanIndex(0)
@@ -176,11 +206,14 @@ export default function GoalCreatePage() {
     setPlanError(undefined)
     try {
       await selectPlan(selectedPlanId)
+      loadMe()
       navigate(paths.home, { replace: true })
     } catch (error) {
       const code = getApiError(error)?.code
-      if (code === 'INSUFFICIENT_CREDITS') setCreditShortage(true)
-      else if (code === 'AI_PLAN_OUTDATED') setPlanError('플랜이 오래됐어요. 플랜을 다시 만들어주세요.')
+      if (code === 'INSUFFICIENT_CREDITS') {
+        loadMe()
+        setCreditShortage(true)
+      } else if (code === 'AI_PLAN_OUTDATED') setPlanError('플랜이 오래됐어요. 플랜을 다시 만들어주세요.')
       else setPlanError('플랜을 시작하지 못했어요. 잠시 후 다시 시도해주세요.')
       setStarting(false)
     }
@@ -235,7 +268,10 @@ export default function GoalCreatePage() {
                   <GoalStepInput
                     prefix="시작일"
                     value={startDate}
-                    onChange={setStartDate}
+                    onChange={(value) => {
+                      setStartDate(value)
+                      setServerPeriodError(undefined)
+                    }}
                     onBlur={() => setTouched((prev) => ({ ...prev, start: true }))}
                     error={startError}
                     placeholder="예: 2026.08.08"
@@ -245,7 +281,10 @@ export default function GoalCreatePage() {
                   <GoalStepInput
                     prefix="종료일"
                     value={endDate}
-                    onChange={setEndDate}
+                    onChange={(value) => {
+                      setEndDate(value)
+                      setServerPeriodError(undefined)
+                    }}
                     onBlur={() => setTouched((prev) => ({ ...prev, end: true }))}
                     error={endError}
                     placeholder="예: 2026.11.08"
@@ -316,7 +355,7 @@ export default function GoalCreatePage() {
           <button
             type="button"
             onClick={regeneratePlans}
-            disabled={remainingGenerations <= 0}
+            disabled={remainingGenerations <= 0 || starting}
             className="text-body-b8 text-black-gray40 underline disabled:no-underline"
           >
             {remainingGenerations > 0 ? `플랜 다시 만들기 (${remainingGenerations}번 남음)` : '플랜을 더 만들 수 없어요'}

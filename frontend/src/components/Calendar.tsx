@@ -25,6 +25,13 @@ type CalendarProps = {
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 const MAX_MARKS = 3
 
+/** 요일 글자색 */
+function weekdayColor(weekday: string) {
+  if (weekday === '일') return 'text-category-task'
+  if (weekday === '토') return 'text-brand-main-80'
+  return 'text-black-gray60'
+}
+
 const MARK_COLOR: Record<CalendarCategory, string> = {
   task: 'bg-category-task',
   schedule: 'bg-category-schedule',
@@ -70,7 +77,7 @@ function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
  * - 카드: 패딩 20 / 반경 20 / 테두리 1 Stroke / 배경 Card_Back / 그림자 Card_Shadow / 배경 흐림 10
  * - 헤더(년·월 + 화살표) ↔ 달력 간격 20, 요일 줄 ↔ 날짜 간격 16
  * - 년·월: Body/B5 Black/Black, 화살표: 8×13 Black/Gray60
- * - 요일: 32×28, Body/B8 Black/Gray60
+ * - 요일: 32×28, Body/B8 Black/Gray60 (일요일 빨강, 토요일 파랑)
  * - 날짜 격자: 7열, 가로 간격 8 / 세로 간격 4, 칸(DayCell) 32×60
  * - 날짜 숫자: 21×21 원 안에 Body/B8. 기본 Black/Black, 지난 날짜 Black/Gray40,
  *   선택한 날짜는 원 배경 Brand/Main + 글자 White/W1, highlightDate 는 원 배경 #F8B629(일정 색) + 글자 White/W1
@@ -131,7 +138,7 @@ export default function Calendar({
           {WEEKDAYS.map((weekday) => (
             <span
               key={weekday}
-              className="flex h-[28px] w-[32px] items-center justify-center text-body-b8 text-black-gray60"
+              className={`flex h-[28px] w-[32px] items-center justify-center text-body-b8 ${weekdayColor(weekday)}`}
             >
               {weekday}
             </span>

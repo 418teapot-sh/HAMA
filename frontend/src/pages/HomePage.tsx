@@ -32,6 +32,7 @@ export default function HomePage() {
   const [goal, setGoal] = useState<GoalSummary | null>(null)
   const [tasks, setTasks] = useState<GoalTask[]>([])
   const [goalLoading, setGoalLoading] = useState(true)
+  const [goalFailed, setGoalFailed] = useState(false)
 
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [viewMonth, setViewMonth] = useState(() => ({
@@ -60,11 +61,13 @@ export default function HomePage() {
       try {
         const current = await getCurrentGoal()
         // 체크 목록 = 선택한 플랜의 반복 할 일 (GET /goals/{id}/tasks)
-        const goalTasks = current ? await getGoalTasks(current.goalId) : null
+        const goalTasks = current ? await getGoalTasks(current.goalId).catch(() => null) : null
         if (!ignore) {
           setGoal(current)
           setTasks(goalTasks?.tasks ?? [])
         }
+      } catch {
+        if (!ignore) setGoalFailed(true)
       } finally {
         if (!ignore) setGoalLoading(false)
       }
@@ -139,7 +142,9 @@ export default function HomePage() {
     <main className="flex flex-col gap-[20px] px-[20px] pt-[20px]">
       <section className="flex flex-col gap-[12px]">
         <h2 className="text-heading-h4 text-black-black">목표 요약</h2>
-        {goalLoading ? null : goal ? (
+        {goalLoading ? null : goalFailed ? (
+          <p className="text-body-b8 text-black-gray60">목표를 불러오지 못했어요. 잠시 후 다시 시도해주세요.</p>
+        ) : goal ? (
           <GoalSummaryCard
             title={goal.title}
             startDate={goal.startDate}
