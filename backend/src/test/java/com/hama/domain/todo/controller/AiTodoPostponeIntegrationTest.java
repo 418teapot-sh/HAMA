@@ -26,6 +26,7 @@ import static org.mockito.Mockito.*;
 
 class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
     @Autowired GoalRepository goals;
+    @MockitoSpyBean GoalFixedScheduleRepository fixedSchedules;
     @Autowired TodoService todoService;
     @Autowired GoalAiReplanService replan;
     @MockitoSpyBean BusyTimeReader busy;
@@ -85,7 +86,8 @@ class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
         assertThat(items.size()).isOne();
         String ics = mvc.perform(get("/api/v1/calendar/export").param("from","2026-10-05").param("to","2026-10-05")
                 .header("Authorization","Bearer " + u.token())).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(ics).contains("hama-AI_GOAL-"+t+"@hama.app","20261005T090000","20261005T101500");
+        String uid = jdbc.queryForObject("select calendar_uid from todo where todo_id=?", String.class, t);
+        assertThat(ics).contains("UID:" + uid,"20261005T090000","20261005T101500");
     }
 
     @Test void 밀린_무시간_투두는_오늘_현재시각부터_30분_배치한다() throws Exception {
@@ -331,6 +333,79 @@ class AiTodoPostponeIntegrationTest extends GoalAiTestSupport {
         replan.replan(u.id(),g,LocalDate.parse("2026-10-02"));
         assertSlot(t,"2026-10-02","10:10","10:40",0);
         assertThat(jdbc.queryForMap("select * from schedule where schedule_id=?",s)).isEqualTo(before);
+    }
+
+    void fixedDay(long goal, DayOfWeek day) {
+        fixedSchedules.save(com.hama.domain.goal.entity.GoalFixedSchedule.create(goal, day, "자동 배치 제외"));
+    }
+
+    @Test void 개별자동은_목표의_고정요일을_건너뛰고_직접지정은_허용한다() throws Exception {
+        User u=user(); long g=goal(u,"2026-10-31");
+        fixedDay(g, DayOfWeek.SUNDAY);
+        long automatic=todo(u,g,"2026-10-03","18:00","19:00");
+        long manual=todo(u,g,"2026-10-03","18:00","19:00");
+        move(u,automatic,null,200);
+        assertSlot(automatic,"2026-10-05","09:00","10:00",1);
+        move(u,manual,Map.of("targetDate","2026-10-04"),200);
+        assertSlot(manual,"2026-10-04","18:00","19:00",1);
+        long conflict=todo(u,g,"2026-10-03","18:00","19:00");
+        var before=row(conflict);
+        assertThat(move(u,conflict,Map.of("targetDate","2026-10-04"),409)
+                .at("/error/code").asString()).isEqualTo("TODO_POSTPONE_TIME_CONFLICT");
+        assertThat(row(conflict)).isEqualTo(before);
+    }
+
+    @Test void NEXT_DAY는_고정요일에서_실패하고_기본전략은_목표별로_다르게_배치한다() throws Exception {
+        User u=user(); long a=goal(u,"2026-10-31"), b=goal(u,"2026-10-31");
+        fixedDay(a, DayOfWeek.SUNDAY);
+        long first=todo(u,a,"2026-10-03","09:00","10:00");
+        long second=todo(u,b,"2026-10-03","09:00","10:00");
+        var before=row(first);
+        clearInvocations(fixedSchedules);
+        var result=day(u,"2026-10-03",Map.of("strategy","NEXT_DAY"));
+        assertThat(result.get("movedCount").asInt()).isOne();
+        assertThat(result.at("/unplaced/0/todoId").asLong()).isEqualTo(first);
+        assertThat(result.at("/unplaced/0/reason").asString()).isEqualTo("TODO_POSTPONE_NO_SLOT");
+        assertThat(row(first)).isEqualTo(before);
+        assertSlot(second,"2026-10-04","09:00","10:00",1);
+        verify(fixedSchedules).findByGoalIdInOrderByGoalIdAsc(argThat(ids -> ids.size()==2 && ids.containsAll(List.of(a,b))));
+        verify(fixedSchedules,never()).findByGoalIdOrderByDayOfWeekAsc(anyLong());
+        assertThat(day(u,"2026-10-03",null).get("movedCount").asInt()).isOne();
+        assertSlot(first,"2026-10-05","09:00","10:00",1);
+    }
+
+    @Test void 허용날짜가_없으면_개별과_일괄은_시간_횟수_감사시각을_보존한다() throws Exception {
+        User u=user(); long g=goal(u,"2026-10-04");
+        fixedDay(g, DayOfWeek.SUNDAY);
+        long t=todo(u,g,"2026-10-03","09:00","10:00");
+        var before=row(t);
+        assertThat(move(u,t,null,409).at("/error/code").asString()).isEqualTo("TODO_POSTPONE_NO_SLOT");
+        assertThat(row(t)).isEqualTo(before);
+        var result=day(u,"2026-10-03",null);
+        assertThat(result.get("movedCount").asInt()).isZero();
+        assertThat(result.at("/unplaced/0/todoId").asLong()).isEqualTo(t);
+        assertThat(row(t)).isEqualTo(before);
+    }
+
+    @Test void 밀린자동도_오늘의_고정요일을_건너뛰되_다른목표에는_전파하지않는다() throws Exception {
+        User u=user(); long a=goal(u,"2026-10-31"), b=goal(u,"2026-10-31");
+        fixedDay(a,DayOfWeek.THURSDAY);
+        long first=todo(u,a,"2026-09-28",null,null),second=todo(u,b,"2026-09-28",null,null);
+        var result=day(u,"2026-09-28",null);
+        assertThat(result.get("movedCount").asInt()).isEqualTo(2);
+        assertSlot(first,"2026-10-02","09:00","09:30",1);
+        assertSlot(second,"2026-10-01","12:00","12:30",1);
+    }
+
+    @Test void 밀린_NEXT_DAY는_오늘로_늘리지않고_원래_다음날이_과거이면_원본을_보존한다() throws Exception {
+        User u=user(); long g=goal(u,"2026-10-31"), t=todo(u,g,"2026-09-28","09:00","10:00");
+        var before=row(t);
+        var result=day(u,"2026-09-28",Map.of("strategy","NEXT_DAY"));
+        assertThat(result.get("movedCount").asInt()).isZero();
+        assertThat(result.at("/unplaced/0/reason").asString()).isEqualTo("TODO_POSTPONE_NO_SLOT");
+        assertThat(row(t)).isEqualTo(before);
+        move(u,t,null,200);
+        assertSlot(t,"2026-10-01","12:00","13:00",1);
     }
 
 }

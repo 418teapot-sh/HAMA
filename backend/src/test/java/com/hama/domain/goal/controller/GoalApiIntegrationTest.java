@@ -126,9 +126,9 @@ class GoalApiIntegrationTest {
         KeyHolder key = new GeneratedKeyHolder();
         jdbc.update(connection -> {
             PreparedStatement ps = connection.prepareStatement("""
-                    INSERT INTO todo (user_id, goal_id, category, content, todo_date,
+                    INSERT INTO todo (calendar_uid, user_id, goal_id, category, content, todo_date,
                                       status, postponed_count, completed_at, created_at, updated_at)
-                    VALUES (?, ?, 'AI_GOAL_TASK', '단어 50개', ?, ?, 0, ?, NOW(6), NOW(6))
+                    VALUES (CONCAT('hama-', UUID(), '@hama.app'), ?, ?, 'AI_GOAL_TASK', '단어 50개', ?, ?, 0, ?, NOW(6), NOW(6))
                     """, Statement.RETURN_GENERATED_KEYS);
             ps.setLong(1, user.userId());
             ps.setLong(2, goalId);

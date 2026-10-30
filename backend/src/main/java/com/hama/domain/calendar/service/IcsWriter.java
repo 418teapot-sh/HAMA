@@ -44,7 +44,7 @@ public class IcsWriter {
         String stamp = UTC.format(clock.instant());
         for (CalendarEvent event : events) {
             line(output, "BEGIN:VEVENT");
-            line(output, "UID:hama-" + event.type() + "-" + event.refId() + "@hama.app");
+            line(output, "UID:" + event.calendarUid());
             line(output, "DTSTAMP:" + stamp);
             line(output, "SUMMARY:" + text(event.title()));
             if (event.allDay()) {

@@ -104,7 +104,7 @@ class IcsWriterTest {
     void 종일_UNTIL은_시간이나_UTC로_바꾸지_않는다() {
         LocalDateTime start = LocalDateTime.of(2026, 10, 5, 0, 0);
         String raw = new String(writer.write(List.of(new CalendarEvent(CalendarType.PERSONAL, 7L, "종일",
-                start, start.plusDays(1), true, "until=20261031;freq=daily;interval=02", null))), StandardCharsets.UTF_8);
+                start, start.plusDays(1), true, "until=20261031;freq=daily;interval=02", null, "hama-PERSONAL-7@hama.app"))), StandardCharsets.UTF_8);
         assertThat(raw).contains("DTSTART;VALUE=DATE:20261005", "DTEND;VALUE=DATE:20261006",
                 "RRULE:FREQ=DAILY;INTERVAL=2;UNTIL=20261031\r\n");
         assertThat(raw).doesNotContain("VTIMEZONE");
@@ -130,6 +130,6 @@ class IcsWriterTest {
     private String file(String title, String memo) {
         return new String(writer.write(List.of(new CalendarEvent(CalendarType.FIXED, 42L, title,
                 LocalDateTime.of(2026, 10, 5, 0, 30), LocalDateTime.of(2026, 10, 5, 1, 30), false,
-                "FREQ=WEEKLY;BYDAY=MO;COUNT=3", memo))), StandardCharsets.UTF_8);
+                "FREQ=WEEKLY;BYDAY=MO;COUNT=3", memo, "hama-FIXED-42@hama.app"))), StandardCharsets.UTF_8);
     }
 }

@@ -2,6 +2,8 @@ package com.hama.domain.schedule.recurrence;
 
 import com.hama.domain.shared.time.Be3Time;
 import com.hama.domain.schedule.entity.ScheduleRepeatRule;
+import com.hama.domain.schedule.exception.ScheduleErrorCode;
+import com.hama.global.exception.BusinessException;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.Instant;
@@ -97,6 +99,15 @@ public final class ScheduleRecurrence {
     /** ICS 원본 선택 시 첫 교차 발생에서 종료하므로 전체 발생 목록을 만들지 않습니다. */
     public boolean overlaps(Source schedule, LocalDate from, LocalDate to) {
         return visit(schedule, from, to, occurrence -> true);
+    }
+
+    /** 표시 날짜에 실제로 나타나는 특정 반복 발생 건인지 확인합니다. */
+    public boolean hasOccurrence(Source schedule, LocalDate date, LocalDateTime occurrenceStartAt) {
+        int[] visited = {0};
+        return visit(schedule, date, date, occurrence -> {
+            if (++visited[0] > 10_000) throw new BusinessException(ScheduleErrorCode.SCHEDULE_OCCURRENCE_LIMIT_EXCEEDED);
+            return occurrence.startAt().equals(occurrenceStartAt);
+        });
     }
 
     private boolean visit(Source schedule, LocalDate from, LocalDate to, Predicate<Occurrence> visitor) {

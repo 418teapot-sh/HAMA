@@ -44,8 +44,12 @@ public class BusyTimeReader {
             CalendarQuery tasks = new CalendarQuery(first, last, Set.of(CalendarType.TASK, CalendarType.OTHER, CalendarType.AI_GOAL));
 
             forEachPage(afterId -> calendar.schedules(userId, schedules, afterId), CalendarReadRepository.ScheduleCandidate::id,
-                    schedule -> occurrences.forEach(schedule.source(), first, last,
-                            occurrence -> add(busy, occurrence.startAt(), occurrence.endAt(), first, last)));
+                    schedule -> {
+                        if (occurrences.hasReadableRepeatRule(schedule.id(), schedule.source())) {
+                            occurrences.forEach(schedule.source(), first, last,
+                                    occurrence -> add(busy, occurrence.startAt(), occurrence.endAt(), first, last));
+                        }
+                    });
             forEachPage(afterId -> calendar.tasks(userId, tasks, afterId), CalendarReadRepository.TaskCandidate::id,
                     task -> {
                         if (task.startTime() != null && task.endTime() != null

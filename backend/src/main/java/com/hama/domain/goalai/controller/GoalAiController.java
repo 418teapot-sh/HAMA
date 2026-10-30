@@ -48,7 +48,7 @@ public class GoalAiController {
                     PLANNING 목표에 A(여유형)·B(집중형) 플랜을 만듭니다. 다시 만들면 선택하지 않은 기존 플랜을 바꿉니다.
                     투두는 목표 시작일과 오늘 중 늦은 날부터 종료일까지 둡니다. preference 는 RELAXED | BALANCED | INTENSIVE(생략 시 BALANCED).
                     없는 목표 404(GOAL_NOT_FOUND), 다른 사람의 목표 403, PLANNING 이 아니면 409(GOAL_NOT_PLANNING),
-                    기간이 없거나 이미 끝났으면 400(GOAL_INVALID_PERIOD), 만드는 사이 목표 기간이 바뀌면 409(AI_PLAN_OUTDATED).
+                    기간이 없거나 이미 끝났으면 400(GOAL_INVALID_PERIOD), 배치 가능한 요일이 없으면 409(AI_PLAN_NO_AVAILABLE_DAY), 만드는 사이 목표 기간이 바뀌면 409(AI_PLAN_OUTDATED).
                     """)
     @PostMapping("/plans")
     public ResponseEntity<ApiResponse<PlanResponses.PlanList>> generatePlans(
@@ -73,7 +73,7 @@ public class GoalAiController {
                     투두는 그날 09:00~22:00 중 고정·개인 일정과 시간이 정해진 기존 투두를 피한 첫 빈 시간(10분 단위)에 둡니다.
                     빈 시간이 없으면 시간 없이 날짜만 두고 placement.unplacedTodos 에 담습니다.
                     없는 플랜 404(AI_PLAN_NOT_FOUND), 다른 사람의 플랜 403, 이미 고른 플랜 409(AI_PLAN_ALREADY_SELECTED),
-                    다른 플랜을 이미 골랐으면 409(GOAL_NOT_PLANNING), 목표 기간이 바뀌었거나 플랜 시작일이 지났으면 409(AI_PLAN_OUTDATED).
+                    다른 플랜을 이미 골랐으면 409(GOAL_NOT_PLANNING), 목표 기간이 바뀌었거나 플랜 시작일이 지났으면 409(AI_PLAN_OUTDATED), 배치 가능한 날이 없으면 409(AI_PLAN_NO_AVAILABLE_DAY).
                     크레딧을 1회 씁니다. 남은 크레딧이 없으면 다른 검사보다 먼저 402(INSUFFICIENT_CREDITS)이고, 실패하면 차감되지 않습니다.
                     """)
     @PostMapping("/plans/{planId}/select")
@@ -87,7 +87,7 @@ public class GoalAiController {
             description = """
                     목표의 미완료 AI 투두(AI_GOAL_TASK)만 옮깁니다. fromDate 이후에 정한 시간이 비어 있는 투두는 그대로 두고,
                     밀린 투두·시간 없는 투두·일정과 겹친 투두를 fromDate(밀린 투두) 또는 원래 날짜부터 목표 종료일까지 첫 빈 시간에 둡니다.
-                    빈 시간이 끝까지 없으면 시간 없이 날짜만 둡니다(unplacedCount). 미룬 횟수는 늘지 않습니다.
+                    목표 고정요일은 자동 배치에서 제외합니다. 빈 시간이 끝까지 없으면 원래 날짜·시간을 보존합니다(unplacedCount). 미룬 횟수는 늘지 않습니다.
                     fromDate 를 생략하면 오늘(KST)과 목표 시작일 중 늦은 날입니다.
                     진행 중이 아닌 목표 409(GOAL_NOT_IN_PROGRESS), fromDate 가 오늘 이전이거나 목표 기간 밖이면 400(AI_REPLAN_INVALID_DATE).
                     크레딧을 1회 씁니다. 남은 크레딧이 없으면 다른 검사보다 먼저 402(INSUFFICIENT_CREDITS)이고,

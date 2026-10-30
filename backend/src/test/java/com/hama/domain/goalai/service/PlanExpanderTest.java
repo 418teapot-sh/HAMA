@@ -84,14 +84,20 @@ class PlanExpanderTest {
     }
 
     @Test
-    void 모든_요일이_바쁘면_그_주는_원래대로_모든_날을_쓴다() {
+    void 모든_요일이_바쁘면_투두를_만들지_않는다() {
         LocalDate weekEnd = START.plusDays(6);
         PlanExpander.Expanded busy = PlanExpander.expand(plan(new AiTask("단어", 7, 30)),
                 "여유형", START, START, weekEnd, EnumSet.allOf(DayOfWeek.class));
-        PlanExpander.Expanded free = PlanExpander.expand(plan(new AiTask("단어", 7, 30)),
-                "여유형", START, START, weekEnd);
+        assertThat(busy.detail().todos()).isEmpty();
+        assertThat(busy.totalTodos()).isZero();
+    }
 
-        assertThat(busy.detail().todos()).isEqualTo(free.detail().todos()).hasSize(7);
+    @Test
+    void 마지막_짧은_주가_전부_바쁘면_그_부분만_건너뛴다() {
+        PlanExpander.Expanded expanded = PlanExpander.expand(plan(new AiTask("단어", 7, 30)),
+                "여유형", START, START, START.plusDays(7), Set.of(DayOfWeek.THURSDAY));
+        assertThat(expanded.totalTodos()).isEqualTo(6);
+        assertThat(expanded.detail().todos()).noneMatch(t -> t.date().equals(START.plusDays(7)));
     }
 
     @Test

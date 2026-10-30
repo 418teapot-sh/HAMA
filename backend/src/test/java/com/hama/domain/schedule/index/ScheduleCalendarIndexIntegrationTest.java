@@ -106,7 +106,8 @@ class ScheduleCalendarIndexIntegrationTest {
         long live = legacy("2026-10-01T09:00:00", "2026-10-01T10:00:00", false, "FREQ=DAILY");
         var query = CalendarQuery.parse("2026-10-05", "2026-10-05", "FIXED");
         assertThat(calendar.get(user, query).items()).singleElement().satisfies(item -> assertThat(item.refId()).isEqualTo(live));
-        assertThat(new String(calendar.export(user, query), StandardCharsets.UTF_8)).contains("hama-FIXED-" + live + "@hama.app");
+        String uid = jdbc.queryForObject("SELECT calendar_uid FROM schedule WHERE schedule_id = ?", String.class, live);
+        assertThat(new String(calendar.export(user, query), StandardCharsets.UTF_8)).contains("UID:" + uid);
     }
 
     @Test
@@ -118,8 +119,8 @@ class ScheduleCalendarIndexIntegrationTest {
                 .contains("RRULE:FREQ=DAILY;COUNT=101");
         jdbc.update("DELETE FROM schedule WHERE user_id = ?", user);
         jdbc.batchUpdate("""
-                INSERT INTO todo(user_id,category,content,todo_date,status,postponed_count,created_at,updated_at)
-                VALUES (?, 'TASK', '테스트', '2026-10-05', 'PENDING', 0, NOW(), NOW())
+                INSERT INTO todo(calendar_uid, user_id,category,content,todo_date,status,postponed_count,created_at,updated_at)
+                VALUES (CONCAT('hama-', UUID(), '@hama.app'), ?, 'TASK', '테스트', '2026-10-05', 'PENDING', 0, NOW(), NOW())
                 """, java.util.stream.IntStream.range(0, 10000).mapToObj(i -> new Object[]{user}).toList());
         var query = CalendarQuery.parse("2026-10-05", "2026-10-05", null);
         assertThat(calendar.get(user, query).items()).hasSize(10000);
@@ -289,16 +290,16 @@ class ScheduleCalendarIndexIntegrationTest {
 
     private long legacy(String start, String end, boolean allDay, String rule) {
         jdbc.update("""
-                INSERT INTO schedule(user_id,type,title,start_at,end_at,all_day,repeat_rule,memo,created_at,updated_at)
-                VALUES (?, 'FIXED', '기존 일정', ?, ?, ?, ?, '원본 메모', '2026-01-01 00:00:00', '2026-01-02 00:00:00')
+                INSERT INTO schedule(calendar_uid, user_id,type,title,start_at,end_at,all_day,repeat_rule,memo,created_at,updated_at)
+                VALUES (CONCAT('hama-', UUID(), '@hama.app'), ?, 'FIXED', '기존 일정', ?, ?, ?, ?, '원본 메모', '2026-01-01 00:00:00', '2026-01-02 00:00:00')
                 """, user, LocalDateTime.parse(start), LocalDateTime.parse(end), allDay, rule);
         return jdbc.queryForObject("SELECT MAX(schedule_id) FROM schedule WHERE user_id = ?", Long.class, user);
     }
 
     private void task(String date) {
         jdbc.update("""
-                INSERT INTO todo(user_id,category,content,todo_date,status,postponed_count,created_at,updated_at)
-                VALUES (?, 'TASK', '테스트', ?, 'PENDING', 0, NOW(), NOW())
+                INSERT INTO todo(calendar_uid, user_id,category,content,todo_date,status,postponed_count,created_at,updated_at)
+                VALUES (CONCAT('hama-', UUID(), '@hama.app'), ?, 'TASK', '테스트', ?, 'PENDING', 0, NOW(), NOW())
                 """, user, date);
     }
 

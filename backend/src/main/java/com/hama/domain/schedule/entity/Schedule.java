@@ -15,6 +15,8 @@ import jakarta.persistence.Table;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Objects;
+import java.util.UUID;
 import com.hama.domain.shared.time.Be3Time;
 import com.hama.domain.schedule.recurrence.ScheduleRecurrence;
 import lombok.AccessLevel;
@@ -36,6 +38,9 @@ public class Schedule extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "schedule_id")
     private Long id;
+
+    @Column(name = "calendar_uid", nullable = false, updatable = false, length = 80)
+    private String calendarUid;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
@@ -88,10 +93,24 @@ public class Schedule extends BaseTimeEntity {
 
     public static Schedule create(Long userId, ScheduleType type, String title, LocalDateTime startAt,
             LocalDateTime endAt, boolean allDay, String repeatRule, String memo) {
+        return create(userId, type, title, startAt, endAt, allDay, repeatRule, memo,
+                "hama-" + UUID.randomUUID() + "@hama.app");
+    }
+
+    /** 투두에서 전환할 때 캘린더의 동일 항목 식별자를 이어받습니다. */
+    public static Schedule createFromCalendarConversion(Long userId, String title, LocalDateTime startAt,
+            LocalDateTime endAt, String memo, String calendarUid) {
+        return create(userId, ScheduleType.PERSONAL, title, startAt, endAt, false, null, memo,
+                Objects.requireNonNull(calendarUid));
+    }
+
+    private static Schedule create(Long userId, ScheduleType type, String title, LocalDateTime startAt,
+            LocalDateTime endAt, boolean allDay, String repeatRule, String memo, String calendarUid) {
         if (userId == null) {
             throw new BusinessException(ScheduleErrorCode.SCHEDULE_INVALID_INPUT);
         }
         Schedule schedule = new Schedule();
+        schedule.calendarUid = calendarUid;
         schedule.userId = userId;
         schedule.revise(type, title, startAt, endAt, allDay, repeatRule, memo);
         return schedule;

@@ -57,7 +57,7 @@ public class TodoController {
         return ApiResponse.success(todoService.list(authUser.userId(), date, category));
     }
 
-    @Operation(summary = "투두 수정", description = "완료된 투두와 AI 생성 투두의 수정은 409. TASK↔OTHER 변경 가능, 생략한 필드는 유지합니다.")
+    @Operation(summary = "투두 수정", description = "완료된 투두 수정과 AI 생성 투두의 내용·시간 수정은 409. 목표 투두 분류 변경은 409 TODO_CATEGORY_CHANGE_NOT_ALLOWED. TASK↔OTHER 변경 가능, 생략한 필드는 유지합니다.")
     @PatchMapping("/{todoId}")
     public ApiResponse<TodoResponses.Updated> update(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
@@ -69,6 +69,7 @@ public class TodoController {
             description = "TASK/OTHER는 날짜 생략 시 다음 날, 시간 생략 시 유지. AI는 빈 요청 시 다음 빈 시간으로 자동 배치합니다. "
                     + "AI 직접 지정은 targetDate 필수, 시간 생략은 유지·null은 지움이며 충돌 시 409입니다. "
                     + "자동 배치는 다음 날부터(밀린 투두는 오늘 현재시각 이후) 09~22시·10분 단위이며 기존 소요시간(무시간 30분)을 유지합니다. "
+                    + "목표에 지정한 고정요일은 자동 배치에서 제외하며 사용자의 직접 지정은 허용합니다. "
                     + "최대 366일과 큰 목표 종료일 중 빠른 날까지 찾고, 빈 시간이 없으면 409 TODO_POSTPONE_NO_SLOT. "
                     + "완료/비진행 목표는 409. 목표 연결은 유지하며 AI 출처와 무관하게 미루기는 허용합니다.")
     @PatchMapping("/{todoId}/postpone")
