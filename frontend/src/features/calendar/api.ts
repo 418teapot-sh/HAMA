@@ -3,11 +3,7 @@ import type { ApiResponse } from '../../api/types'
 import type { CalendarCategory, CalendarMark } from '../../components/Calendar'
 import { toDateKey } from '../../utils/date'
 
-<<<<<<< HEAD
-/** FIXED·PERSONAL = 고정·개인 일정, AI_GOAL = AI 목표 투두, TASK = 일반 할일, OTHER = 기타 */
-=======
 /** FIXED·PERSONAL = 고정·개인 일정, AI_GOAL = AI 목표 투두, TASK = 일반 할일, OTHER = 기타 (#223) */
->>>>>>> origin/develop
 export type CalendarItemType = 'FIXED' | 'PERSONAL' | 'AI_GOAL' | 'TASK' | 'OTHER'
 
 /** 캘린더 항목 (GET /api/v1/calendar). 반복·여러 날 일정은 날짜별로 나눠서 옴 */

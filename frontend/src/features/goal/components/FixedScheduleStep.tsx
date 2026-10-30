@@ -71,6 +71,7 @@ function DaySchedules({
   const [draft, setDraft] = useState('')
   /** 수정 중인 일정의 순서 */
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const add = () => {
     const title = draft.trim()
@@ -90,9 +91,14 @@ function DaySchedules({
   return (
     <div className="flex flex-col gap-[8px]">
       <p className="flex items-center gap-[8px] text-heading-h6 text-brand-main-80">
-        <span className="flex size-[24px] items-center justify-center rounded-full bg-brand-main-20">
+        <button
+          type="button"
+          aria-label={`${day}요일 고정일정 추가`}
+          className="flex size-[24px] cursor-pointer items-center justify-center rounded-full bg-brand-main-20"
+          onClick={() => inputRef.current?.focus()}
+        >
           <img src={icAdd} alt="" className="size-[20px]" />
-        </span>
+        </button>
         {day}
       </p>
       <ul className="flex flex-col gap-[4px] pl-[8px]">
@@ -137,6 +143,7 @@ function DaySchedules({
             •
           </span>
           <input
+            ref={inputRef}
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
