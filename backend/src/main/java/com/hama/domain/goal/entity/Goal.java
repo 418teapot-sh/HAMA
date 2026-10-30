@@ -76,6 +76,9 @@ public class Goal extends BaseTimeEntity {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    @Column(name = "auto_completed", nullable = false)
+    private boolean autoCompleted;
+
     /** 성공한 A/B 플랜 생성 횟수. {@link #MAX_PLAN_GENERATIONS} 에 닿으면 더 만들 수 없습니다. */
     @Column(name = "plan_generation_count", nullable = false)
     private int planGenerationCount;
@@ -120,6 +123,21 @@ public class Goal extends BaseTimeEntity {
         }
         this.status = GoalStatus.COMPLETED;
         this.completedAt = now;
+        this.autoCompleted = false;
+    }
+
+    /** 모든 목표 투두 완료로 자동 종료한 경우만 완료 취소 시 다시 엽니다. */
+    public void completeAutomatically(LocalDateTime now) {
+        complete(now);
+        this.autoCompleted = true;
+    }
+
+    public void reopenAutomaticallyCompleted() {
+        if (status == GoalStatus.COMPLETED && autoCompleted) {
+            status = GoalStatus.IN_PROGRESS;
+            completedAt = null;
+            autoCompleted = false;
+        }
     }
 
     public boolean isCompleted() {
