@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { getApiError } from '../api/client'
 import icMascot from '../assets/icons/ic_mascot.svg'
@@ -32,6 +32,9 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'ENDED', label: '완료한 목표' },
 ]
 
+/** 완료한 목표 탭에서 상태별로 불러올 개수 (백엔드 최대 100) */
+const ENDED_PAGE_SIZE = 100
+
 type ReportItem = { goal: GoalSummary; tasks: GoalTask[]; aiSummary: string[] | null }
 
 /**
@@ -57,7 +60,7 @@ async function loadGoals(tab: Tab): Promise<ReportItem[]> {
   const goals =
     tab === 'IN_PROGRESS'
       ? await getGoals('IN_PROGRESS')
-      : (await Promise.all([getGoals('COMPLETED'), getGoals('PAST')])).flat()
+      : (await Promise.all([getGoals('COMPLETED', ENDED_PAGE_SIZE), getGoals('PAST', ENDED_PAGE_SIZE)])).flat()
   return Promise.all(
     goals.map(async (goal) => {
       const [goalTasks, aiSummary] = await Promise.all([
@@ -93,32 +96,36 @@ export default function ReportPage() {
   const [creditShortage, setCreditShortage] = useState(false)
   const credits = useAuthStore((state) => state.user?.credits ?? 0)
 
+  /** 마지막 목록 요청 번호. 탭을 바꾼 뒤 늦게 온 이전 응답을 버리는 데 씁니다 */
+  const requestId = useRef(0)
+
   const reload = useCallback(async (target: Tab) => {
+    const id = ++requestId.current
     setItems(null)
     setFailed(false)
     try {
-      setItems(await loadGoals(target))
+      const result = await loadGoals(target)
+      if (id === requestId.current) setItems(result)
     } catch {
-      setFailed(true)
-      setItems([])
+      if (id === requestId.current) {
+        setFailed(true)
+        setItems([])
+      }
     }
   }, [])
 
   useEffect(() => {
-    let ignore = false
+    const id = ++requestId.current
     loadGoals(tab)
       .then((result) => {
-        if (!ignore) setItems(result)
+        if (id === requestId.current) setItems(result)
       })
       .catch(() => {
-        if (!ignore) {
+        if (id === requestId.current) {
           setFailed(true)
           setItems([])
         }
       })
-    return () => {
-      ignore = true
-    }
   }, [tab])
 
   const changeTab = (next: Tab) => {
