@@ -45,17 +45,19 @@ public class AuthController {
             description = """
                     가입과 동시에 로그인 처리됩니다. body 에 accessToken, Set-Cookie 에 refreshToken 이 옵니다.
                     이메일이 이미 가입되어 있으면 409(EMAIL_ALREADY_EXISTS)입니다.
+                    같은 IP 에서 15분에 30회까지 가입할 수 있고, 넘으면 429(TOO_MANY_REQUESTS)입니다.
                     """)
     @PostMapping("/signup")
-    public ResponseEntity<ApiResponse<TokenResponse>> signup(@Valid @RequestBody SignupRequest request) {
-        return withRefreshCookie(authService.signup(request));
+    public ResponseEntity<ApiResponse<TokenResponse>> signup(@Valid @RequestBody SignupRequest request,
+                                                             HttpServletRequest servletRequest) {
+        return withRefreshCookie(authService.signup(request, servletRequest.getRemoteAddr()));
     }
 
     @Operation(summary = "로그인",
             description = """
                     body 에 accessToken, Set-Cookie 에 refreshToken 이 옵니다.
                     이메일이 없거나 비밀번호가 틀려도 구분하지 않고 401(INVALID_CREDENTIALS)입니다.
-                    같은 IP 에서 이메일 하나당 15분에 5회까지 시도할 수 있고, 넘으면 429(TOO_MANY_PASSWORD_ATTEMPTS)입니다.
+                    같은 IP 에서 이메일 하나당 15분에 5회, 이메일과 상관없이 50회까지 시도할 수 있고, 넘으면 429(TOO_MANY_PASSWORD_ATTEMPTS)입니다.
                     """)
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<TokenResponse>> login(@Valid @RequestBody LoginRequest request,

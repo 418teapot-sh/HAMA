@@ -33,6 +33,7 @@ class AuthServiceTest {
     private static final String SECRET = "test-only-secret-key-do-not-use-in-production-0123456789";
     private static final String EMAIL = "test@hama.com";
     private static final String IP = "203.0.113.1";
+    private static final AuthLimitProperties LIMITS = new AuthLimitProperties(30, 50);
 
     @Mock
     private UserRepository userRepository;
@@ -51,7 +52,7 @@ class AuthServiceTest {
         JwtProperties properties = new JwtProperties(SECRET, 30 * 60 * 1000L, 14L * 24 * 60 * 60 * 1000);
         jwtTokenProvider = new JwtTokenProvider(properties);
         authService = new AuthService(jwtTokenProvider, refreshTokenRepository, userRepository, passwordEncoder,
-                new PasswordAttemptLimiter(), properties);
+                new PasswordAttemptLimiter(), properties, LIMITS);
     }
 
     private static User savedUser() {
@@ -75,7 +76,7 @@ class AuthServiceTest {
                 return user;
             });
 
-            AuthTokens tokens = authService.signup(new SignupRequest(EMAIL, "password1234!", "하마", true, true, true, null));
+            AuthTokens tokens = authService.signup(new SignupRequest(EMAIL, "password1234!", "하마", true, true, true, null), IP);
 
             assertThat(jwtTokenProvider.parseAccessUser(tokens.accessToken())).isPresent();
             assertThat(jwtTokenProvider.parseRefreshUserId(tokens.refreshToken())).contains(1L);
@@ -85,8 +86,21 @@ class AuthServiceTest {
         void 이미_가입된_이메일이면_409() {
             given(userRepository.existsByEmail(EMAIL)).willReturn(true);
 
-            assertThatThrownBy(() -> authService.signup(new SignupRequest(EMAIL, "password1234!", "하마", true, true, true, null)))
+            assertThatThrownBy(() -> authService.signup(new SignupRequest(EMAIL, "password1234!", "하마", true, true, true, null), IP))
                     .extracting("errorCode").isEqualTo(AuthErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+
+        @Test
+        void 같은_IP_에서_정해진_횟수보다_많이_가입하면_429() {
+            given(userRepository.existsByEmail(EMAIL)).willReturn(true);
+            SignupRequest request = new SignupRequest(EMAIL, "password1234!", "하마", true, true, true, null);
+            for (int i = 0; i < LIMITS.signupPerIp(); i++) {
+                assertThatThrownBy(() -> authService.signup(request, IP))
+                        .extracting("errorCode").isEqualTo(AuthErrorCode.EMAIL_ALREADY_EXISTS);
+            }
+
+            assertThatThrownBy(() -> authService.signup(request, IP))
+                    .extracting("errorCode").isEqualTo(AuthErrorCode.TOO_MANY_REQUESTS);
         }
 
         @Test
@@ -169,6 +183,18 @@ class AuthServiceTest {
             }
 
             assertThat(authService.login(new LoginRequest(EMAIL, "password1234!"), IP)).isNotNull();
+        }
+
+        @Test
+        void 이메일을_바꿔도_같은_IP_는_정해진_횟수를_넘으면_잠긴다() {
+            for (int i = 0; i < LIMITS.loginPerIp(); i++) {
+                String email = "user" + i + "@hama.com";
+                assertThatThrownBy(() -> authService.login(new LoginRequest(email, "wrong-password"), IP))
+                        .extracting("errorCode").isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
+            }
+
+            assertThatThrownBy(() -> authService.login(new LoginRequest("other@hama.com", "wrong-password"), IP))
+                    .extracting("errorCode").isEqualTo(AuthErrorCode.TOO_MANY_PASSWORD_ATTEMPTS);
         }
     }
 
