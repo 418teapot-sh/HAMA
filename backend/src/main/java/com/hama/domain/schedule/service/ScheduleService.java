@@ -7,11 +7,14 @@ import com.hama.domain.schedule.entity.Schedule;
 import com.hama.domain.schedule.entity.ScheduleType;
 import com.hama.domain.schedule.exception.ScheduleErrorCode;
 import com.hama.domain.schedule.repository.ScheduleRepository;
+import com.hama.domain.schedule.repository.ScheduleCompletionRepository;
+import com.hama.domain.user.repository.UserRepository;
 import com.hama.global.exception.BusinessException;
 import com.hama.global.exception.GlobalErrorCode;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,10 +24,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class ScheduleService {
 
     private final ScheduleRepository schedules;
+    private final ScheduleCompletionRepository completions;
+    private final UserRepository users;
     private final Clock clock;
 
-    public ScheduleService(ScheduleRepository schedules, @Qualifier("be3Clock") Clock clock) {
+    public ScheduleService(ScheduleRepository schedules, ScheduleCompletionRepository completions,
+            UserRepository users, @Qualifier("be3Clock") Clock clock) {
         this.schedules = schedules;
+        this.completions = completions;
+        this.users = users;
         this.clock = clock;
     }
 
@@ -45,13 +53,22 @@ public class ScheduleService {
 
     @Transactional
     public ScheduleResponses.Detail update(Long userId, Long scheduleId, UpdateScheduleRequest request) {
+        users.findByIdForShare(userId).orElseThrow(() -> new BusinessException(ScheduleErrorCode.SCHEDULE_NOT_FOUND));
         Schedule schedule = ownedForUpdate(userId, scheduleId);
+        var previousStartDate = schedule.getStartAt().toLocalDate();
+        var previousEndDate = schedule.getEndAt().toLocalDate();
+        String previousRule = schedule.getRepeatRule();
         schedule.revise(request.getType() == null ? schedule.getType() : ScheduleType.valueOf(request.getType()),
                 request.getTitle() == null ? schedule.getTitle() : request.getTitle(),
                 request.getStartAt() == null ? schedule.getStartAt() : request.getStartAt(),
                 request.getEndAt() == null ? schedule.getEndAt() : request.getEndAt(),
                 request.getAllDay() == null ? schedule.isAllDay() : request.getAllDay(),
                 request.repeatRuleOr(schedule.getRepeatRule()), request.memoOr(schedule.getMemo()));
+        if (!previousStartDate.equals(schedule.getStartAt().toLocalDate())
+                || !previousEndDate.equals(schedule.getEndAt().toLocalDate())
+                || !Objects.equals(previousRule, schedule.getRepeatRule())) {
+            completions.deleteAllForSchedule(scheduleId);
+        }
         return ScheduleResponses.Detail.from(schedule);
     }
 
