@@ -114,7 +114,7 @@ class CreditDeductionIntegrationTest extends GoalAiTestSupport {
     }
 
     @Test
-    void replan_은_빈_시간이_없어_날짜만_옮겨도_1회_쓴다() throws Exception {
+    void replan_은_빈_시간이_없으면_원본을_보존하고_차감하지_않는다() throws Exception {
         User user = user();
         long goalId = planningGoal(user);
         long planA = generatePlans(user, goalId).at("/plans/0/planId").asLong();
@@ -129,9 +129,11 @@ class CreditDeductionIntegrationTest extends GoalAiTestSupport {
 
         JsonNode data = call(post("/api/v1/goals/ai/replan"), user, Map.of("goalId", goalId), 200).get("data");
 
-        assertThat(data.get("movedCount").asInt()).isPositive();
+        assertThat(data.get("movedCount").asInt()).isZero();
         assertThat(data.get("unplacedCount").asInt()).isPositive();
-        assertThat(credits(user)).isZero();
+        assertThat(credits(user)).isEqualTo(1);
+        assertThat(String.valueOf(jdbc.queryForObject("select todo_date from todo where todo_id = ?", Object.class, todoId)))
+                .isEqualTo("2026-09-30");
     }
 
     @Test

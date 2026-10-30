@@ -25,11 +25,15 @@ public final class PlanResponses {
             boolean selected) {
 
         public static PlanView of(GoalPlan plan, PlanDetail detail) {
+            return of(plan, detail, plan.getTotalTodos(), plan.getAvgDailyMinutes());
+        }
+
+        public static PlanView of(GoalPlan plan, PlanDetail detail, int totalTodos, int avgDailyMinutes) {
             return new PlanView(plan.getId(), plan.getVariant(), plan.getTitle(), plan.getSummary(),
                     detail.tasks().stream()
                             .map(t -> new TaskView(t.content(), t.timesPerWeek(), t.minutes()))
                             .toList(),
-                    new Stats(plan.getTotalTodos(), plan.getAvgDailyMinutes()),
+                    new Stats(totalTodos, avgDailyMinutes),
                     plan.isSelected());
         }
     }

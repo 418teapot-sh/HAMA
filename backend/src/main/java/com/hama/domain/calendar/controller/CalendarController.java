@@ -37,8 +37,8 @@ public class CalendarController {
     private final AiTodoPostponeService postpone;
 
     @Operation(summary = "그날 AI 투두 미루기", description = "해당 KST 날짜의 본인 PENDING AI 투두만 이동합니다. "
-            + "본문/strategy 생략 시 NEXT_FREE_SLOT, NEXT_DAY는 첫 탐색일 안에서만 배치합니다. "
-            + "다음 날부터 찾되 밀린 투두는 오늘 현재시각 이후, 09~22시·10분 단위·기존 소요시간(무시간 30분). "
+            + "본문/strategy 생략 시 NEXT_FREE_SLOT, NEXT_DAY는 원래 날짜의 바로 다음 날 안에서만 배치하며 그날이 이미 지났으면 실패합니다. "
+            + "NEXT_FREE_SLOT은 다음 날부터 찾되 밀린 투두는 오늘 현재시각 이후, 09~22시·10분 단위·기존 소요시간(무시간 30분). 목표별 고정요일은 제외합니다. "
             + "최대 366일과 큰 목표 종료일 중 빠른 날까지 찾습니다. 성공만 횟수를 증가시키며 실패 원본은 유지합니다. "
             + "moved.fromDate는 원래 날짜, from은 원래 시작일시(무시간이면 null), to는 이동한 시작일시입니다. "
             + "unplaced.reason은 TODO_POSTPONE_NO_SLOT 또는 TODO_GOAL_NOT_IN_PROGRESS. 고정·개인 일정은 변경하지 않습니다.")

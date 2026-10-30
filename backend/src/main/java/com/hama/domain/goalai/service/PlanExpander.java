@@ -40,7 +40,7 @@ final class PlanExpander {
 
     /**
      * @param busyDays 고정 일정이 있는 요일. 그 요일에는 투두를 두지 않고, 횟수도 남은 날 수를 넘지 않습니다.
-     *                 한 주의 모든 날이 바쁘면 그 주만 예외로 모든 날을 씁니다(투두가 아예 사라지지 않도록).
+     *                 가능한 날이 없는 주는 건너뜁니다.
      */
     static Expanded expand(AiPlan plan, String defaultTitle, LocalDate goalStart, LocalDate planStart,
             LocalDate planEnd, Set<DayOfWeek> busyDays) {
@@ -67,6 +67,7 @@ final class PlanExpander {
             int weekLength = (int) ChronoUnit.DAYS.between(weekStart, weekEnd) + 1;
             List<LocalDate> free = freeDays(weekStart, weekLength, busyDays);
             int length = free.size();
+            if (length == 0) continue;
             for (int t = 0; t < templates.size(); t++) {
                 PlanDetail.TaskTemplate task = templates.get(t);
                 // 7일보다 짧은 주(목표 끝)는 길이에 비례해 횟수를 줄입니다.
@@ -77,9 +78,6 @@ final class PlanExpander {
                     todos.add(new PlanDetail.TodoPlan(task.content(), free.get(day), task.minutes()));
                 }
             }
-        }
-        if (todos.isEmpty()) {
-            return null;
         }
         todos.sort(Comparator.comparing(PlanDetail.TodoPlan::date));
 
@@ -98,8 +96,21 @@ final class PlanExpander {
         for (int i = 0; i < weekLength; i++) {
             all.add(weekStart.plusDays(i));
         }
-        List<LocalDate> free = all.stream().filter(date -> !busyDays.contains(date.getDayOfWeek())).toList();
-        return free.isEmpty() ? all : free;
+        return all.stream().filter(date -> !busyDays.contains(date.getDayOfWeek())).toList();
+    }
+
+    static Expanded normalize(PlanDetail detail, String title, String summary, Set<DayOfWeek> busyDays) {
+        List<AiTask> tasks = detail.tasks().stream()
+                .map(t -> new AiTask(t.content(), t.timesPerWeek(), t.minutes())).toList();
+        return expand(new AiPlan(null, title, summary, tasks), title, detail.goalStartDate(),
+                detail.planStartDate(), detail.goalEndDate(), busyDays);
+    }
+
+    static boolean hasAvailableDay(LocalDate from, LocalDate to, Set<DayOfWeek> busyDays) {
+        for (LocalDate day = from; !day.isAfter(to) && day.isBefore(from.plusDays(7)); day = day.plusDays(1)) {
+            if (!busyDays.contains(day.getDayOfWeek())) return true;
+        }
+        return false;
     }
 
     private static String text(String value, int max, String fallback) {
