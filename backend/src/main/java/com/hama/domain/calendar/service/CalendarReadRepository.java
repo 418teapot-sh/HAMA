@@ -22,19 +22,20 @@ public class CalendarReadRepository {
     private final NamedParameterJdbcTemplate jdbc;
 
     public record ScheduleCandidate(long id, CalendarType type, String title,
-            ScheduleRecurrence.Source source, String memo) {
+            ScheduleRecurrence.Source source, String memo, String calendarUid) {
         public CalendarEvent event() {
-            return new CalendarEvent(type, id, title, source.startAt(), source.endAt(), source.allDay(), source.repeatRule(), memo);
+            return new CalendarEvent(type, id, title, source.startAt(), source.endAt(), source.allDay(), source.repeatRule(), memo,
+                    calendarUid);
         }
     }
 
     public record TaskCandidate(long id, String title, LocalDate date, LocalTime startTime,
-            LocalTime endTime, TodoStatus status, String memo, CalendarType type, Long goalId) {
+            LocalTime endTime, TodoStatus status, String memo, CalendarType type, Long goalId, String calendarUid) {
         public CalendarEvent event() {
             boolean allDay = startTime == null;
             LocalDateTime start = allDay ? date.atStartOfDay() : date.atTime(startTime);
             LocalDateTime end = allDay ? start.plusDays(1) : date.atTime(endTime);
-            return new CalendarEvent(type, id, title, start, end, allDay, null, memo);
+            return new CalendarEvent(type, id, title, start, end, allDay, null, memo, calendarUid);
         }
     }
 
@@ -45,7 +46,7 @@ public class CalendarReadRepository {
             return List.of();
         }
         return jdbc.query("""
-                SELECT schedule_id, type, title, start_at, end_at, all_day, repeat_rule, memo
+                SELECT schedule_id, type, title, start_at, end_at, all_day, repeat_rule, memo, calendar_uid
                 FROM schedule WHERE user_id = :user AND deleted_at IS NULL AND type IN (:types)
                   AND schedule_id > :cursor AND start_at <= :last
                   AND (end_at > :first OR repeat_rule IS NOT NULL)
@@ -58,7 +59,8 @@ public class CalendarReadRepository {
                         "epoch", query.from().atStartOfDay(Be3Time.KST).toEpochSecond()),
                 (rs, row) -> new ScheduleCandidate(rs.getLong("schedule_id"), CalendarType.valueOf(rs.getString("type")),
                         rs.getString("title"), new ScheduleRecurrence.Source(rs.getObject("start_at", java.time.LocalDateTime.class),
-                        rs.getObject("end_at", java.time.LocalDateTime.class), rs.getBoolean("all_day"), rs.getString("repeat_rule")), rs.getString("memo")));
+                        rs.getObject("end_at", java.time.LocalDateTime.class), rs.getBoolean("all_day"), rs.getString("repeat_rule")),
+                        rs.getString("memo"), rs.getString("calendar_uid")));
     }
 
     public List<TaskCandidate> tasks(long userId, CalendarQuery query, long afterId) {
@@ -68,7 +70,7 @@ public class CalendarReadRepository {
         if (categories.isEmpty()) return List.of();
         return jdbc.query("""
                 SELECT t.todo_id, t.content, t.todo_date, t.start_time, t.end_time, t.status, t.status_note,
-                       t.category, t.goal_id
+                       t.category, t.goal_id, t.calendar_uid
                 FROM todo t WHERE t.user_id = :user AND t.deleted_at IS NULL AND t.category IN (:categories)
                   AND t.todo_id > :cursor AND t.todo_date BETWEEN :first AND :last
                   AND (t.category IN ('TASK', 'OTHER') OR EXISTS
@@ -79,6 +81,6 @@ public class CalendarReadRepository {
                         rs.getObject("start_time", LocalTime.class), rs.getObject("end_time", LocalTime.class),
                         TodoStatus.valueOf(rs.getString("status")), rs.getString("status_note"),
                         "AI_GOAL_TASK".equals(rs.getString("category")) ? CalendarType.AI_GOAL : CalendarType.valueOf(rs.getString("category")),
-                        rs.getObject("goal_id", Long.class)));
+                        rs.getObject("goal_id", Long.class), rs.getString("calendar_uid")));
     }
 }

@@ -94,7 +94,7 @@ class CalendarApiIntegrationTest {
         assertThat(items.size()).isOne();
         assertThat(items.get(0).get("refId").asLong()).isEqualTo(fixed);
         String file = export(token, "2026-10-05", "2026-10-05", "FIXED");
-        assertThat(file).contains("UID:hama-FIXED-" + fixed + "@hama.app", "SUMMARY:포함");
+        assertThat(file).contains("UID:" + jdbc.queryForObject("select calendar_uid from schedule where schedule_id=?", String.class, fixed), "SUMMARY:포함");
         assertThat(file).doesNotContain("타인", "다른 타입", "이전 경계", "다음 경계", "삭제");
         assertThat(query(token, "2026-10-05", "2026-10-05", "TASK").isEmpty()).isTrue();
         assertThat(query(token, "2026-10-05", "2026-10-05", "AI_GOAL").isEmpty()).isTrue();
@@ -110,7 +110,7 @@ class CalendarApiIntegrationTest {
         assertThat(items.valueStream().map(item -> item.get("date").asString()).toList())
                 .containsExactly("2026-10-19", "2026-10-21", "2026-11-02");
         String file = export(token, "2026-10-19", "2026-11-03", null);
-        assertThat(file).contains("UID:hama-FIXED-" + id + "@hama.app", "DTSTART;TZID=Asia/Seoul:20261005T090000", "RRULE:" + rule);
+        assertThat(file).contains("UID:" + jdbc.queryForObject("select calendar_uid from schedule where schedule_id=?", String.class, id), "DTSTART;TZID=Asia/Seoul:20261005T090000", "RRULE:" + rule);
         assertThat(file.split("BEGIN:VEVENT", -1)).hasSize(2);
         assertThat(file).doesNotContain("종료된 반복");
     }

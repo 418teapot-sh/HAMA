@@ -16,6 +16,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Objects;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -33,6 +35,9 @@ public class Todo extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "todo_id")
     private Long id;
+
+    @Column(name = "calendar_uid", nullable = false, updatable = false, length = 80)
+    private String calendarUid;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
@@ -83,12 +88,29 @@ public class Todo extends BaseTimeEntity {
     /** 목표에 연결되지 않은 수동 TASK를 생성합니다. */
     public static Todo createTask(Long userId, String content, LocalDate todoDate,
             LocalTime startTime, LocalTime endTime) {
+        return createTask(userId, content, todoDate, startTime, endTime, "hama-" + UUID.randomUUID() + "@hama.app");
+    }
+
+    /** 개인 일정에서 전환할 때 캘린더의 동일 항목 식별자를 이어받습니다. */
+    public static Todo createFromCalendarConversion(Long userId, TodoCategory category, String content,
+            LocalDate todoDate, LocalTime startTime, LocalTime endTime, String calendarUid) {
+        if (category != TodoCategory.TASK && category != TodoCategory.OTHER) {
+            throw new BusinessException(TodoErrorCode.TODO_CATEGORY_CHANGE_NOT_ALLOWED);
+        }
+        Todo todo = createTask(userId, content, todoDate, startTime, endTime, Objects.requireNonNull(calendarUid));
+        todo.category = category;
+        return todo;
+    }
+
+    private static Todo createTask(Long userId, String content, LocalDate todoDate,
+            LocalTime startTime, LocalTime endTime, String calendarUid) {
         if (userId == null || !isStorableDate(todoDate)) {
             throw new BusinessException(TodoErrorCode.TODO_INVALID_INPUT);
         }
         validateContent(content);
         validateTimes(startTime, endTime);
         Todo todo = new Todo();
+        todo.calendarUid = calendarUid;
         todo.userId = userId;
         todo.category = TodoCategory.TASK;
         todo.origin = TodoOrigin.MANUAL;

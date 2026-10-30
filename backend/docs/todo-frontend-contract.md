@@ -102,7 +102,10 @@ TASK/OTHER는 목표 ID를 받을 수 없습니다. OTHER는 일반 할일과 �
 ## 캘린더·파일·연동 후 확인
 
 - `GET /api/v1/calendar` 및 `/api/v1/calendar/export`의 types에 OTHER를 추가합니다. 생략하면 기존 종류와 OTHER 전체입니다. 할일 TASK 필터에 OTHER를 자동 합치지 않습니다.
-- 시간 없는 OTHER는 종일 표시 및 하루 DATE 항목으로 ICS 내보내기 합니다. UID는 `hama-OTHER-{todoId}@hama.app`입니다.
+- 시간 없는 OTHER는 종일 표시 및 하루 DATE 항목으로 ICS 내보내기 합니다.
+- ICS UID는 저장된 불변 식별자를 사용합니다. V29 이전 행은 마이그레이션 시점의 `hama-{type}-{refId}@hama.app`을 보존하고, 신규 항목은 `hama-{UUID}@hama.app`을 발급합니다. TASK↔OTHER, FIXED↔PERSONAL 수정 및 개인 일정↔투두 전환에서 분류/ID가 달라져도 UID는 유지됩니다. 이전에 다른 UID로 가져온 중복은 외부 캘린더에서 수동 정리합니다.
 - 시간이 있는 OTHER는 기존 시간이 있는 TASK처럼 AI 빈 시간 탐색에서 피합니다. 시간이 없는 OTHER는 하루 전체를 점유하지 않습니다.
 - 366일·10,000개 상한, JSON 오류/ICS 파일 응답, 일정 반복·소유권은 유지합니다.
 - 배포 후 OpenAPI 타입 재생성, OTHER 목록/뱃지 매핑, aiGenerated 판별, 완료 토글, 분류 전환의 날짜·시각 입력 및 새ID 처리, 400/403/404/409 안내를 연결합니다.
+
+- 저장된 일정의 반복 규칙을 해석할 수 없으면 캘린더 조회·ICS와 AI 시간 계산에서 해당 일정을 제외하고 서버 로그에 일정 ID와 오류 종류를 남깁니다. 해당 시간이 AI 배치에서 빈 시간으로 취급될 수 있으므로 운영 시 누락된 일정을 확인해야 합니다. 원본 일정은 변경하지 않습니다.

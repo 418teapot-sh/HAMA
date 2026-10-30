@@ -39,7 +39,7 @@ class CalendarPlanIntegrationTest extends GoalAiTestSupport {
                 .header("Authorization", "Bearer " + user.token()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         assertThat(file.split("BEGIN:VEVENT", -1)).hasSize(125);
-        assertThat(file).contains("UID:hama-AI_GOAL-");
+        assertThat(file).contains("UID:hama-");
         long todo = jdbc.queryForObject("select min(todo_id) from todo where goal_id=? and todo_date='2026-10-01'",Long.class,goal);
         var postponed = call(patch("/api/v1/todos/" + todo + "/postpone"),user,null,200).get("data");
         assertThat(postponed.get("todoDate").asString()).isEqualTo("2026-10-02");

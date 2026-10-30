@@ -59,8 +59,8 @@ public class CategoryConversionService {
         }
         if (request.startAt() == null || request.endAt() == null || request.todoDate() != null
                 || request.startTime() != null || request.endTime() != null) throw invalid();
-        Schedule schedule = Schedule.create(userId, ScheduleType.PERSONAL, todo.getContent(),
-                request.startAt(), request.endAt(), false, null, todo.getStatusNote());
+        Schedule schedule = Schedule.createFromCalendarConversion(userId, todo.getContent(),
+                request.startAt(), request.endAt(), todo.getStatusNote(), todo.getCalendarUid());
         schedules.save(schedule);
         todo.delete(now());
         return new CategoryConversionResponse(source, todo.getId(), target, schedule.getId());
@@ -74,9 +74,8 @@ public class CategoryConversionService {
         if (schedule.getType() != ScheduleType.PERSONAL || schedule.getRepeatRule() != null) throw notAllowed();
         if (target == CalendarType.PERSONAL || request.todoDate() == null
                 || request.startAt() != null || request.endAt() != null) throw invalid();
-        Todo todo = target == CalendarType.TASK
-                ? Todo.createTask(userId, schedule.getTitle(), request.todoDate(), request.startTime(), request.endTime())
-                : Todo.createOther(userId, schedule.getTitle(), request.todoDate(), request.startTime(), request.endTime());
+        Todo todo = Todo.createFromCalendarConversion(userId, TodoCategory.valueOf(target.name()),
+                schedule.getTitle(), request.todoDate(), request.startTime(), request.endTime(), schedule.getCalendarUid());
         todo.changeStatusNote(schedule.getMemo());
         todos.save(todo);
         schedule.delete(now());
