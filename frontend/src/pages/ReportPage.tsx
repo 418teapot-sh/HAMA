@@ -13,7 +13,6 @@ import {
   getGoalTasks,
   getProgressSummary,
   replanGoal,
-  updateGoal,
   type GoalSummary,
   type GoalTask,
 } from '../features/goal/api'
@@ -92,12 +91,6 @@ export default function ReportPage() {
   const [failed, setFailed] = useState(false)
   const [moreGoal, setMoreGoal] = useState<GoalSummary | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<GoalSummary | null>(null)
-  const [editTarget, setEditTarget] = useState<GoalSummary | null>(null)
-  const [editTitle, setEditTitle] = useState('')
-  const [editStart, setEditStart] = useState('')
-  const [editEnd, setEditEnd] = useState('')
-  const [savingGoal, setSavingGoal] = useState(false)
-  const [editError, setEditError] = useState('')
   const [replanTarget, setReplanTarget] = useState<GoalSummary | null>(null)
   const [replanningId, setReplanningId] = useState<number | null>(null)
   const [creditShortage, setCreditShortage] = useState(false)
@@ -176,34 +169,12 @@ export default function ReportPage() {
       await deleteGoal(goal.goalId)
       toast.show('목표를 삭제했어요.')
       reload(tab)
-    } catch {
-      toast.show('목표를 삭제하지 못했어요. 잠시 후 다시 시도해주세요.')
-    }
-  }
-
-  const handleEdit = async () => {
-    if (!editTarget || savingGoal) return
-    const title = editTitle.trim()
-    if (!title || title.length > 100) {
-      setEditError('목표 제목을 1~100자로 입력해주세요.')
-      return
-    }
-    if (!editStart || !editEnd || editStart > editEnd) {
-      setEditError('시작일과 종료일을 올바르게 선택해주세요.')
-      return
-    }
-    setSavingGoal(true)
-    setEditError('')
-    try {
-      const result = await updateGoal(editTarget.goalId, { title, startDate: editStart, endDate: editEnd })
-      setEditTarget(null)
-      await reload(tab)
-      const unplaced = result.periodAdjustment?.unplacedCount ?? 0
-      toast.show(unplaced > 0 ? `목표를 수정했어요. 옮기지 못한 투두 ${unplaced}개는 기존 날짜에 남아요.` : '목표를 수정했어요.')
     } catch (error) {
-      setEditError(getApiError(error)?.message ?? '목표를 수정하지 못했어요. 잠시 후 다시 시도해주세요.')
-    } finally {
-      setSavingGoal(false)
+      toast.show(
+        getApiError(error)?.code === 'GOAL_NOT_DELETABLE'
+          ? '진행 중인 목표는 삭제할 수 없어요.'
+          : '목표를 삭제하지 못했어요. 잠시 후 다시 시도해주세요.',
+      )
     }
   }
 
@@ -269,18 +240,9 @@ export default function ReportPage() {
         isPast={moreGoal?.status === 'PAST' || moreGoal?.status === 'COMPLETED'}
         onClose={() => setMoreGoal(null)}
         onEdit={() => {
-          if (!moreGoal) return
-          if (moreGoal.status !== 'IN_PROGRESS') {
-            setMoreGoal(null)
-            toast.show('종료된 목표는 수정할 수 없어요.')
-            return
-          }
-          setEditTarget(moreGoal)
-          setEditTitle(moreGoal.title)
-          setEditStart(moreGoal.startDate)
-          setEditEnd(moreGoal.endDate)
-          setEditError('')
+          // TODO: 목표 수정 화면 디자인이 정해지면 연결합니다 (PATCH /api/v1/goals/{goalId})
           setMoreGoal(null)
+          toast.show('목표 수정은 곧 열릴 예정이에요.')
         }}
         onDelete={() => {
           setDeleteTarget(moreGoal)
@@ -288,27 +250,6 @@ export default function ReportPage() {
         }}
         onRestart={() => navigate(paths.goalNew)}
       />
-
-      <Modal open={editTarget !== null} title="목표 수정" confirmText={savingGoal ? '저장 중' : '저장하기'}
-        onCancel={() => { if (!savingGoal) setEditTarget(null) }} onConfirm={() => void handleEdit()}>
-        <label className="flex flex-col gap-[8px] text-body-b8 text-black-black">
-          목표 제목
-          <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} maxLength={100}
-            disabled={savingGoal} className="w-full rounded-[8px] border border-black-gray20 px-[12px] py-[10px]" />
-        </label>
-        <label className="flex flex-col gap-[8px] text-body-b8 text-black-black">
-          시작일
-          <input type="date" value={editStart} onChange={(event) => setEditStart(event.target.value)}
-            disabled={savingGoal} className="w-full rounded-[8px] border border-black-gray20 px-[12px] py-[10px]" />
-        </label>
-        <label className="flex flex-col gap-[8px] text-body-b8 text-black-black">
-          종료일
-          <input type="date" value={editEnd} onChange={(event) => setEditEnd(event.target.value)}
-            disabled={savingGoal} className="w-full rounded-[8px] border border-black-gray20 px-[12px] py-[10px]" />
-        </label>
-        <p className="text-body-b8 text-black-gray60">기간 밖 미완료 AI 투두를 옮겨요. 완료 기록과 옮기지 못한 투두는 기존 날짜에 남아요.</p>
-        {editError && <p role="alert" className="text-body-b8 text-category-task">{editError}</p>}
-      </Modal>
 
       <Modal
         open={deleteTarget !== null}

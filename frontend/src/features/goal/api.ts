@@ -58,17 +58,10 @@ export interface GoalDetail {
   /** 'YYYY-MM-DD' */
   endDate: string
   status: GoalStatus
-  periodAdjustment?: { movedCount: number; unplacedCount: number } | null
 }
 
 export async function getGoal(goalId: number) {
   const res = await api.get<ApiResponse<GoalDetail>>(`/api/v1/goals/${goalId}`)
-  return res.data.data
-}
-
-/** 진행 중 목표 수정 */
-export async function updateGoal(goalId: number, changes: { title: string; startDate?: string; endDate?: string }) {
-  const res = await api.patch<ApiResponse<GoalDetail>>(`/api/v1/goals/${goalId}`, changes)
   return res.data.data
 }
 
@@ -93,7 +86,7 @@ export async function getGoals(status: 'IN_PROGRESS' | 'PAST' | 'COMPLETED', siz
   return res.data.data.content
 }
 
-/** 목표와 연결된 투두 삭제 */
+/** 목표 삭제. 진행 중인 목표는 409(GOAL_NOT_DELETABLE) */
 export async function deleteGoal(goalId: number) {
   await api.delete(`/api/v1/goals/${goalId}`)
 }
