@@ -197,11 +197,6 @@ public class Goal extends BaseTimeEntity {
         return status == GoalStatus.IN_PROGRESS && endDate != null && endDate.isBefore(today);
     }
 
-    /** 진행 중인 목표만 삭제할 수 없습니다. PLANNING 은 플랜을 아직 고르지 않은 목표라 지울 수 있어야 합니다. */
-    public boolean isDeletable(LocalDate today) {
-        return status == GoalStatus.PLANNING || isCompleted() || isPast(today);
-    }
-
     public boolean isOwnedBy(Long userId) {
         return this.userId.equals(userId);
     }
