@@ -50,7 +50,7 @@ public class CategoryConversionService {
                 .orElseThrow(() -> new BusinessException(TodoErrorCode.TODO_NOT_FOUND));
         requireOwner(todo.getUserId(), userId);
         todo.requireConvertible();
-        if (!todo.getCategory().name().equals(source.name())) throw notAllowed();
+        if (!todo.getCategory().name().equals(source.name())) throw invalid();
         if (target != CalendarType.PERSONAL) {
             if (request.startAt() != null || request.endAt() != null || request.todoDate() != null
                     || request.startTime() != null || request.endTime() != null) throw invalid();

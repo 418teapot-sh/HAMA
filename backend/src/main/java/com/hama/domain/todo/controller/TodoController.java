@@ -57,7 +57,7 @@ public class TodoController {
         return ApiResponse.success(todoService.list(authUser.userId(), date, category));
     }
 
-    @Operation(summary = "투두 수정", description = "완료된 투두와 AI 생성 투두의 수정은 409. TASK↔OTHER 변경 가능, 생략한 필드는 유지합니다.")
+    @Operation(summary = "투두 수정", description = "완료된 투두 수정과 AI 생성 투두의 내용·시간 수정은 409. 목표 투두 분류 변경은 409 TODO_CATEGORY_CHANGE_NOT_ALLOWED. TASK↔OTHER 변경 가능, 생략한 필드는 유지합니다.")
     @PatchMapping("/{todoId}")
     public ApiResponse<TodoResponses.Updated> update(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,

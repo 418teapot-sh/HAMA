@@ -52,8 +52,9 @@ class TodoFrontendContractIntegrationTest extends GoalAiTestSupport {
         long id = task(user, "TASK");
         call(patch("/api/v1/todos/" + id), user, Map.of("category", "OTHER", "startTime", "19:00"), 400);
         assertThat(daily(user).at("/pending/0/category").asString()).isEqualTo("TASK");
-        convert(user, Map.of("sourceType", "OTHER", "refId", id, "targetType", "PERSONAL",
-                "startAt", "2026-10-01T15:00:00", "endAt", "2026-10-01T16:00:00"), 409);
+        assertThat(convert(user, Map.of("sourceType", "OTHER", "refId", id, "targetType", "PERSONAL",
+                "startAt", "2026-10-01T15:00:00", "endAt", "2026-10-01T16:00:00"), 400)
+                .at("/error/code").asString()).isEqualTo("CALENDAR_CONVERSION_INVALID");
         convert(user, Map.of("sourceType", "TASK", "refId", id, "targetType", "PERSONAL",
                 "startAt", "2026-10-01T16:00:00", "endAt", "2026-10-01T15:00:00"), 400);
         assertThat(todos.findById(id).orElseThrow().getDeletedAt()).isNull();
@@ -157,6 +158,8 @@ class TodoFrontendContractIntegrationTest extends GoalAiTestSupport {
         assertThat(call(patch("/api/v1/todos/" + id), other, Map.of("content", "수정"), 403).at("/error/code").asString()).isEqualTo("FORBIDDEN");
         assertThat(call(patch("/api/v1/todos/" + id), user, Map.of("content", "수정"), 409).at("/error/code").asString())
                 .isEqualTo("TODO_AI_EDIT_NOT_ALLOWED");
+        assertThat(call(patch("/api/v1/todos/" + id), user, Map.of("category", "TASK"), 409).at("/error/code").asString())
+                .isEqualTo("TODO_CATEGORY_CHANGE_NOT_ALLOWED");
         assertThat(call(delete("/api/v1/todos/" + id), user, null, 409).at("/error/code").asString()).isEqualTo("TODO_AI_EDIT_NOT_ALLOWED");
         call(patch("/api/v1/todos/" + id + "/complete"), user, null, 200);
         call(patch("/api/v1/todos/state/" + id), user, Map.of("statusNote", "오늘 상태"), 200);
@@ -256,6 +259,9 @@ class TodoFrontendContractIntegrationTest extends GoalAiTestSupport {
     void 실패한_전환은_원본을_유지하고_완료_고정_반복_목표투두를_보호한다() throws Exception {
         User user = user();
         long id = task(user, "TASK");
+        assertThat(convert(user, Map.of("sourceType", "OTHER", "refId", id, "targetType", "TASK"), 400)
+                .at("/error/code").asString()).isEqualTo("CALENDAR_CONVERSION_INVALID");
+        assertThat(todos.findById(id).orElseThrow().getCategory().name()).isEqualTo("TASK");
         call(patch("/api/v1/todos/" + id), user, Map.of("content", "가".repeat(101)), 200);
         convert(user, Map.of("sourceType", "TASK", "refId", id, "targetType", "PERSONAL",
                 "startAt", "2026-10-01T15:00:00", "endAt", "2026-10-01T16:00:00"), 400);

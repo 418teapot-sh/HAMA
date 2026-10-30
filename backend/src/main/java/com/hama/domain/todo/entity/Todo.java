@@ -127,10 +127,10 @@ public class Todo extends BaseTimeEntity {
 
     public void changeCategory(TodoCategory category) {
         requirePending();
-        requireUserEditable();
         if (this.category == TodoCategory.AI_GOAL_TASK || category == null || category == TodoCategory.AI_GOAL_TASK) {
             throw new BusinessException(TodoErrorCode.TODO_CATEGORY_CHANGE_NOT_ALLOWED);
         }
+        requireUserEditable();
         this.category = category;
     }
 

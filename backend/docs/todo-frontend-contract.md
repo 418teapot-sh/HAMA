@@ -59,7 +59,7 @@ TASK/OTHER는 목표 ID를 받을 수 없습니다. OTHER는 일반 할일과 �
 
 ### 할일 ↔ 기타
 
-`PATCH /api/v1/todos/{todoId}`에 `{"category":"OTHER"}` 또는 `{"category":"TASK"}`를 보냅니다. 내용·시간 PATCH와 함께 보낼 수 있고 ID·날짜·메모·미룬 횟수는 유지합니다. 응답 data에 확정된 category가 추가됩니다. category 생략은 유지, null/미지원 값400. 목표 투두의 분류 변경은409이며 목표 연결을 분리하지 않습니다.
+`PATCH /api/v1/todos/{todoId}`에 `{"category":"OTHER"}` 또는 `{"category":"TASK"}`를 보냅니다. 내용·시간 PATCH와 함께 보낼 수 있고 ID·날짜·메모·미룬 횟수는 유지합니다. 응답 data에 확정된 category가 추가됩니다. category 생략은 유지, null/미지원 값400. 목표 투두의 분류 변경은 `409 TODO_CATEGORY_CHANGE_NOT_ALLOWED`이며 목표 연결을 분리하지 않습니다. AI 생성 투두의 내용·시간 수정은 `TODO_AI_EDIT_NOT_ALLOWED`입니다.
 
 ### 할일·기타 ↔ 개인 일정
 
@@ -96,6 +96,7 @@ TASK/OTHER는 목표 ID를 받을 수 없습니다. OTHER는 일반 할일과 �
 - 성공200: `data={sourceType,sourceRefId,type,refId}`. 후속 요청은 새 type/refId의 API를 사용하고 목록·캘린더를 재조회합니다.
 - TASK↔OTHER는 이 전환 API로도 가능하며 이 경우 ID를 유지합니다. 날짜/시간 변경은 기존 PATCH/미루기 API를 사용합니다.
 - 완료 투두는 완료 취소 후 전환합니다. 목표 연결 투두·FIXED·반복 일정 전환은 이번 범위에서 제외하며409로 보호합니다. 반복 일정 전체 수정/삭제는 기존 일정 API에서 가능합니다.
+- 미완료 TASK/OTHER 원본의 실제 분류와 sourceType이 다르면 `400 CALENDAR_CONVERSION_INVALID`입니다. 지원하지 않는 sourceType도 400이며, PERSONAL로 지정한 실제 고정/반복 일정은 409입니다. type과 refId를 함께 확인하세요.
 - 대상 검증 실패 시 원본은 그대로 유지합니다. 동시 전환은 원본 잠금으로 하나만 성공합니다. 교차 전환의 원본 재요청은404입니다. 통신 실패만 보고 POST를 자동 재전송하지 말고 캘린더를 재조회해 결과를 확인합니다.
 
 ## 캘린더·파일·연동 후 확인
