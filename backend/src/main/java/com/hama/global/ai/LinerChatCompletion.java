@@ -19,18 +19,12 @@ final class LinerChatCompletion {
             String model,
             List<Message> messages,
             @JsonProperty("max_completion_tokens") Integer maxCompletionTokens,
-            @JsonProperty("reasoning_effort") String reasoningEffort,
-            @JsonProperty("response_format") ResponseFormat responseFormat
+            @JsonProperty("reasoning_effort") String reasoningEffort
     ) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record Message(String role, String content) {
-    }
-
-    record ResponseFormat(String type) {
-
-        static final ResponseFormat JSON_OBJECT = new ResponseFormat("json_object");
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

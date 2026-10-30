@@ -4,7 +4,6 @@ import com.hama.global.ai.LinerChatCompletion.Choice;
 import com.hama.global.ai.LinerChatCompletion.Message;
 import com.hama.global.ai.LinerChatCompletion.Request;
 import com.hama.global.ai.LinerChatCompletion.Response;
-import com.hama.global.ai.LinerChatCompletion.ResponseFormat;
 import com.hama.global.ai.LinerChatCompletion.Usage;
 import com.hama.global.exception.BusinessException;
 import java.time.Duration;
@@ -57,13 +56,28 @@ public class LinerAiClient implements AiClient {
     @Override
     public <T> T chatForJson(AiRequest request, Class<T> type) {
         String content = call(request, true);
+        String object = extractJsonObject(content);
+        if (object == null) {
+            throw new BusinessException(AiErrorCode.AI_UPSTREAM_ERROR, new IllegalStateException(
+                    "[%s] AI 응답에 JSON 객체가 없습니다: %s".formatted(request.purpose(), abbreviate(content))));
+        }
         try {
-            return jsonMapper.readValue(content, type);
+            return jsonMapper.readValue(object, type);
         } catch (JacksonException e) {
             throw new BusinessException(AiErrorCode.AI_UPSTREAM_ERROR, new IllegalStateException(
                     "[%s] AI 응답을 %s 로 파싱하지 못했습니다: %s"
                             .formatted(request.purpose(), type.getSimpleName(), abbreviate(content)), e));
         }
+    }
+
+    /**
+     * JSON 모드를 쓰지 않아서 모델이 ```json 울타리나 앞뒤 설명을 붙일 수 있습니다.
+     * 첫 '{' 부터 마지막 '}' 까지만 남기고, 둘 중 하나라도 없으면 null 입니다.
+     */
+    static String extractJsonObject(String content) {
+        int start = content.indexOf('{');
+        int end = content.lastIndexOf('}');
+        return start < 0 || end < start ? null : content.substring(start, end + 1);
     }
 
     private String call(AiRequest request, boolean json) {
@@ -97,7 +111,9 @@ public class LinerAiClient implements AiClient {
         List<Message> messages = new ArrayList<>();
 
         String systemPrompt = request.systemPrompt();
-        // json_object 모드는 메시지에 "JSON" 이라는 단어가 없으면 라이너가 400 으로 거절합니다.
+        // JSON 모드(response_format: json_object)는 쓰지 않습니다. 라이너가 일부 입력(예: 고정 일정 "수학 실모 1회")을
+        // 이유 없이 400 invalid_request 로 거절하고, 같은 입력은 다시 보내도 똑같이 거절합니다(#241).
+        // 그래서 JSON 형식은 프롬프트 지시로만 받고, 응답에서 JSON 객체를 잘라 파싱합니다.
         if (json && (systemPrompt == null || !systemPrompt.contains("JSON"))) {
             systemPrompt = systemPrompt == null ? JSON_INSTRUCTION : systemPrompt + "\n" + JSON_INSTRUCTION;
         }
@@ -116,8 +132,7 @@ public class LinerAiClient implements AiClient {
                 ? properties.reasoningEffort()
                 : request.reasoningEffort();
 
-        return new Request(properties.model(), messages, maxTokens, reasoningEffort,
-                json ? ResponseFormat.JSON_OBJECT : null);
+        return new Request(properties.model(), messages, maxTokens, reasoningEffort);
     }
 
     /** 최근 N개만 보내되, 잘릴 때도 대화의 출발점인 첫 메시지는 남깁니다. */
