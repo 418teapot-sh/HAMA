@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import icBack from '../assets/icons/ic_back.svg'
 import IconAlert from '../components/IconAlert'
@@ -51,6 +51,11 @@ export default function ChargePage() {
     const preview = import.meta.env.DEV ? searchParams.get('preview') : null
     return preview === 'success' || preview === 'fail' ? preview : null
   })
+
+  // 들어올 때 남은 크레딧을 새로 불러옵니다. 옛 숫자를 기준으로 결제 뒤 충전 확인을 하면 틀린 숫자가 보입니다.
+  useEffect(() => {
+    void loadMe()
+  }, [])
 
   /** 들어온 화면 (크레딧 부족 팝업 · 마이페이지 등이 state.from 으로 넘김). 없으면 뒤로, 그것도 없으면 홈 */
   function goBack() {

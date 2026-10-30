@@ -3,14 +3,31 @@ import { getApiError } from '../api/client'
 import Calendar, { type CalendarMark } from '../components/Calendar'
 import Toast from '../components/Toast'
 import { getMonthCalendar, toCalendarMarks } from '../features/calendar/api'
+import { getGoals, type GoalSummary } from '../features/goal/api'
+import { AiStateInput, AiStatePromptModal, AiStateSheet, GoalPickSheet } from '../features/todo/AiStateSheets'
 import CategoryBar, { CategoryPointer } from '../features/todo/CategoryBar'
 import MoveDateHeader from '../features/todo/MoveDateHeader'
 import TodoCard, { TodoEmpty } from '../features/todo/TodoCard'
-import TodoEditRow from '../features/todo/TodoEditRow'
-import TodoInput from '../features/todo/TodoInput'
+import TodoEditRow, { type TodoEditValue } from '../features/todo/TodoEditRow'
+import TodoInput, { type TodoInputValue } from '../features/todo/TodoInput'
 import TodoItem from '../features/todo/TodoItem'
 import TodoMoreSheet from '../features/todo/TodoMoreSheet'
-import { completeTodo, createTask, deleteTodo, getDailyTodos, moveTodo, updateTodoContent } from '../features/todo/api'
+import {
+  completeTodo,
+  convertCategory,
+  createGoalTodo,
+  createSchedule,
+  createTodo,
+  deleteSchedule,
+  deleteTodo,
+  getDailyTodos,
+  moveTodo,
+  toDateTime,
+  uncompleteTodo,
+  updateScheduleTitle,
+  updateStatusNote,
+  updateTodo,
+} from '../features/todo/api'
 import { getCategory, type TodoCategoryKey } from '../features/todo/categories'
 import type { TodoView } from '../features/todo/types'
 import { useToast } from '../hooks/useToast'
@@ -25,17 +42,29 @@ const TOAST_TOP = 415
 /** 서버가 문구를 주지 않았을 때(네트워크 오류 등) 보여줄 문구. 회원가입 화면과 같습니다. */
 const FALLBACK_ERROR = '잠시 후 다시 시도해 주세요'
 
-/** 캘린더에는 목록과 같은 종류만 표시합니다 (일반 할일 · AI 목표 투두). 일정은 아직 연동하지 않습니다. */
-const MARK_TYPES = new Set(['TASK', 'AI_GOAL'])
+/** 에러 코드별 안내 (서버 문구보다 화면에 맞는 문구가 필요한 것만) */
+const ERROR_MESSAGES: Record<string, string> = {
+  TODO_AI_EDIT_NOT_ALLOWED: 'AI 목표는 수정 및 삭제가 불가능합니다.',
+  TODO_ALREADY_COMPLETED: '완료한 투두는 체크를 풀고 수정해 주세요.',
+  TODO_NOT_COMPLETED: '이미 완료하지 않은 투두예요.',
+}
+
+function errorMessage(error: unknown) {
+  const apiError = getApiError(error)
+  if (!apiError) return FALLBACK_ERROR
+  return ERROR_MESSAGES[apiError.code] ?? apiError.message ?? FALLBACK_ERROR
+}
+
+/** 캘린더 뱃지: 할일 · 기타 · AI 목표 투두 · 일정 */
+const MARK_TYPES = new Set(['TASK', 'OTHER', 'AI_GOAL', 'FIXED', 'PERSONAL'])
+
+/** 화면 분류 → 백엔드 투두 종류 (할일 · 기타) */
+function toTodoCategory(key: TodoCategoryKey): 'TASK' | 'OTHER' {
+  return key === 'etc' ? 'OTHER' : 'TASK'
+}
 
 /**
- * 연동 전까지 추가할 수 없는 카테고리.
- * TODO: 일정 · 기타는 백엔드 투두에 없고, AI 는 목표를 고르는 화면이 없어 지금은 할일만 추가할 수 있습니다.
- */
-const ADDABLE: TodoCategoryKey[] = ['task']
-
-/**
- * 투두리스트 화면 (Figma UI > 투두리스트 - 기본)
+ * 투두리스트 화면 (Figma UI > 투두리스트 - 기본 · AI 목표)
  *
  * 구조 (Figma Frame 2085668192: 세로 가운데 / 패딩 위 20 · 좌우 20 / 간격 20)
  * - 월간 캘린더 카드 (공용 Calendar)
@@ -43,20 +72,15 @@ const ADDABLE: TodoCategoryKey[] = ['task']
  * - Frame 2085668215 (간격 12): [카테고리 바 + (고르면) 꼭지 + 입력창, 간격 8] [투두 카드]
  *   투두가 없는 날은 "아직 투두리스트가 없어요." 카드 (투두리스트_투두리스트없을때)
  *
+ * 추가: 할일 · 기타 (POST /todos), 일정 (POST /calendar/schedules, 시간 필요),
+ *       AI (목표 고르기 시트 → POST /todos AI_GOAL_TASK + goalId)
+ * 체크박스: 완료 ↔ 완료 취소. AI 목표 투두를 완료하면 "현재 상태를 입력할까요?" 팝업
  * … 버튼 → 더보기 시트 (투두리스트 더보기)
- *   - 수정하기 → 그 줄이 수정 줄로 바뀜 (투두리스트_수정)
- *   - 삭제하기 → 지우고 "삭제 되었습니다." 토스트 (투두리스트_삭제 알림)
+ *   - 수정하기 → 그 줄이 수정 줄로 (캐릭터로 할일 · 일정 · 기타 바꾸기, 투두리스트_수정)
+ *   - 삭제하기 → 지우고 "삭제 되었습니다." 토스트
  *   - 날짜 변경 → 날짜 이동 화면 (투두리스트_날짜 이동)
- *     위에 안내 말풍선 + [취소하기 | 이동하기], 카테고리 바 대신 "이동중인 투두리스트" 와 그 투두,
- *     그 날의 나머지 투두는 흐리게(30%). 캘린더에서 날짜를 고르면 노란 원으로 표시되고,
- *     지난 날짜는 고를 수 없음 (디자이너 답변). 이동하기 → 그 날짜로 옮기고 그 날짜를 보여 주며 "이동되었습니다." 토스트
- *
- * 백엔드 연동 (features/todo/api)
- * - 목록: GET /api/v1/todos?date= (미완료 먼저, 완료는 아래)
- * - 캘린더 뱃지: GET /api/v1/calendar 로 보이는 달의 할일 · AI 목표 투두
- * - 할일 추가 · 내용 수정 · 완료 · 날짜 변경 · 삭제 후에는 그 날 목록과 캘린더를 다시 불러옵니다.
- * - 실패하면 토스트에 백엔드 문구 (실패 안내 디자인이 없어 회원가입 화면과 같은 방식)
- * 아직 안 되는 것 (백엔드 · 디자인 확인 필요): 일정 · 기타 · AI 추가, 완료 취소, 카테고리 변경
+ *   완료한 투두는 삭제만, 일정은 수정 · 삭제만 (날짜 변경 없음)
+ * AI 가 만든 투두는 … 대신 sparkle → AI 목표 상태수정 시트 → 현재 상태 입력 (PATCH /todos/state/{id})
  */
 export default function TodoPage() {
   const [today] = useState(startOfToday)
@@ -64,12 +88,22 @@ export default function TodoPage() {
   /** 캘린더에 보이는 달 */
   const [month, setMonth] = useState({ year: today.getFullYear(), month: today.getMonth() + 1 })
   const [category, setCategory] = useState<TodoCategoryKey | null>(null)
+  /** AI 칸에서 고른 목표 */
+  const [goal, setGoal] = useState<GoalSummary | null>(null)
+  const [goalPicking, setGoalPicking] = useState<GoalSummary[] | null>(null)
   const [todos, setTodos] = useState<TodoView[]>([])
+  const [loaded, setLoaded] = useState(false)
   const [marks, setMarks] = useState<Record<string, CalendarMark[]>>({})
-  /** 더보기 시트를 연 투두 */
-  const [moreId, setMoreId] = useState<number | null>(null)
-  /** 수정 중인 투두 */
-  const [editId, setEditId] = useState<number | null>(null)
+  /** 더보기 시트를 연 투두 (key) */
+  const [moreKey, setMoreKey] = useState<string | null>(null)
+  /** sparkle 시트를 연 AI 투두 (key) */
+  const [sparkleKey, setSparkleKey] = useState<string | null>(null)
+  /** 완료 뒤 "현재 상태를 입력할까요?" 팝업을 띄울 투두 */
+  const [promptTodo, setPromptTodo] = useState<TodoView | null>(null)
+  /** 현재 상태를 입력 중인 투두 */
+  const [stateTodo, setStateTodo] = useState<TodoView | null>(null)
+  /** 수정 중인 투두 (key) */
+  const [editKey, setEditKey] = useState<string | null>(null)
   /** 날짜 이동 중인 투두와 고른 날짜 */
   const [moving, setMoving] = useState<{ todo: TodoView; target: Date | null } | null>(null)
   /** 요청 중에는 같은 동작을 또 보내지 않습니다 */
@@ -89,7 +123,10 @@ export default function TodoPage() {
         if (!ignore) setTodos(items)
       })
       .catch((error: unknown) => {
-        if (!ignore) showToast(getApiError(error)?.message ?? FALLBACK_ERROR)
+        if (!ignore) showToast(errorMessage(error))
+      })
+      .finally(() => {
+        if (!ignore) setLoaded(true)
       })
     return () => {
       ignore = true
@@ -110,7 +147,7 @@ export default function TodoPage() {
     }
   }, [month.year, month.month, reloadKey])
 
-  /** 요청 하나를 보내고, 성공하면 목록 · 캘린더를 다시 불러옵니다. 실패하면 백엔드 문구를 토스트로 */
+  /** 요청 하나를 보내고, 끝나면 목록 · 캘린더를 다시 불러옵니다. 실패하면 토스트 */
   async function run(request: () => Promise<unknown>, successMessage?: string) {
     if (busy) return false
     setBusy(true)
@@ -119,7 +156,7 @@ export default function TodoPage() {
       if (successMessage) showToast(successMessage)
       return true
     } catch (error) {
-      showToast(getApiError(error)?.message ?? FALLBACK_ERROR)
+      showToast(errorMessage(error))
       return false
     } finally {
       setBusy(false)
@@ -127,60 +164,132 @@ export default function TodoPage() {
     }
   }
 
+  const findTodo = (key: string | null) => todos.find((item) => item.key === key)
+
   function handleSelectDate(date: Date) {
     if (moving) {
       setMoving({ ...moving, target: date })
       return
     }
     setSelectedDate(date)
-    setEditId(null)
+    setEditKey(null)
+    setStateTodo(null)
   }
 
-  function handleSelectCategory(key: TodoCategoryKey | null) {
-    if (key && !ADDABLE.includes(key)) return
-    setCategory(key)
+  async function handleSelectCategory(key: TodoCategoryKey | null) {
+    if (key !== 'ai') {
+      setCategory(key)
+      setGoal(null)
+      return
+    }
+    // AI 칸: 진행 중인 목표를 골라야 추가할 수 있습니다 (Figma AI 목표 추가 시트)
+    try {
+      const goals = await getGoals('IN_PROGRESS')
+      setGoalPicking(goals.filter((item) => item.status === 'IN_PROGRESS'))
+    } catch (error) {
+      showToast(errorMessage(error))
+    }
   }
 
-  function handleAdd(content: string) {
-    if (category !== 'task') return
-    void run(() => createTask(content, selectedKey))
+  function handlePickGoal(picked: GoalSummary) {
+    setGoalPicking(null)
+    if (selectedKey < picked.startDate || selectedKey > picked.endDate) {
+      showToast('목표 기간 안의 날짜에만 추가할 수 있어요.')
+      return
+    }
+    setGoal(picked)
+    setCategory('ai')
   }
 
-  /**
-   * 체크박스: 완료.
-   * TODO: 완료 취소 API 가 없어 완료한 투두는 체크박스를 누를 수 없게 둡니다.
-   */
-  function handleComplete(id: number) {
-    void run(() => completeTodo(id))
+  function handleAdd({ content, startTime, endTime }: TodoInputValue) {
+    if (!category) return Promise.resolve(false)
+    if (category === 'ai') {
+      if (!goal) return Promise.resolve(false)
+      return run(() => createGoalTodo(goal.goalId, content, selectedKey))
+    }
+    if (category === 'schedule') {
+      return run(() => createSchedule(content, selectedKey, startTime!, endTime!))
+    }
+    return run(() => createTodo(toTodoCategory(category), content, selectedKey))
+  }
+
+  /** 체크박스: 완료 ↔ 완료 취소. AI 목표 투두를 완료하면 현재 상태 입력 팝업 */
+  async function handleToggle(todo: TodoView) {
+    if (todo.done) {
+      await run(() => uncompleteTodo(todo.id))
+      return
+    }
+    const ok = await run(() => completeTodo(todo.id))
+    if (ok && todo.category === 'ai') setPromptTodo(todo)
   }
 
   function handleEdit() {
-    setEditId(moreId)
-    setMoreId(null)
+    setEditKey(moreKey)
+    setMoreKey(null)
   }
 
-  /** TODO: 카테고리를 바꾸는 API 가 없어 내용만 저장합니다. */
-  async function handleSave(todo: TodoView, title: string) {
-    if (title === todo.title) {
-      setEditId(null)
+  /** 수정 저장: 내용 + 분류. 할일 ↔ 기타는 PATCH, 일정과 오가는 것은 전환 API */
+  async function handleSave(todo: TodoView, value: TodoEditValue) {
+    const titleChanged = value.title !== todo.title
+    const categoryChanged = value.category !== todo.category
+    if (!titleChanged && !categoryChanged) {
+      setEditKey(null)
       return
     }
-    if (await run(() => updateTodoContent(todo.id, title))) setEditId(null)
+
+    let request: () => Promise<unknown>
+    if (todo.kind === 'schedule') {
+      if (value.category === 'schedule') {
+        request = () => updateScheduleTitle(todo.id, value.title)
+      } else {
+        // 일정 → 할일 · 기타: 같은 날짜, 시간 없음
+        request = async () => {
+          const converted = await convertCategory({
+            sourceType: 'PERSONAL',
+            refId: todo.id,
+            targetType: toTodoCategory(value.category),
+            todoDate: todo.date,
+            startTime: null,
+            endTime: null,
+          })
+          if (titleChanged) await updateTodo(converted.refId, { content: value.title })
+        }
+      }
+    } else if (value.category === 'schedule') {
+      // 할일 · 기타 → 일정: 고른 시간으로
+      request = async () => {
+        const converted = await convertCategory({
+          sourceType: todo.apiCategory === 'OTHER' ? 'OTHER' : 'TASK',
+          refId: todo.id,
+          targetType: 'PERSONAL',
+          startAt: toDateTime(todo.date, value.startTime!),
+          endAt: toDateTime(todo.date, value.endTime!),
+        })
+        if (titleChanged) await updateScheduleTitle(converted.refId, value.title)
+      }
+    } else {
+      request = () =>
+        updateTodo(todo.id, {
+          ...(titleChanged ? { content: value.title } : {}),
+          ...(categoryChanged && todo.category !== 'ai' ? { category: toTodoCategory(value.category) } : {}),
+        })
+    }
+    if (await run(request)) setEditKey(null)
   }
 
   function handleDelete() {
-    if (moreId === null) return
-    const id = moreId
-    setMoreId(null)
-    void run(() => deleteTodo(id), '삭제 되었습니다.')
+    const todo = findTodo(moreKey)
+    setMoreKey(null)
+    if (!todo) return
+    void run(() => (todo.kind === 'schedule' ? deleteSchedule(todo.id) : deleteTodo(todo.id)), '삭제 되었습니다.')
   }
 
   function handleStartMove() {
-    const todo = todos.find((item) => item.id === moreId)
+    const todo = findTodo(moreKey)
     if (!todo) return
     setMoving({ todo, target: null })
-    setMoreId(null)
-    setEditId(null)
+    setMoreKey(null)
+    setEditKey(null)
     setCategory(null)
   }
 
@@ -190,6 +299,23 @@ export default function TodoPage() {
     if (await run(() => moveTodo(todo.id, toDateKey(target)), '이동되었습니다.')) {
       setSelectedDate(target)
       setMoving(null)
+    }
+  }
+
+  function startStateInput(todo: TodoView | undefined | null) {
+    setPromptTodo(null)
+    setSparkleKey(null)
+    if (!todo) return
+    setStateTodo(todo)
+    setEditKey(null)
+    setCategory(null)
+  }
+
+  async function handleSaveState(note: string) {
+    if (!stateTodo) return
+    const todo = stateTodo
+    if (await run(() => updateStatusNote(todo.id, note), note ? '현재 상태를 저장했어요.' : undefined)) {
+      setStateTodo(null)
     }
   }
 
@@ -203,13 +329,15 @@ export default function TodoPage() {
     return (date: Date) => date < today || toDateKey(date) <= from
   }, [moving, today])
 
+  const moreTodo = findTodo(moreKey)
+  /** 목록 위에 따로 보여 주는 투두 (날짜 이동 · 상태 입력 중) */
+  const focused = moving?.todo ?? stateTodo
+
   return (
     <main className="relative flex w-full flex-col items-center gap-[20px] px-[20px] pt-[20px]">
       <Toast message={toast.message} top={TOAST_TOP} />
 
-      {moving && (
-        <MoveDateHeader target={moving.target} onCancel={() => setMoving(null)} onMove={() => void handleMove()} />
-      )}
+      {moving && <MoveDateHeader target={moving.target} onCancel={() => setMoving(null)} onMove={() => void handleMove()} />}
 
       <Calendar
         selectedDate={selectedDate}
@@ -224,20 +352,30 @@ export default function TodoPage() {
         <h1 className="text-heading-h4 leading-[24px] text-black-black">{formatKoreanDate(selectedDate)}</h1>
       </div>
 
-      {moving ? (
+      {focused ? (
         <div className="flex w-full flex-col gap-[12px]">
           <div className="flex w-full flex-col gap-[8px]">
-            <h2 className="text-[18px] leading-[21px] font-semibold text-black-gray40">이동중인 투두리스트</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-[18px] leading-[21px] font-semibold text-black-gray40">
+                {moving ? '이동중인 투두리스트' : 'AI 목표 현재 상태 입력'}
+              </h2>
+              {stateTodo && (
+                <button type="button" className="text-body-b8 text-black-gray60" onClick={() => setStateTodo(null)}>
+                  취소
+                </button>
+              )}
+            </div>
             <TodoCard>
-              <TodoItem todo={moving.todo} />
+              <TodoItem todo={{ ...focused, statusNote: null }} />
             </TodoCard>
+            {stateTodo && <AiStateInput initial={stateTodo.statusNote ?? ''} busy={busy} onSubmit={(note) => void handleSaveState(note)} />}
           </div>
-          {todos.some((todo) => todo.id !== moving.todo.id) && (
+          {todos.some((todo) => todo.key !== focused.key) && (
             <TodoCard faded>
               {todos
-                .filter((todo) => todo.id !== moving.todo.id)
+                .filter((todo) => todo.key !== focused.key)
                 .map((todo) => (
-                  <TodoItem key={todo.id} todo={todo} />
+                  <TodoItem key={todo.key} todo={todo} />
                 ))}
             </TodoCard>
           )}
@@ -245,33 +383,41 @@ export default function TodoPage() {
       ) : (
         <div className="flex w-full flex-col gap-[12px]">
           <div className="flex w-full flex-col gap-[8px]">
-            <CategoryBar selected={category} onSelect={handleSelectCategory} />
+            <CategoryBar selected={category} onSelect={(key) => void handleSelectCategory(key)} />
             {category && (
               <>
                 <CategoryPointer selected={category} />
-                <TodoInput category={getCategory(category)} onSubmit={handleAdd} />
+                <TodoInput
+                  key={`${category}-${goal?.goalId ?? ''}`}
+                  category={getCategory(category)}
+                  withTime={category === 'schedule'}
+                  placeholder={category === 'ai' && goal ? goal.title : undefined}
+                  onSubmit={handleAdd}
+                />
               </>
             )}
           </div>
 
           {todos.length === 0 ? (
-            <TodoEmpty />
+            loaded && <TodoEmpty />
           ) : (
             <TodoCard>
               {todos.map((todo) =>
-                todo.id === editId ? (
+                todo.key === editKey ? (
                   <TodoEditRow
-                    key={todo.id}
+                    key={todo.key}
                     title={todo.title}
                     category={todo.category}
-                    onSave={(title) => void handleSave(todo, title)}
+                    allowCategory={todo.category !== 'ai'}
+                    onSave={(value) => void handleSave(todo, value)}
                   />
                 ) : (
                   <TodoItem
-                    key={todo.id}
+                    key={todo.key}
                     todo={todo}
-                    onToggle={todo.done ? undefined : () => handleComplete(todo.id)}
-                    onMore={() => setMoreId(todo.id)}
+                    onToggle={todo.kind === 'todo' ? () => void handleToggle(todo) : undefined}
+                    onMore={todo.scheduleType === 'FIXED' ? undefined : () => setMoreKey(todo.key)}
+                    onSparkle={() => setSparkleKey(todo.key)}
                   />
                 ),
               )}
@@ -281,11 +427,32 @@ export default function TodoPage() {
       )}
 
       <TodoMoreSheet
-        open={moreId !== null}
+        open={moreTodo !== undefined}
+        canEdit={!moreTodo?.done}
+        canMove={moreTodo?.kind === 'todo' && !moreTodo.done}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onMoveDate={handleStartMove}
-        onClose={() => setMoreId(null)}
+        onClose={() => setMoreKey(null)}
+      />
+
+      <AiStateSheet
+        open={sparkleKey !== null}
+        onClose={() => setSparkleKey(null)}
+        onEditState={() => startStateInput(findTodo(sparkleKey))}
+      />
+
+      <AiStatePromptModal
+        open={promptTodo !== null}
+        onClose={() => setPromptTodo(null)}
+        onConfirm={() => startStateInput(todos.find((item) => item.key === promptTodo?.key) ?? promptTodo)}
+      />
+
+      <GoalPickSheet
+        open={goalPicking !== null}
+        goals={goalPicking ?? []}
+        onClose={() => setGoalPicking(null)}
+        onPick={handlePickGoal}
       />
     </main>
   )

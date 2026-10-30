@@ -18,7 +18,7 @@ import { paths } from '../paths'
  * 메일의 링크(/reset-password?token=...)로 들어오는 화면은 ResetPasswordPage 입니다.
  *
  * 가입 여부를 숨기려고 백엔드는 없는 이메일이어도 성공으로 답합니다. 그래서 안내 문구도 "가입된 계정이 있다면" 입니다.
- * TODO: "메일 다시 보내기" 성공 뒤 안내(토스트 등)는 디자인에 없어 지금은 아무것도 띄우지 않습니다. 확인 필요
+ * "메일 다시 보내기" 성공 뒤에는 "메일을 다시 보냈어요." 토스트 (디자인에 없어 임시 문구, 디자이너 확인 중)
  */
 export default function FindPasswordPage() {
   const toast = useToast()
@@ -31,6 +31,7 @@ export default function FindPasswordPage() {
     setSending(true)
     try {
       await requestPasswordReset(email.trim())
+      if (sent) toast.show('메일을 다시 보냈어요.')
       setSent(true)
     } catch (error) {
       const { fields, toast: message } = splitRecoveryError(error)
