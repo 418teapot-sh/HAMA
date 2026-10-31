@@ -48,7 +48,7 @@ public class HttpGoogleEventsProvider implements GoogleEventsProvider {
             String query = "singleEvents=true&showDeleted=false&maxResults=1000&timeZone=Asia%2FSeoul"
                     + "&timeMin=" + encode(from.atStartOfDay(Be3Time.KST).format(RFC3339))
                     + "&timeMax=" + encode(to.plusDays(1).atStartOfDay(Be3Time.KST).format(RFC3339))
-                    + "&fields=" + encode("nextPageToken,items(id,status,summary,description,start(date,dateTime),end(date,dateTime))")
+                    + "&fields=" + encode("nextPageToken,items(id,status,summary,description,start(date,dateTime,timeZone),end(date,dateTime,timeZone))")
                     + (pageToken == null ? "" : "&pageToken=" + encode(pageToken));
             URI uri = URI.create(endpoint + "/calendars/" + encode(calendarId) + "/events?" + query);
             JsonNode root;
@@ -90,7 +90,7 @@ public class HttpGoogleEventsProvider implements GoogleEventsProvider {
     }
 
     private static GoogleCalendarEvent.EventTime time(JsonNode node) {
-        return new GoogleCalendarEvent.EventTime(string(node, "date"), string(node, "dateTime"));
+        return new GoogleCalendarEvent.EventTime(string(node, "date"), string(node, "dateTime"), string(node, "timeZone"));
     }
 
     private static String string(JsonNode node, String name) {

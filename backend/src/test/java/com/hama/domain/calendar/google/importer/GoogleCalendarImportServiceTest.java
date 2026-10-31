@@ -56,6 +56,24 @@ class GoogleCalendarImportServiceTest {
     }
 
     @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void offset없는_시간은_명시된_IANA시간대로_변환하고_DST_모호한_시간은_제외한다() {
+        var namedZone = event("zone", "시간대", new EventTime(null, "2026-10-12T20:00:00", "America/Los_Angeles"),
+                new EventTime(null, "2026-10-12T21:00:00", "America/Los_Angeles"));
+        var overlap = event("overlap", "모호한 시간", new EventTime(null, "2026-11-01T01:15:00", "America/Los_Angeles"),
+                new EventTime(null, "2026-11-01T01:45:00", "America/Los_Angeles"));
+        LocalDate end = LocalDate.of(2026, 11, 2);
+        when(provider.fetchEvents("token", "calendar", from, end)).thenReturn(List.of(namedZone, overlap));
+        when(writer.write(eq(1L), any(), anyList(), any(), any())).thenReturn(new GoogleCalendarImportWriter.Counts(1, 0));
+        var result = service.importEvents(1L, "token", "calendar", from, end);
+        ArgumentCaptor<List<GoogleCalendarImportService.Candidate>> captured = ArgumentCaptor.forClass((Class) List.class);
+        verify(writer).write(eq(1L), any(), captured.capture(), any(), any());
+        assertThat(captured.getValue()).hasSize(1);
+        assertThat(captured.getValue().getFirst().schedule().getStartAt()).isEqualTo("2026-10-13T12:00:00");
+        assertThat(result.skippedReasons()).containsEntry(SkipReason.INVALID_TIME, 1);
+    }
+
+    @Test
     void invalidEventsAreCountedWithoutInventingOrTruncatingContent() {
         EventTime start = new EventTime("2026-10-10", null);
         EventTime end = new EventTime("2026-10-11", null);

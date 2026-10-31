@@ -12,6 +12,8 @@ import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -86,8 +88,8 @@ public class GoogleCalendarImportService {
                 end = LocalDate.parse(event.end().date()).atStartOfDay();
             } else {
                 if (event.end().date() != null) throw skipped(SkipReason.INVALID_TIME);
-                start = OffsetDateTime.parse(event.start().dateTime()).atZoneSameInstant(Be3Time.KST).toLocalDateTime();
-                end = OffsetDateTime.parse(event.end().dateTime()).atZoneSameInstant(Be3Time.KST).toLocalDateTime();
+                start = timedKst(event.start());
+                end = timedKst(event.end());
             }
         } catch (DateTimeException | NullPointerException e) {
             throw skipped(SkipReason.INVALID_TIME);
@@ -103,6 +105,19 @@ public class GoogleCalendarImportService {
             throw skipped(SkipReason.OUTSIDE_RANGE);
         }
         return new Candidate(hash(event.id()), schedule);
+    }
+
+    private static LocalDateTime timedKst(GoogleCalendarEvent.EventTime time) {
+        try {
+            return OffsetDateTime.parse(time.dateTime()).atZoneSameInstant(Be3Time.KST).toLocalDateTime();
+        } catch (DateTimeParseException noOffset) {
+            if (time.timeZone() == null || time.timeZone().isBlank()) throw noOffset;
+            LocalDateTime local = LocalDateTime.parse(time.dateTime());
+            ZoneId zone = ZoneId.of(time.timeZone());
+            var offsets = zone.getRules().getValidOffsets(local);
+            if (offsets.size() != 1) throw noOffset; // DST 겹침·빈 시간은 임의 보정하지 않습니다.
+            return local.atOffset(offsets.getFirst()).atZoneSameInstant(Be3Time.KST).toLocalDateTime();
+        }
     }
 
     public static void validateRequest(Long userId, String accessToken, String calendarId, LocalDate from, LocalDate to) {
