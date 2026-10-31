@@ -74,7 +74,7 @@ const FAQ_ROWS: Faq[][] = [
     },
     {
       q: 'Q. 이미 쓴 크레딧도 환불되나요?',
-      a: ['A. 이미 쓴 크레딧은 환불되지 않습니다. 일부만 썼다면 결제 금액에서 쓴 횟수 × 1회당 가격(5회권 990원, 10회권 825원)을 뺀 금액을 돌려드립니다.'],
+      a: ['A. 이미 쓴 크레딧은 환불되지 않습니다. 일부만 썼다면 결제 금액에서 쓴 횟수 × 1회당 가격(5회권 $0.80, 10회권 약 $0.67)을 뺀 금액을 돌려드립니다.'],
       tight: true,
     },
   ],
@@ -219,17 +219,17 @@ export default function LandingPage() {
             <PlanCard
               title="1회"
               description="한 가지 목표에 집중할 때"
-              price="1,200원"
-              perUse="1회당 1,200원"
+              price="$1"
+              perUse="1회당 $1.00"
               borderClass="border-black-gray40 desktop:border-black-gray60"
             />
             <PlanCard
               title="5회"
               badge="추천"
               description="여러 목표를 동시에"
-              price="4,950원"
-              perUse="1회당 990원"
-              saving="1회보다 1,050원 절약"
+              price="$4"
+              perUse="1회당 $0.80"
+              saving="1회보다 $1 절약"
               borderClass="border-brand-main"
             />
             <PlanCard
@@ -239,9 +239,9 @@ export default function LandingPage() {
                 </>
               }
               description="더 많은 목표를 동시에"
-              price="9,900원"
-              perUse="1회당 825원"
-              saving="5회보다 1,980원 절약"
+              price="$8"
+              perUse="1회당 약 $0.67"
+              saving="5회보다 $1.60 절약"
               borderClass="border-black-gray60"
             />
           </div>

@@ -8,7 +8,7 @@ import { loadMe } from '../features/auth/api'
 import { useAuthStore } from '../features/auth/store'
 import { isPaddleConfigured, openCheckout } from '../features/payment/paddle'
 import PlanOption from '../features/payment/PlanOption'
-import { CREDIT_PLANS, DEFAULT_PLAN, formatWon, type CreditPlan } from '../features/payment/plans'
+import { CREDIT_PLANS, DEFAULT_PLAN, formatPrice, type CreditPlan } from '../features/payment/plans'
 import { paths } from '../paths'
 
 type Result = 'success' | 'fail' | null
@@ -126,7 +126,7 @@ export default function ChargePage() {
       <div className="fixed bottom-0 left-1/2 flex w-full max-w-[402px] -translate-x-1/2 flex-col gap-[8px] bg-white-w1 px-[20px] pt-[12px] pb-[41px]">
         <div className="flex items-center justify-between gap-[12px]">
           <span className="text-body-b8 text-brand-main">{plan.credits}회 충전</span>
-          <span className="text-body-b3 text-black-black">{formatWon(plan.price)}</span>
+          <span className="text-body-b3 text-black-black">{formatPrice(plan.price)}</span>
         </div>
         <button
           type="button"
@@ -134,7 +134,7 @@ export default function ChargePage() {
           onClick={() => void handlePay()}
           className="flex h-[48px] w-full items-center justify-center rounded-[12px] bg-brand-main px-[20px] py-[12px] text-body-b3 text-white-w1"
         >
-          {formatWon(plan.price)} 결제하기
+          {formatPrice(plan.price)} 결제하기
         </button>
         <p className="text-center text-caption-cap3 text-black-gray60">최종 결제 금액은 결제창에서 확인해 주세요.</p>
       </div>
