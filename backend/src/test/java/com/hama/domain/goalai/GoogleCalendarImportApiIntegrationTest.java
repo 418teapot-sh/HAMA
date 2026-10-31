@@ -72,8 +72,9 @@ class GoogleCalendarImportApiIntegrationTest extends GoalAiTestSupport {
         JsonNode first = runImport(user, authorized(user), 200);
         assertThat(first.at("/data/importedCount").asInt()).isEqualTo(1);
         Long schedule = jdbc.queryForObject("select schedule_id from schedule where user_id=? and deleted_at is null", Long.class, user.id());
-        assertThat(jdbc.queryForObject("select start_at from schedule where schedule_id=?", java.sql.Timestamp.class, schedule)
-                .toLocalDateTime().toString()).isEqualTo("2026-10-02T09:00");
+        java.time.LocalDateTime start = jdbc.queryForObject("select start_at from schedule where schedule_id=?",
+                (rs, row) -> rs.getObject(1, java.time.LocalDateTime.class), schedule);
+        assertThat(start).isEqualTo(java.time.LocalDateTime.parse("2026-10-02T09:00:00"));
         assertThat(busyTimes.read(user.id(), LocalDate.parse("2026-10-02"), LocalDate.parse("2026-10-02"), Set.of())
                 .get(LocalDate.parse("2026-10-02"))).anyMatch(interval -> interval.start() == 540 && interval.end() == 600);
         assertThat(runImport(user, authorized(user), 200).at("/data/duplicateCount").asInt()).isEqualTo(1);
