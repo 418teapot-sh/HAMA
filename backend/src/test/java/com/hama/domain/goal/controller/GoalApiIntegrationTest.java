@@ -208,7 +208,7 @@ class GoalApiIntegrationTest {
                         """), owner))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("GOAL_PERIOD_TOO_LONG"));
-        createGoal(owner, "365일", TODAY, TODAY.plusDays(364));
+        createGoal(owner, "365일 도전", TODAY, TODAY.plusDays(364));
     }
 
     @Test
@@ -427,7 +427,7 @@ class GoalApiIntegrationTest {
         mvc.perform(auth(post("/api/v1/goals").contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"title":"목표","startDate":"%s","endDate":"%s",
-                                 "fixedSchedules":[{"dayOfWeek":"MONDAY","content":"A"},{"dayOfWeek":"MONDAY","content":"B"}]}
+                                 "fixedSchedules":[{"dayOfWeek":"MONDAY","content":"알바"},{"dayOfWeek":"MONDAY","content":"야근"}]}
                                 """.formatted(TODAY, TODAY.plusDays(30))), owner))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("GOAL_INVALID_INPUT"));

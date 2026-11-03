@@ -15,9 +15,10 @@ import lombok.Getter;
 public class UpdateGoalRequest {
 
     @Getter
-    @Pattern(regexp = "(?s).*\\S.*", message = "목표 제목은 공백일 수 없습니다.")
+    @Pattern(regexp = GoalContent.MEANINGFUL_TEXT, message = "목표 제목은 글자 2자 이상으로 입력해주세요.")
     @Size(max = 100, message = "목표 제목은 100자 이하입니다.")
-    @Schema(example = "3개월 안에 토익 850점", maxLength = 100, description = "생략하거나 null 이면 유지")
+    @Schema(example = "3개월 안에 토익 850점", maxLength = 100,
+            description = "생략하거나 null 이면 유지. 한글이나 영문 글자가 2자 이상 있어야 합니다.")
     private String title;
 
     @Getter
