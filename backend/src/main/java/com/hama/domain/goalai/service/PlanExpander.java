@@ -121,8 +121,13 @@ final class PlanExpander {
         return value.length() <= max ? value : value.substring(0, max);
     }
 
+    /** valid 가 false 면 AI 가 입력의 뜻을 몰라 플랜을 만들지 않은 것이고, reason 에 이유가 있습니다. 없으면 true 로 봅니다. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record AiPlans(List<AiPlan> plans) {
+    record AiPlans(Boolean valid, String reason, List<AiPlan> plans) {
+
+        boolean rejected() {
+            return Boolean.FALSE.equals(valid);
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

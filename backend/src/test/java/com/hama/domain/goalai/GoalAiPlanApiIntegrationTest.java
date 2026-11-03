@@ -142,6 +142,35 @@ class GoalAiPlanApiIntegrationTest extends GoalAiTestSupport {
     }
 
     @Test
+    void AI_가_입력의_뜻을_모르면_범용_플랜_대신_422_이고_횟수는_그대로다() throws Exception {
+        User user = user();
+        long goalId = planningGoal(user);
+        AI.answer("""
+                {"valid":false,"reason":"고정 일정 '기', '모', '치'의 뜻을 알 수 없습니다."}
+                """);
+
+        JsonNode error = call(post("/api/v1/goals/ai/plans"), user, Map.of("goalId", goalId), 422);
+
+        assertThat(error.at("/error/code").asString()).isEqualTo("AI_PLAN_INVALID_INPUT");
+        assertThat(error.at("/error/message").asString()).contains("구체적으로");
+        JsonNode listed = call(get("/api/v1/goals/ai/plans").param("goalId", String.valueOf(goalId)), user, null, 200)
+                .get("data");
+        assertThat(listed.get("remainingGenerations").asInt()).isEqualTo(3);
+        assertThat(listed.get("plans")).isEmpty();
+    }
+
+    @Test
+    void 뜻_없는_목표_제목이나_고정_일정은_저장부터_400() throws Exception {
+        User user = user();
+        call(post("/api/v1/goals"), user,
+                Map.of("title", "4", "startDate", "2026-10-01", "endDate", "2026-12-31"), 400);
+        JsonNode error = call(post("/api/v1/goals"), user,
+                Map.of("title", "3개월 안에 토익 850점", "startDate", "2026-10-01", "endDate", "2026-12-31",
+                        "fixedSchedules", List.of(Map.of("dayOfWeek", "MONDAY", "content", "기"))), 400);
+        assertThat(error.at("/error/code").asString()).isEqualTo("VALIDATION_FAILED");
+    }
+
+    @Test
     void 고정_일정_요일에는_투두를_두지_않는다() throws Exception {
         User user = user();
         long goalId = call(post("/api/v1/goals"), user,

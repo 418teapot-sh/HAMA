@@ -30,11 +30,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** PLANNING 목표의 A(여유형)/B(집중형) 플랜 생성과 조회. 마일스톤 없이 반복 할 일(tasks)만 만듭니다. */
+@Slf4j
 @Service
 public class GoalAiPlanService {
 
@@ -48,8 +50,10 @@ public class GoalAiPlanService {
             예) 여유형 - "매일 영어 단어 30개씩 외우기"(timesPerWeek 7) / "일주일에 모의고사 1번 보기"(timesPerWeek 1),
                 집중형 - "매일 영어 단어 50개씩 외우기"(timesPerWeek 7) / "일주일에 모의고사 1번 보기"(timesPerWeek 1).
             사용자 선호: %s. fixedSchedules(이미 바쁜 요일)가 있으면 그 요일에는 할 일을 두지 않으니, 남은 요일 수 안에서 timesPerWeek 를 정해.
+            title 이나 fixedSchedules 의 content 가 숫자·한 글자·의미 없는 글자라서 무엇을 하려는 목표인지 알 수 없으면,
+            "목표와 관련된 핵심 활동하기" 같은 범용 할 일로 채우지 말고 {"valid":false,"reason":"이유 한 문장"} 만 답해.
             반드시 아래 모양의 JSON 객체 하나로만, 짧게 답해.
-            {"plans":[{"variant":"A","title":10자 이하,"summary":"매일 영어 단어 30개씩 외우기 / 일주일에 모의고사 1번 보기" 같은 한 문장,
+            {"valid":true,"plans":[{"variant":"A","title":10자 이하,"summary":"매일 영어 단어 30개씩 외우기 / 일주일에 모의고사 1번 보기" 같은 한 문장,
               "tasks":[{"content":할 일 한 줄,"timesPerWeek":1~7,"minutes":10~240}]},
              {"variant":"B", ...}]}
             """;
@@ -97,6 +101,11 @@ public class GoalAiPlanService {
                 PLAN_PROMPT.formatted(today, preference.prompt()),
                 List.of(AiMessage.user(json.write(goalInfo(goal, planStart, goalFixedSchedules))))),
                 PlanExpander.AiPlans.class);
+        if (answer != null && answer.rejected()) {
+            // 사용자에게는 고정 문구를 보여주고, AI 가 댄 이유는 로그에만 남깁니다. 횟수를 쓰기 전이라 차감되지 않습니다.
+            log.info("[goal-plan] AI 가 입력을 거절했습니다 goalId={} reason={}", goalId, answer.reason());
+            throw new BusinessException(GoalAiErrorCode.AI_PLAN_INVALID_INPUT);
+        }
         List<PlanExpander.Expanded> expanded = expandBoth(answer, goal.getStartDate(), planStart, goal.getEndDate(),
                 busyDays);
 
