@@ -34,11 +34,18 @@ function isValidDate(value: string) {
 /** 'YYYY.MM.DD' → 'YYYY-MM-DD' (API 형식) */
 const toApiDate = (date: string) => date.replaceAll('.', '-')
 
+/** 숫자만 남기고 'YYYY.MM.DD' 모양으로 점을 넣음. 예: '20260808' → '2026.08.08', '20261' → '2026.1' */
+function formatDateInput(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 8)
+  return [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6)].filter(Boolean).join('.')
+}
+
+/** hint: 제목 아래 말풍선 문구. 고정 일정 단계는 그 요일에 투두를 만들지 않는다고 알려줌 (사용자 피드백) */
 const STEPS = [
-  { title: 'AI와 함께할\n새로운 목표를 입력해주세요.', showHint: true },
-  { title: 'AI와 함께할\n새로운 목표를 입력해주세요.', showHint: true },
-  { title: '목표를 진행 할\n기간을 입력해주세요.', showHint: false },
-  { title: '고정 일정을\n입력해주세요.', showHint: false },
+  { title: 'AI와 함께할\n새로운 목표를 입력해주세요.', hint: '간단하게 작성해도 괜찮아요!' },
+  { title: 'AI와 함께할\n새로운 목표를 입력해주세요.', hint: '간단하게 작성해도 괜찮아요!' },
+  { title: '목표를 진행 할\n기간을 입력해주세요.', hint: null },
+  { title: '고정 일정을\n입력해주세요.', hint: '고정 일정이 있는 요일에는 투두를 만들지 않아요.' },
 ] as const
 
 /** 입력 단계가 끝난 뒤 화면: AI 진행 중 → 완료 (또는 실패) → 플랜 제안 */
@@ -287,7 +294,7 @@ export default function GoalCreatePage() {
     }
   }
 
-  const { title, showHint } = STEPS[step]
+  const { title, hint } = STEPS[step]
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -302,9 +309,9 @@ export default function GoalCreatePage() {
         <main className="flex flex-1 flex-col gap-[20px] px-[20px] pt-[20px]">
           <div className="flex flex-col items-start gap-[12px]">
             <GoalHeader title={title} />
-            {showHint && (
+            {hint && (
               <span className="rounded-[12px] rounded-bl-[2px] bg-brand-main-40 px-[12px] py-[4px] text-body-b9 text-white-w1">
-                간단하게 작성해도 괜찮아요!
+                {hint}
               </span>
             )}
           </div>
@@ -362,7 +369,7 @@ export default function GoalCreatePage() {
                     prefix="시작일"
                     value={startDate}
                     onChange={(value) => {
-                      setStartDate(value)
+                      setStartDate(formatDateInput(value))
                       setServerPeriodError(undefined)
                     }}
                     onBlur={() => setTouched((prev) => ({ ...prev, start: true }))}
@@ -375,7 +382,7 @@ export default function GoalCreatePage() {
                     prefix="종료일"
                     value={endDate}
                     onChange={(value) => {
-                      setEndDate(value)
+                      setEndDate(formatDateInput(value))
                       setServerPeriodError(undefined)
                     }}
                     onBlur={() => setTouched((prev) => ({ ...prev, end: true }))}

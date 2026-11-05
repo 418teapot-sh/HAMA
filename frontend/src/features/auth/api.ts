@@ -48,14 +48,28 @@ export async function login(body: LoginRequest) {
   await loadMe()
 }
 
-/** 내 정보(GET /api/v1/users/me)를 불러와 저장합니다. 실패해도 로그인 상태는 그대로 둡니다. */
-export async function loadMe() {
-  try {
-    const res = await api.get<ApiResponse<User>>('/api/v1/users/me')
-    useAuthStore.getState().setUser(res.data.data)
-  } catch {
-    // 토큰이 만료돼 refresh 까지 실패하면 인터셉터가 로그아웃 상태로 바꿉니다.
+/** 진행 중인 내 정보 요청. 여러 곳에서 동시에 불러도 요청은 한 번만 보냅니다 */
+let loadMePromise: Promise<void> | null = null
+
+/**
+ * 내 정보(GET /api/v1/users/me)를 불러와 저장합니다. 실패해도 로그인 상태는 그대로 둡니다.
+ * 새로고침 직후 로그인 복구(restoreSession)와 화면(마이페이지 · 충전)이 같이 불러도 요청은 하나로 합칩니다.
+ */
+export function loadMe(): Promise<void> {
+  if (!loadMePromise) {
+    loadMePromise = api
+      .get<ApiResponse<User>>('/api/v1/users/me')
+      .then((res) => {
+        useAuthStore.getState().setUser(res.data.data)
+      })
+      .catch(() => {
+        // 토큰이 만료돼 refresh 까지 실패하면 인터셉터가 로그아웃 상태로 바꿉니다.
+      })
+      .finally(() => {
+        loadMePromise = null
+      })
   }
+  return loadMePromise
 }
 
 /** 로그아웃. 서버가 refreshToken 쿠키를 지우고, 메모리의 토큰도 비웁니다. */

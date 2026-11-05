@@ -3,6 +3,7 @@ import RequireAuth from './features/auth/RequireAuth'
 import MobileLayout from './layouts/MobileLayout'
 import TabLayout from './layouts/TabLayout'
 import ChargePage from './pages/ChargePage'
+import ErrorPage from './pages/ErrorPage'
 import FindEmailPage from './pages/FindEmailPage'
 import FindPasswordPage from './pages/FindPasswordPage'
 import GoalCreatePage from './pages/GoalCreatePage'
@@ -20,35 +21,42 @@ import TodoPage from './pages/TodoPage'
 import { paths } from './paths'
 
 export const router = createBrowserRouter([
-  // 랜딩 · 약관 · 정책 페이지는 넓은 화면에서 데스크톱 디자인으로 보여 주므로 모바일 폭(402) 레이아웃 밖에 둡니다.
-  { path: paths.landing, element: <LandingPage /> },
-  { path: paths.terms, element: <TermsPage /> },
-  { path: paths.refund, element: <RefundPage /> },
-  { path: paths.privacy, element: <PrivacyPage /> },
   {
-    element: <MobileLayout />,
+    // 화면을 그리다 오류가 나면 라우터 기본 화면 대신 ErrorPage, 없는 주소는 '*' 로 같은 화면
+    errorElement: <ErrorPage />,
     children: [
+      // 랜딩 · 약관 · 정책 페이지는 넓은 화면에서 데스크톱 디자인으로 보여 주므로 모바일 폭(402) 레이아웃 밖에 둡니다.
+      { path: paths.landing, element: <LandingPage /> },
+      { path: paths.terms, element: <TermsPage /> },
+      { path: paths.refund, element: <RefundPage /> },
+      { path: paths.privacy, element: <PrivacyPage /> },
       {
-        element: <RequireAuth />,
+        element: <MobileLayout />,
         children: [
           {
-            element: <TabLayout />,
+            element: <RequireAuth />,
             children: [
-              { path: paths.home, element: <HomePage /> },
-              { path: paths.todos, element: <TodoPage /> },
-              { path: paths.report, element: <ReportPage /> },
-              { path: paths.mypage, element: <MyPage /> },
+              {
+                element: <TabLayout />,
+                children: [
+                  { path: paths.home, element: <HomePage /> },
+                  { path: paths.todos, element: <TodoPage /> },
+                  { path: paths.report, element: <ReportPage /> },
+                  { path: paths.mypage, element: <MyPage /> },
+                ],
+              },
+              { path: paths.goalNew, element: <GoalCreatePage /> },
+              { path: paths.charge, element: <ChargePage /> },
             ],
           },
-          { path: paths.goalNew, element: <GoalCreatePage /> },
-          { path: paths.charge, element: <ChargePage /> },
+          { path: paths.login, element: <LoginPage /> },
+          { path: paths.signup, element: <SignupPage /> },
+          { path: paths.findEmail, element: <FindEmailPage /> },
+          { path: paths.findPassword, element: <FindPasswordPage /> },
+          { path: paths.resetPassword, element: <ResetPasswordPage /> },
         ],
       },
-      { path: paths.login, element: <LoginPage /> },
-      { path: paths.signup, element: <SignupPage /> },
-      { path: paths.findEmail, element: <FindEmailPage /> },
-      { path: paths.findPassword, element: <FindPasswordPage /> },
-      { path: paths.resetPassword, element: <ResetPasswordPage /> },
+      { path: '*', element: <ErrorPage /> },
     ],
   },
 ])
