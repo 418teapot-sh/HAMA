@@ -49,6 +49,7 @@ public class GoalAiController {
                     투두는 목표 시작일과 오늘 중 늦은 날부터 종료일까지 둡니다. preference 는 RELAXED | BALANCED | INTENSIVE(생략 시 BALANCED).
                     없는 목표 404(GOAL_NOT_FOUND), 다른 사람의 목표 403, PLANNING 이 아니면 409(GOAL_NOT_PLANNING),
                     기간이 없거나 이미 끝났으면 400(GOAL_INVALID_PERIOD), 배치 가능한 요일이 없으면 409(AI_PLAN_NO_AVAILABLE_DAY), 만드는 사이 목표 기간이 바뀌면 409(AI_PLAN_OUTDATED).
+                    목표 제목이나 고정 일정의 뜻을 AI 가 알 수 없으면 범용 할 일로 채우지 않고 422(AI_PLAN_INVALID_INPUT) 이며, 생성 횟수는 줄지 않습니다.
                     """)
     @PostMapping("/plans")
     public ResponseEntity<ApiResponse<PlanResponses.PlanList>> generatePlans(

@@ -11,6 +11,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 
 class PlanExpanderTest {
 
@@ -105,5 +106,18 @@ class PlanExpanderTest {
         assertThat(PlanExpander.expand(plan(), "여유형", START, START, END)).isNull();
         assertThat(PlanExpander.expand(new AiPlan("A", "여유형", "-", null), "여유형", START, START, END)).isNull();
         assertThat(PlanExpander.expand(null, "여유형", START, START, END)).isNull();
+    }
+
+    @Test
+    void valid_가_false_일_때만_거절이고_빠지면_정상으로_본다() {
+        JsonMapper mapper = JsonMapper.builder().build();
+
+        PlanExpander.AiPlans rejected = mapper.readValue("{\"valid\":false,\"reason\":\"뜻을 알 수 없음\"}",
+                PlanExpander.AiPlans.class);
+        assertThat(rejected.rejected()).isTrue();
+        assertThat(rejected.reason()).isEqualTo("뜻을 알 수 없음");
+
+        assertThat(mapper.readValue("{\"valid\":true,\"plans\":[]}", PlanExpander.AiPlans.class).rejected()).isFalse();
+        assertThat(mapper.readValue("{\"plans\":[]}", PlanExpander.AiPlans.class).rejected()).isFalse();
     }
 }

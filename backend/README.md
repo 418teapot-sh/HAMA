@@ -9,6 +9,11 @@ Spring Boot 4 · Java 21 · MySQL 8 · Flyway
 - 테스트(`./gradlew test`)는 MySQL 컨테이너가 떠 있어야 합니다(`hama_test` DB 사용).
 - 테스트가 끝나면 커버리지 리포트(JaCoCo)가 `build/reports/jacoco/test/html/index.html`에 생깁니다. 브라우저로 열면 테스트가 실행하지 않은 줄이 빨갛게 보입니다.
 - AI를 실제로 부르려면 `.env`에 `LINER_API_KEY`를 넣습니다. 없어도 AI 외 기능은 정상입니다.
+- 구글 캘린더 일회성 가져오기는 `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`,
+  `GOOGLE_CALENDAR_REDIRECT_URI`, `GOOGLE_CALENDAR_ENCRYPTION_KEY`가 필요합니다. 키는 32바이트 AES 키를
+  Base64로 인코딩한 값이며 비밀 저장소에 보관합니다. 리디렉션 URI는 Google OAuth 설정과 정확히 같아야 합니다.
+  값이 없거나 잘못되면 가져오기 API만 사용할 수 없고 서버의 다른 기능은 정상 기동합니다.
+  운영에서는 기존 SSM 환경변수 공급 절차를 따르고 Google OAuth 동의 화면·앱 검증 상태를 확인합니다.
 
 ## DB 마이그레이션 (Flyway)
 

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { PlusIcon } from '../../components/TodoIcons'
 import type { TodoCategory } from './categories'
+import { SCHEDULE_TITLE_MAX, TODO_CONTENT_MAX } from './types'
 
 export interface TodoInputValue {
   content: string
@@ -54,6 +55,7 @@ export default function TodoInput({ category, withTime = false, placeholder, onS
         <input
           autoFocus
           value={content}
+          maxLength={withTime ? SCHEDULE_TITLE_MAX : TODO_CONTENT_MAX}
           placeholder={placeholder}
           aria-label={`${category.label} 내용`}
           onChange={(e) => setContent(e.target.value)}

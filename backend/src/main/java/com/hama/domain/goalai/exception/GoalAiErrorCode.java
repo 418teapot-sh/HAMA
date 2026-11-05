@@ -12,6 +12,8 @@ public enum GoalAiErrorCode implements BaseErrorCode {
     AI_PLAN_ALREADY_SELECTED(HttpStatus.CONFLICT, "이미 선택된 플랜입니다."),
     AI_PLAN_OUTDATED(HttpStatus.CONFLICT, "목표 기간이 바뀌었거나 플랜 시작일이 지나 적용할 수 없습니다. 플랜을 다시 만들어주세요."),
     AI_PLAN_NO_AVAILABLE_DAY(HttpStatus.CONFLICT, "목표 기간에 배치할 수 있는 날짜가 없습니다. 목표 기간이나 고정 요일을 확인해주세요."),
+    AI_PLAN_INVALID_INPUT(HttpStatus.UNPROCESSABLE_CONTENT,
+            "목표나 고정 일정의 뜻을 알 수 없어 플랜을 만들 수 없습니다. 목표 제목과 일정 내용을 구체적으로 적어주세요."),
     AI_PLAN_GENERATION_LIMIT(HttpStatus.TOO_MANY_REQUESTS, "플랜은 목표당 3번까지 만들 수 있습니다."),
     GOAL_NOT_PLANNING(HttpStatus.CONFLICT, "플랜 선택 전(PLANNING) 목표에서만 할 수 있습니다."),
     GOAL_NOT_IN_PROGRESS(HttpStatus.CONFLICT, "진행 중인 목표에서만 할 수 있습니다."),

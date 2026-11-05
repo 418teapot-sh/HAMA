@@ -11,4 +11,10 @@ public record GoalContent(
         LocalDate startDate,
         LocalDate endDate
 ) {
+
+    /**
+     * 목표 제목·고정 일정 내용 검증용. 한글 음절이나 영문자가 2자 이상 있어야 합니다. "4", "기", "ㄱㄱ" 처럼
+     * 뜻을 알 수 없는 입력으로는 AI 가 구체적인 할 일을 만들지 못하고 범용 문구로 채웁니다.
+     */
+    public static final String MEANINGFUL_TEXT = "(?s)(?:.*?[가-힣A-Za-z]){2}.*";
 }

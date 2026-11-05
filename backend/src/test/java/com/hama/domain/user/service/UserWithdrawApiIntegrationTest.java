@@ -295,6 +295,15 @@ class UserWithdrawApiIntegrationTest {
                 INSERT INTO schedule (calendar_uid, user_id, type, title, start_at, end_at, all_day, created_at, updated_at)
                 VALUES (CONCAT('hama-', UUID(), '@hama.app'), ?, 'FIXED', '학원 아르바이트', '2026-10-10 18:00:00', '2026-10-10 21:00:00', 0, NOW(6), NOW(6))""",
                 session.userId());
+        jdbcTemplate.update("""
+                INSERT INTO google_calendar_import_session
+                    (session_id,user_id,state_hash,verifier_cipher,access_token_cipher,expires_at,created_at)
+                VALUES (UUID(),?,'hash','cipher','token',NOW(6),NOW(6))
+                """, session.userId());
+        jdbcTemplate.update("""
+                INSERT INTO google_calendar_import_source (user_id,calendar_hash,event_hash,calendar_uid,created_at)
+                VALUES (?,'calendar','event','uid',NOW(6))
+                """, session.userId());
         return new Seeded(goalId);
     }
 
@@ -314,7 +323,7 @@ class UserWithdrawApiIntegrationTest {
     /** 목표가 지워진 뒤에도 셀 수 있도록 자식 테이블은 미리 받아 둔 goal_id 로 셉니다. */
     private Map<String, Long> remainingRows(Session session, Seeded seeded) {
         Map<String, Long> rows = new LinkedHashMap<>();
-        for (String table : List.of("todo", "schedule", "goal", "refresh_token")) {
+        for (String table : List.of("google_calendar_import_session", "google_calendar_import_source", "todo", "schedule", "goal", "refresh_token")) {
             rows.put(table, count("SELECT COUNT(*) FROM " + table + " WHERE user_id = ?", session.userId()));
         }
         for (String table : List.of("goal_fixed_schedule", "goal_checkin", "goal_plan", "goal_review_generation",

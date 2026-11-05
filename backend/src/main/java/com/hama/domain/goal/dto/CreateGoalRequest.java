@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -16,7 +17,9 @@ import tools.jackson.databind.annotation.JsonDeserialize;
 public record CreateGoalRequest(
         @NotBlank(message = "목표 제목은 필수입니다.")
         @Size(max = 100, message = "목표 제목은 100자 이하입니다.")
-        @Schema(example = "매일 영어 공부", maxLength = 100, requiredMode = Schema.RequiredMode.REQUIRED)
+        @Pattern(regexp = GoalContent.MEANINGFUL_TEXT, message = "목표 제목은 글자 2자 이상으로 입력해주세요.")
+        @Schema(example = "매일 영어 공부", maxLength = 100, description = "한글이나 영문 글자가 2자 이상 있어야 합니다.",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         String title,
 
         @Size(max = 200, message = "현재 상태는 200자 이하입니다.")
@@ -46,8 +49,10 @@ public record CreateGoalRequest(
 
             @NotBlank(message = "일정 내용은 필수입니다.")
             @Size(max = 100, message = "일정 내용은 100자 이하입니다.")
+            @Pattern(regexp = GoalContent.MEANINGFUL_TEXT, message = "일정 내용은 글자 2자 이상으로 입력해주세요.")
             @JsonDeserialize(using = StrictDeserializers.Text.class)
-            @Schema(example = "한국사 공부", maxLength = 100, requiredMode = Schema.RequiredMode.REQUIRED)
+            @Schema(example = "한국사 공부", maxLength = 100, description = "한글이나 영문 글자가 2자 이상 있어야 합니다.",
+                    requiredMode = Schema.RequiredMode.REQUIRED)
             String content
     ) {
     }
