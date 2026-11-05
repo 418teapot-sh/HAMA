@@ -12,6 +12,7 @@ import PlanProposal from '../features/goal/components/PlanProposal'
 import { loadMe } from '../features/auth/api'
 import { useAuthStore } from '../features/auth/store'
 import CreditShortageModal from '../features/payment/CreditShortageModal'
+import { GOAL_TEXT_ERROR, isMeaningfulText } from '../features/goal/validation'
 import type { Weekday } from '../features/goal/weekdays'
 import { paths } from '../paths'
 import { toDateKey } from '../utils/date'
@@ -95,6 +96,10 @@ export default function GoalCreatePage() {
   const [createdGoal, setCreatedGoal] = useState<GoalDetail | null>(null)
   /** 서버가 거절한 기간 오류. 날짜를 고치면 지움 */
   const [serverPeriodError, setServerPeriodError] = useState<string>()
+  /** 목표 · 현재 상태 · 고정 일정 칸 오류 (글자 수 검사, 서버 400 fields, AI 422). 그 칸을 고치면 지움 */
+  const [goalError, setGoalError] = useState<string>()
+  const [levelError, setLevelError] = useState<string>()
+  const [scheduleError, setScheduleError] = useState<string>()
   const [plans, setPlans] = useState<PlanView[]>([])
   /** 플랜을 더 만들 수 있는 횟수 (목표당 3번) */
   const [remainingGenerations, setRemainingGenerations] = useState(0)
@@ -112,22 +117,46 @@ export default function GoalCreatePage() {
     : undefined
 
   const periodValid = datesValid && !periodError(startDate, endDate)
-  const canNext = [goal.trim().length > 0, currentLevel.trim().length > 0, periodValid, true][step]
+  const canNext = [isMeaningfulText(goal.trim()), currentLevel.trim().length > 0, periodValid, true][step]
   const nextBlocked = phase === 'loading' || (phase === 'input' && !canNext)
+
+  /** 입력을 고치러 돌아갈 때 먼저 만든 목표를 지움 (화면에 안 보이고, 새 값으로 다시 만듦) */
+  const discardCreatedGoal = (goalId: number | null) => {
+    if (goalId !== null) deleteGoal(goalId).catch(() => {})
+    setCreatedGoalId(null)
+    setCreatedGoal(null)
+  }
+
+  /** 서버 400 VALIDATION_FAILED 의 fields 를 칸 오류로 옮기고 첫 번째로 틀린 단계로 이동. 옮길 칸이 없으면 false */
+  const showFieldErrors = (fields: Record<string, string>) => {
+    const scheduleKey = Object.keys(fields).find((key) => key.startsWith('fixedSchedules'))
+    const periodMessage = fields.startDate ?? fields.endDate
+    setGoalError(fields.title)
+    setLevelError(fields.currentStatus)
+    setScheduleError(scheduleKey && fields[scheduleKey])
+    if (periodMessage) {
+      setServerPeriodError(periodMessage)
+      setTouched({ start: true, end: true })
+    }
+    const firstStep = fields.title ? 0 : fields.currentStatus ? 1 : periodMessage ? 2 : scheduleKey ? 3 : null
+    if (firstStep === null) return false
+    setStep(firstStep)
+    setPhase('input')
+    return true
+  }
 
   const submit = async () => {
     setPhase('loading')
+    // 목표는 이미 만들었고 상세 조회나 플랜 생성만 실패했다면 목표를 다시 만들지 않음
+    let goalId = createdGoalId
     try {
-      // 목표는 이미 만들었고 상세 조회나 플랜 생성만 실패했다면 목표를 다시 만들지 않음
-      const goalId =
-        createdGoalId ??
-        (await createGoalFromInput({
-          goal: goal.trim(),
-          currentLevel: currentLevel.trim(),
-          startDate: toApiDate(startDate),
-          endDate: toApiDate(endDate),
-          fixedSchedules,
-        }))
+      goalId ??= await createGoalFromInput({
+        goal: goal.trim(),
+        currentLevel: currentLevel.trim(),
+        startDate: toApiDate(startDate),
+        endDate: toApiDate(endDate),
+        fixedSchedules,
+      })
       setCreatedGoalId(goalId)
       setCreatedGoal(await getGoal(goalId))
       const planList = await generatePlans(goalId)
@@ -135,7 +164,8 @@ export default function GoalCreatePage() {
       setRemainingGenerations(planList.remainingGenerations)
       setPhase('done')
     } catch (error) {
-      const code = getApiError(error)?.code
+      const apiError = getApiError(error)
+      const code = apiError?.code
       if (code === 'INSUFFICIENT_CREDITS') {
         loadMe()
         setPhase('input')
@@ -147,6 +177,19 @@ export default function GoalCreatePage() {
         setTouched((prev) => ({ ...prev, end: true }))
         setStep(2)
         setPhase('input')
+      } else if (code === 'VALIDATION_FAILED' && apiError?.fields && showFieldErrors(apiError.fields)) {
+        // 목표를 만들 때 거절돼서 지울 목표가 없음
+      } else if (apiError && (code === 'AI_PLAN_INVALID_INPUT' || code === 'AI_PLAN_NO_AVAILABLE_DAY')) {
+        // 같은 입력으로 다시 시도해도 또 실패하므로, 만든 목표를 지우고 고칠 단계로 돌려보냄 (생성 횟수는 줄지 않음)
+        discardCreatedGoal(goalId)
+        if (code === 'AI_PLAN_INVALID_INPUT') {
+          setGoalError(apiError.message)
+          setStep(0)
+        } else {
+          setScheduleError(apiError.message)
+          setStep(3)
+        }
+        setPhase('input')
       } else {
         setPhase('error')
       }
@@ -156,9 +199,7 @@ export default function GoalCreatePage() {
   const handlePrev = () => {
     // 입력을 고치러 돌아가면 새 값으로 목표를 다시 만듦. 먼저 만든 목표는 화면에 안 보여서 지움
     if (phase === 'error') {
-      if (createdGoalId !== null) deleteGoal(createdGoalId).catch(() => {})
-      setCreatedGoalId(null)
-      setCreatedGoal(null)
+      discardCreatedGoal(createdGoalId)
       setPhase('input')
     }
     else if (step === 0) navigate(-1)
@@ -175,9 +216,11 @@ export default function GoalCreatePage() {
       return
     }
     if (!canNext) {
+      if (step === 0) setGoalError(GOAL_TEXT_ERROR)
       if (step === 2) setTouched({ start: true, end: true })
       return
     }
+    if (step === 0) setGoalError(undefined)
     if (step < STEPS.length - 1) setStep(step + 1)
     else submit()
   }
@@ -193,8 +236,15 @@ export default function GoalCreatePage() {
       const planList = await generatePlans(createdGoal.goalId)
       setPlans(planList.plans)
       setRemainingGenerations(planList.remainingGenerations)
-    } catch {
-      setPlanError('플랜을 다시 만들지 못했어요. 잠시 후 다시 시도해주세요.')
+    } catch (error) {
+      const apiError = getApiError(error)
+      // 입력 · 횟수 · 요일 문제는 다시 시도해도 같으므로 서버 문구로 알려줌. 나머지는 잠시 뒤 다시 시도
+      const guided = ['AI_PLAN_INVALID_INPUT', 'AI_PLAN_GENERATION_LIMIT', 'AI_PLAN_NO_AVAILABLE_DAY']
+      setPlanError(
+        apiError && guided.includes(apiError.code)
+          ? apiError.message
+          : '플랜을 다시 만들지 못했어요. 잠시 후 다시 시도해주세요.',
+      )
     }
     setPhase('plans')
   }
@@ -242,12 +292,28 @@ export default function GoalCreatePage() {
           </div>
 
           {step === 3 ? (
-            <FixedScheduleStep value={fixedSchedules} onChange={setFixedSchedules} />
+            <FixedScheduleStep
+              value={fixedSchedules}
+              onChange={(value) => {
+                setFixedSchedules(value)
+                setScheduleError(undefined)
+              }}
+              error={scheduleError}
+            />
           ) : (
             <div className="flex flex-col gap-[16px]">
               <GoalStepCard label="목표">
                 {step === 0 ? (
-                  <GoalStepInput value={goal} onChange={setGoal} placeholder="예: 3개월 안에 토익 850점 받고 싶어." autoFocus />
+                  <GoalStepInput
+                    value={goal}
+                    onChange={(value) => {
+                      setGoal(value)
+                      setGoalError(undefined)
+                    }}
+                    error={goalError}
+                    placeholder="예: 3개월 안에 토익 850점 받고 싶어."
+                    autoFocus
+                  />
                 ) : (
                   <GoalStepValue>{goal}</GoalStepValue>
                 )}
@@ -256,7 +322,16 @@ export default function GoalCreatePage() {
               {step >= 1 && (
                 <GoalStepCard label="현재 상태">
                   {step === 1 ? (
-                    <GoalStepInput value={currentLevel} onChange={setCurrentLevel} placeholder="예: 현재 토익 600점" autoFocus />
+                    <GoalStepInput
+                      value={currentLevel}
+                      onChange={(value) => {
+                        setCurrentLevel(value)
+                        setLevelError(undefined)
+                      }}
+                      error={levelError}
+                      placeholder="예: 현재 토익 600점"
+                      autoFocus
+                    />
                   ) : (
                     <GoalStepValue>{currentLevel}</GoalStepValue>
                   )}
@@ -374,8 +449,11 @@ export default function GoalCreatePage() {
           <button
             type="button"
             onClick={handleNext}
-            // 기간 단계는 회색이어도 눌러서 어떤 칸이 틀렸는지 오류를 볼 수 있게 함
-            disabled={phase === 'loading' || (phase === 'input' && !canNext && step !== 2)}
+            // 기간 단계와 무언가 적은 목표 단계는 회색이어도 눌러서 어떤 칸이 틀렸는지 오류를 볼 수 있게 함
+            disabled={
+              phase === 'loading' ||
+              (phase === 'input' && !canNext && step !== 2 && !(step === 0 && goal.trim().length > 0))
+            }
             aria-disabled={nextBlocked}
             className={`h-[40px] flex-1 rounded-[8px] text-body-b7 font-semibold text-white-w1 ${
               nextBlocked ? 'bg-black-gray20' : 'bg-brand-main'
