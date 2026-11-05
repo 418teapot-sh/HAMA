@@ -1,25 +1,33 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
 import icAdd from '../../../assets/icons/ic_add.svg'
 import Checkbox from '../../../components/Checkbox'
+import { isMeaningfulText, SCHEDULE_TEXT_ERROR } from '../validation'
 import { WEEKDAYS, type Weekday } from '../weekdays'
 
 type FixedScheduleStepProps = {
   /** 요일별 고정 일정 제목. 고른 요일만 키가 있음 */
   value: Partial<Record<Weekday, string[]>>
   onChange: (value: Partial<Record<Weekday, string[]>>) => void
+  /** 서버가 거절한 고정 일정 오류 문구 */
+  error?: string
 }
 
-/** 일정 제목 수정칸. Enter · 바깥 누르기로 저장, Esc 로 취소. 비우면 원래 제목을 유지 */
+/**
+ * 일정 제목 수정칸. Enter · 바깥 누르기로 저장, Esc 로 취소. 비우면 원래 제목을 유지.
+ * 글자 2자가 안 되는 제목도 원래 제목을 유지하고 onInvalid 로 알림
+ */
 function ScheduleTitleInput({
   title,
   label,
   onSave,
   onCancel,
+  onInvalid,
 }: {
   title: string
   label: string
   onSave: (title: string) => void
   onCancel: () => void
+  onInvalid: () => void
 }) {
   const [draft, setDraft] = useState(title)
   /** Enter · Esc 뒤 입력칸이 사라지며 생기는 blur 로 또 처리하지 않습니다 */
@@ -29,8 +37,11 @@ function ScheduleTitleInput({
     if (finished.current) return
     finished.current = true
     const next = draft.trim()
-    if (next) onSave(next)
-    else onCancel()
+    if (!next) onCancel()
+    else if (!isMeaningfulText(next)) {
+      onInvalid()
+      onCancel()
+    } else onSave(next)
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -58,7 +69,10 @@ function ScheduleTitleInput({
   )
 }
 
-/** 요일 하나의 고정 일정 목록 + 새 일정 입력칸 (Enter 로 추가). 입력한 일정은 수정 · 삭제할 수 있음 */
+/**
+ * 요일 하나의 고정 일정 목록 + 새 일정 입력칸 (Enter 로 추가). 입력한 일정은 수정 · 삭제할 수 있음.
+ * 백엔드는 한 요일의 일정을 쉼표로 이어 받아서 "기, 모" 처럼 합치면 서버 검사를 통과하므로 일정마다 여기서 검사
+ */
 function DaySchedules({
   day,
   titles,
@@ -71,11 +85,17 @@ function DaySchedules({
   const [draft, setDraft] = useState('')
   /** 수정 중인 일정의 순서 */
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [error, setError] = useState<string>()
   const inputRef = useRef<HTMLInputElement>(null)
 
   const add = () => {
     const title = draft.trim()
     if (!title) return
+    if (!isMeaningfulText(title)) {
+      setError(SCHEDULE_TEXT_ERROR)
+      return
+    }
+    setError(undefined)
     onChange([...titles, title])
     setDraft('')
   }
@@ -110,10 +130,12 @@ function DaySchedules({
                 title={title}
                 label={`${title} 수정`}
                 onSave={(next) => {
+                  setError(undefined)
                   onChange(titles.map((item, i) => (i === index ? next : item)))
                   setEditingIndex(null)
                 }}
                 onCancel={() => setEditingIndex(null)}
+                onInvalid={() => setError(SCHEDULE_TEXT_ERROR)}
               />
             ) : (
               <>
@@ -146,15 +168,24 @@ function DaySchedules({
             ref={inputRef}
             type="text"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              setError(undefined)
+            }}
             onKeyDown={handleKeyDown}
             onBlur={add}
             placeholder="고정일정을 입력해주세요."
             aria-label={`${day}요일 고정일정`}
+            aria-invalid={Boolean(error)}
             className="min-w-0 flex-1 bg-transparent text-black-black outline-none placeholder:text-black-gray40"
           />
         </li>
       </ul>
+      {error && (
+        <p role="alert" className="pl-[8px] text-body-b11 text-brand-eo">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
@@ -166,7 +197,7 @@ function DaySchedules({
  *   카드 스타일은 목표 단계 카드와 같음
  * TODO: Figma 의 "고정일정 캘린더에 추가하기"는 일정 API 가 시작·종료 시간을 요구해서 보류 (디자인·백엔드 확인 필요)
  */
-export default function FixedScheduleStep({ value, onChange }: FixedScheduleStepProps) {
+export default function FixedScheduleStep({ value, onChange, error }: FixedScheduleStepProps) {
   const selectedDays = WEEKDAYS.filter((day) => value[day])
 
   const toggleDay = (day: Weekday, checked: boolean) => {
@@ -178,6 +209,11 @@ export default function FixedScheduleStep({ value, onChange }: FixedScheduleStep
 
   return (
     <div className="flex flex-col gap-[16px]">
+      {error && (
+        <p role="alert" className="text-body-b11 text-brand-eo">
+          {error}
+        </p>
+      )}
       <div className="flex justify-between">
         {WEEKDAYS.map((day) => {
           const checked = Boolean(value[day])
