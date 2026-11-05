@@ -333,6 +333,8 @@ export default function TodoPage() {
     setMoreKey(null)
     setEditKey(null)
     setCategory(null)
+    // 취소 · 이동하기 버튼이 캘린더 위에 나오므로, 목록을 내려 본 상태여도 버튼이 보이게 맨 위로 올립니다.
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function handleMove() {
