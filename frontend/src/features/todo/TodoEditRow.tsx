@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import Character from '../../components/Character'
 import { CheckIcon } from '../../components/TodoIcons'
 import { EDITABLE_CATEGORIES, getCategory, type TodoCategoryKey } from './categories'
+import { SCHEDULE_TITLE_MAX, TODO_CONTENT_MAX } from './types'
 
 export interface TodoEditValue {
   title: string
@@ -76,6 +77,7 @@ export default function TodoEditRow({ title, category, allowCategory = true, onS
           <input
             autoFocus
             value={content}
+            maxLength={picked === 'schedule' ? SCHEDULE_TITLE_MAX : TODO_CONTENT_MAX}
             aria-label="투두 내용 수정"
             onChange={(e) => setContent(e.target.value)}
             className="h-[22px] min-w-0 flex-1 border-b border-black-gray40 text-body-b7 font-semibold text-black-gray80 outline-none"

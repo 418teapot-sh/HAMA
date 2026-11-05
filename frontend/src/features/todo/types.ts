@@ -1,5 +1,11 @@
 import type { TodoCategoryKey } from './categories'
 
+/** 투두 내용 최대 글자 수 (백엔드 CreateTodoRequest · UpdateTodoRequest 의 @Size(max = 255)) */
+export const TODO_CONTENT_MAX = 255
+
+/** 일정 제목 최대 글자 수 (백엔드 CreateScheduleRequest · UpdateScheduleRequest 의 @Size(max = 100)) */
+export const SCHEDULE_TITLE_MAX = 100
+
 /** 백엔드 투두 종류 (TASK 할일 · OTHER 기타 · AI_GOAL_TASK 목표 투두) */
 export type TodoApiCategory = 'TASK' | 'OTHER' | 'AI_GOAL_TASK'
 
