@@ -159,16 +159,6 @@ export default function GoalCreatePage() {
         endDate: toApiDate(endDate),
         fixedSchedules,
       })
-      // 목표는 이미 만들었고 상세 조회나 플랜 생성만 실패했다면 목표를 다시 만들지 않음
-      const goalId =
-        createdGoalId ??
-        (await createGoalFromInput({
-          goal: goal.trim(),
-          currentLevel: currentLevel.trim(),
-          startDate: toApiDate(startDate),
-          endDate: toApiDate(endDate),
-          fixedSchedules,
-        }))
       // 만드는 중에 닫았으면 쓰지 않을 목표라 지우고 멈춤 (화면은 이미 닫힘)
       if (closed.current) {
         deleteGoal(goalId).catch(() => {})
