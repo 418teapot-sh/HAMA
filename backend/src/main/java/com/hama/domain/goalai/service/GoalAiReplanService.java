@@ -14,6 +14,7 @@ import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -81,6 +82,24 @@ public class GoalAiReplanService {
         return result;
     }
 
+    /** 호출자는 이미 목표를 잠갔습니다. 기간 밖 미완료 투두만 무료로 조정합니다. */
+    public ReplanResponse adjustForPeriodChange(Long userId, Goal goal) {
+        LocalDate today = LocalDate.now(clock);
+        LocalDate from = today.isAfter(goal.getStartDate()) ? today : goal.getStartDate();
+        List<Todo> targets = todos.findPendingGoalTasksForUpdate(goal.getId()).stream()
+                .filter(todo -> todo.getTodoDate().isBefore(goal.getStartDate())
+                        || todo.getTodoDate().isAfter(goal.getEndDate()))
+                .toList();
+        if (targets.isEmpty()) return new ReplanResponse(0, 0);
+        TimeSlotPlacer placer = new TimeSlotPlacer(busyTimes.read(userId, from, goal.getEndDate(),
+                targets.stream().map(Todo::getId).collect(Collectors.toSet())));
+        if (from.equals(today) && !LocalTime.now(clock).equals(LocalTime.MIDNIGHT)) {
+            placer.block(today, LocalTime.MIDNIGHT, LocalTime.now(clock));
+        }
+        Set<DayOfWeek> busyDays = GoalAiPlanService.days(fixedSchedules.findByGoalIdOrderByDayOfWeekAsc(goal.getId()));
+        return rearrange(targets, placer, from, goal.getEndDate(), busyDays, true);
+    }
+
     /**
      * fromDate 이후에 정해진 시간이 비어 있는 투두는 그대로 두고, 나머지(밀린 투두, 시간 없는 투두, 일정과 겹친 투두)를
      * 순서대로 max(원래 날짜, fromDate) 부터 하루씩 넘기며 첫 빈 시간에 둡니다. 끝까지 없으면 원래 날짜와 시간을 보존합니다.
@@ -93,6 +112,11 @@ public class GoalAiReplanService {
 
     static ReplanResponse rearrange(List<Todo> targets, TimeSlotPlacer base, LocalDate from, LocalDate end,
             Set<DayOfWeek> busyDays) {
+        return rearrange(targets, base, from, end, busyDays, false);
+    }
+
+    private static ReplanResponse rearrange(List<Todo> targets, TimeSlotPlacer base, LocalDate from, LocalDate end,
+            Set<DayOfWeek> busyDays, boolean restartOutsidePeriod) {
         Set<Todo> failed = new HashSet<>();
         Map<Todo, Placement> results;
         // 실패 원본을 점유에 포함하면 앞서 배치했던 투두도 영향을 받을 수 있으므로 안정될 때까지 다시 계산합니다.
@@ -115,7 +139,7 @@ public class GoalAiReplanService {
                 int minutes = todo.getStartTime() == null ? DEFAULT_MINUTES
                         : (int) Duration.between(todo.getStartTime(), todo.getEndTime()).toMinutes();
                 LocalDate first = todo.getTodoDate().isBefore(from) ? from : todo.getTodoDate();
-                if (first.isAfter(end)) first = end;
+                if (first.isAfter(end)) first = restartOutsidePeriod ? from : end;
                 Placement placement = null;
                 for (LocalDate day = first; !day.isAfter(end) && placement == null; day = day.plusDays(1)) {
                     if (busyDays.contains(day.getDayOfWeek())) continue;

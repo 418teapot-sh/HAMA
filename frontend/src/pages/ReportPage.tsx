@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { getApiError } from '../api/client'
 import icMascot from '../assets/icons/ic_mascot.svg'
+import Character from '../components/Character'
 import Modal from '../components/Modal'
 import NavigationBar from '../components/NavigationBar'
 import Toast from '../components/Toast'
@@ -79,7 +80,7 @@ async function loadGoals(tab: Tab): Promise<ReportItem[]> {
  *   - 고른 탭: 배경 Brand/Main + 글자 Body/B5 White/W1
  *   - 안 고른 탭: 배경 Card_Back + 글자 Body/B5 Black/Gray40
  *   마스코트 아이콘은 흰색·회색 파일이 아직 없어 ic_mascot 에 색 필터를 씌웠습니다.
- *   TODO: Figma 탭 아이콘(흰색·회색)을 받아 파일로 바꿉니다
+ *   - 탭 아이콘: 고른 탭 = 흰 몸통 + Brand/Main 눈 (Character selected), 안 고른 탭 = 회색 마스코트
  * - 완료한 목표 탭 = 완료 처리한 목표(COMPLETED) 먼저, 그다음 종료일이 지난 목표(PAST)
  * - 목표 카드 목록 간격 20
  */
@@ -196,11 +197,12 @@ export default function ReportPage() {
                   selected ? 'bg-brand-main text-white-w1' : 'bg-card-back text-black-gray40'
                 }`}
               >
-                <img
-                  src={icMascot}
-                  alt=""
-                  className={`size-[36px] ${selected ? 'brightness-0 invert' : 'opacity-30 grayscale'}`}
-                />
+                {selected ? (
+                  // 고른 탭: 몸통 흰색 + 눈 Brand/Main (전체를 흰색으로 바꾸는 필터를 쓰면 눈까지 하얗게 사라져서 Character 로 그림)
+                  <Character color="var(--color-brand-main)" variant="selected" className="size-[36px]" />
+                ) : (
+                  <img src={icMascot} alt="" className="size-[36px] opacity-30 grayscale" />
+                )}
                 {label}
               </button>
             )

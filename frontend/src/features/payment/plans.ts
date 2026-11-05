@@ -6,7 +6,7 @@ export interface CreditPlan {
   credits: 1 | 5 | 12
   /** 카드 제목 (예: 10회 + 보너스 2회) */
   label: string
-  /** 원 단위 금액 */
+  /** 달러 단위 금액 (#250: 해외원화결제 차단 카드 결제 거절로 원화 → 달러) */
   price: number
   description: string
   /** 카드 오른쪽 아래 단가 문구 */
@@ -14,15 +14,15 @@ export interface CreditPlan {
 }
 
 export const CREDIT_PLANS: CreditPlan[] = [
-  { credits: 1, label: '1회', price: 1200, description: '한 가지 목표에 집중할 때', perUse: '1회당 1,200원' },
-  { credits: 5, label: '5회', price: 4950, description: '여러 목표를 동시에', perUse: '1회당 990원' },
-  { credits: 12, label: '10회 + 보너스 2회', price: 9900, description: '더 많은 목표를 동시에', perUse: '총 12회 · 1회당 825원' },
+  { credits: 1, label: '1회', price: 1, description: '한 가지 목표에 집중할 때', perUse: '1회당 $1.00' },
+  { credits: 5, label: '5회', price: 4, description: '여러 목표를 동시에', perUse: '1회당 $0.80' },
+  { credits: 12, label: '10회 + 보너스 2회', price: 8, description: '더 많은 목표를 동시에', perUse: '총 12회 · 1회당 약 $0.67' },
 ]
 
 /** 처음에 골라 둘 요금제: 추천 5회 (Figma 캡션 "기본 선택: 추천 5회") */
 export const DEFAULT_PLAN = CREDIT_PLANS[1]
 
-/** 4950 → '4,950원' */
-export function formatWon(price: number) {
-  return `${price.toLocaleString('ko-KR')}원`
+/** 4 → '$4' */
+export function formatPrice(price: number) {
+  return `$${price.toLocaleString('en-US')}`
 }

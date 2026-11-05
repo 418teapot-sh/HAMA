@@ -1,4 +1,4 @@
-import { formatWon, type CreditPlan } from './plans'
+import { formatPrice, type CreditPlan } from './plans'
 
 interface PlanOptionProps {
   plan: CreditPlan
@@ -30,7 +30,7 @@ export default function PlanOption({ plan, selected, onSelect }: PlanOptionProps
     >
       <span className="flex w-full items-center justify-between gap-[4px] text-body-b3">
         <span className="text-brand-main">{plan.label}</span>
-        <span className="text-black-black">{formatWon(plan.price)}</span>
+        <span className="text-black-black">{formatPrice(plan.price)}</span>
       </span>
       <span className="flex w-full items-center justify-between gap-[4px] text-body-b10 text-black-gray60">
         <span>{plan.description}</span>

@@ -60,11 +60,12 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
         jdbc.update("delete from goal_progress_summary");
     }
 
-    /** 직접 생성은 PLANNING 으로 시작하므로, 플랜을 고른 뒤의 진행 중 목표로 바꿔 둡니다. */
+    /** 요약 대상인 진행 중 목표를 만들고, 기록 투두 완료로 자동 종료되지 않도록 미완료 투두를 남깁니다. */
     private long goal(User user) throws Exception {
         long id = call(post("/api/v1/goals"), user, Map.of("title", "토익 850점", "startDate", "2026-10-01",
                 "endDate", "2026-10-31"), 201).at("/data/goalId").asLong();
         jdbc.update("update goal set status = 'IN_PROGRESS' where goal_id = ?", id);
+        todo(user, id);
         return id;
     }
 
@@ -116,7 +117,7 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
         assertThat(empty.get("summary").isNull()).isTrue();
         TIME.advance(60);
         var completed = call(patch("/api/v1/todos/" + id + "/complete"), user, null, 200);
-        assertThat(completed.at("/data/goalProgressRate").asDouble()).isEqualTo(100.0);
+        assertThat(completed.at("/data/goalProgressRate").asDouble()).isEqualTo(50.0);
         var record = records(user, goalId).at("/content/0");
         assertThat(record.get("statusNote").asString()).isEqualTo("700점");
         assertThat(record.get("completedAt").asString()).isNotEqualTo(previousAt);
@@ -313,7 +314,7 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
                 .isNull();
         JsonNode input = json.readTree(AI.requests().getLast().messages().getFirst().content());
         assertThat(input.at("/records/0/statusNote").asString()).hasSize(300);
-        assertThat(input.get("progressRate").decimalValue()).isEqualByComparingTo("100.0");
+        assertThat(input.get("progressRate").decimalValue()).isEqualByComparingTo("50.0");
         summary(user, goalId);
         worker.process(goalId);
         assertThat(calls()).isEqualTo(1);
@@ -469,7 +470,7 @@ class GoalProgressApiIntegrationTest extends GoalAiTestSupport {
         answer("완료율 변경");
         worker.process(goalId);
         assertThat(json.readTree(AI.requests().getLast().messages().getFirst().content())
-                .get("progressRate").decimalValue()).isEqualByComparingTo("50.0");
+                .get("progressRate").decimalValue()).isEqualByComparingTo("33.3");
         call(patch("/api/v1/goals/" + goalId), user, Map.of("title", "새 목표 제목"), 200);
         TIME.advance(60);
         answer("제목 변경");

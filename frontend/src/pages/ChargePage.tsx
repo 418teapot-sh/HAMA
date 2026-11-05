@@ -8,7 +8,7 @@ import { loadMe } from '../features/auth/api'
 import { useAuthStore } from '../features/auth/store'
 import { isPaddleConfigured, openCheckout } from '../features/payment/paddle'
 import PlanOption from '../features/payment/PlanOption'
-import { CREDIT_PLANS, DEFAULT_PLAN, formatWon, type CreditPlan } from '../features/payment/plans'
+import { CREDIT_PLANS, DEFAULT_PLAN, formatPrice, type CreditPlan } from '../features/payment/plans'
 import { paths } from '../paths'
 
 type Result = 'success' | 'fail' | null
@@ -89,7 +89,7 @@ export default function ChargePage() {
   }
 
   return (
-    <div className="flex w-full flex-1 flex-col pb-[158px]">
+    <div className="flex w-full flex-1 flex-col pb-[174px]">
       <NavigationBar
         title="크레딧 충전"
         leftLabel="뒤로 가기"
@@ -126,7 +126,7 @@ export default function ChargePage() {
       <div className="fixed bottom-0 left-1/2 flex w-full max-w-[402px] -translate-x-1/2 flex-col gap-[8px] bg-white-w1 px-[20px] pt-[12px] pb-[41px]">
         <div className="flex items-center justify-between gap-[12px]">
           <span className="text-body-b8 text-brand-main">{plan.credits}회 충전</span>
-          <span className="text-body-b3 text-black-black">{formatWon(plan.price)}</span>
+          <span className="text-body-b3 text-black-black">{formatPrice(plan.price)}</span>
         </div>
         <button
           type="button"
@@ -134,9 +134,12 @@ export default function ChargePage() {
           onClick={() => void handlePay()}
           className="flex h-[48px] w-full items-center justify-center rounded-[12px] bg-brand-main px-[20px] py-[12px] text-body-b3 text-white-w1"
         >
-          {formatWon(plan.price)} 결제하기
+          {formatPrice(plan.price)} 결제하기
         </button>
-        <p className="text-center text-caption-cap3 text-black-gray60">최종 결제 금액은 결제창에서 확인해 주세요.</p>
+        {/* #253: 달러 결제라 카드사 해외 결제 수수료 안내를 한 줄 더함 (하단 영역이 16px 늘어 본문 pb 도 같이 늘림) */}
+        <p className="text-center text-caption-cap3 whitespace-pre-line text-black-gray60">
+          {'최종 결제 금액은 결제창에서 확인해 주세요.\n달러 결제라 카드사 해외 결제 수수료가 붙을 수 있어요.'}
+        </p>
       </div>
 
       <IconAlert

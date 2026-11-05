@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import icClose from '../assets/icons/ic_close.svg'
 import NavigationBar from '../components/NavigationBar'
@@ -109,6 +109,8 @@ export default function GoalCreatePage() {
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null)
   const [starting, setStarting] = useState(false)
   const [planError, setPlanError] = useState<string>()
+  /** 닫기를 눌렀는지. 목표를 만드는 중에 닫으면 응답이 온 뒤 지우는 데 씁니다 */
+  const closed = useRef(false)
 
   const startError = touched.start ? dateError('시작일', startDate) : undefined
   const datesValid = isValidDate(startDate) && isValidDate(endDate)
@@ -157,6 +159,21 @@ export default function GoalCreatePage() {
         endDate: toApiDate(endDate),
         fixedSchedules,
       })
+      // 목표는 이미 만들었고 상세 조회나 플랜 생성만 실패했다면 목표를 다시 만들지 않음
+      const goalId =
+        createdGoalId ??
+        (await createGoalFromInput({
+          goal: goal.trim(),
+          currentLevel: currentLevel.trim(),
+          startDate: toApiDate(startDate),
+          endDate: toApiDate(endDate),
+          fixedSchedules,
+        }))
+      // 만드는 중에 닫았으면 쓰지 않을 목표라 지우고 멈춤 (화면은 이미 닫힘)
+      if (closed.current) {
+        deleteGoal(goalId).catch(() => {})
+        return
+      }
       setCreatedGoalId(goalId)
       setCreatedGoal(await getGoal(goalId))
       const planList = await generatePlans(goalId)
@@ -196,13 +213,24 @@ export default function GoalCreatePage() {
     }
   }
 
+  /**
+   * 닫기: 플랜을 골라 시작하기 전에 나가면 만들어 둔 목표(PLANNING)를 지움.
+   * 지우지 않으면 화면 어디에도 안 보이는 목표가 서버에 남습니다. 플랜 시작 요청 중에는 닫지 않습니다.
+   */
+  const handleClose = () => {
+    if (starting) return
+    closed.current = true
+    if (createdGoalId !== null) deleteGoal(createdGoalId).catch(() => {})
+    navigate(-1)
+  }
+
   const handlePrev = () => {
     // 입력을 고치러 돌아가면 새 값으로 목표를 다시 만듦. 먼저 만든 목표는 화면에 안 보여서 지움
     if (phase === 'error') {
       discardCreatedGoal(createdGoalId)
       setPhase('input')
     }
-    else if (step === 0) navigate(-1)
+    else if (step === 0) handleClose()
     else setStep(step - 1)
   }
 
@@ -277,7 +305,7 @@ export default function GoalCreatePage() {
         title="목표 추가"
         rightIcon={<img src={icClose} alt="" className="size-[24px]" />}
         rightLabel="닫기"
-        onRightClick={() => navigate(-1)}
+        onRightClick={handleClose}
       />
 
       {phase === 'input' ? (

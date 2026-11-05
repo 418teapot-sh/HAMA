@@ -104,6 +104,8 @@ public class GoalController {
     @Operation(summary = "목표 수정",
             description = """
                     제목·기간만 바꿉니다(currentStatus 는 현재 상태 수정 API를 쓰세요).
+                    진행 중 목표의 기간을 바꾸면 기간 밖 미완료 투두를 무료로 재배치합니다.
+                    빈자리가 없어 옮기지 못한 투두와 완료된 투두는 원래 날짜를 유지하며 periodAdjustment에 건수를 반환합니다.
                     생략한 필드는 기존 값을 유지하고, null 을 보내면 지웁니다(title 은 null 이어도 유지).
                     진행 중인 목표의 startDate·endDate 를 null 로 보내면 400(GOAL_INVALID_INPUT). 응답은 상세 조회와 같습니다.
                     지난 목표(PAST)는 409(GOAL_NOT_EDITABLE), 기간이 잘못되면 400(GOAL_INVALID_PERIOD), 404 / 403 은 상세와 같습니다.
@@ -145,8 +147,7 @@ public class GoalController {
 
     @Operation(summary = "목표 삭제",
             description = """
-                    지난 목표(PAST)·완료한 목표(COMPLETED)·플랜 선택 전(PLANNING) 목표만 삭제할 수 있고,
-                    진행 중(IN_PROGRESS)이면 409(GOAL_NOT_DELETABLE)입니다.
+                    진행 중·지난 목표·완료한 목표·플랜 선택 전 목표를 삭제할 수 있습니다.
                     연결된 투두도 함께 소프트 삭제됩니다.
                     성공 시 HTTP 200, 공통 응답의 data 는 null 입니다. 404 / 403 은 상세와 같습니다.
                     """)

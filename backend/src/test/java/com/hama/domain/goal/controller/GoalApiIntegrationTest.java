@@ -245,6 +245,43 @@ class GoalApiIntegrationTest {
     }
 
     @Test
+    void 기간을_줄이면_미완료_기간밖_투두만_무료로_옮기고_완료기록은_보존한다() throws Exception {
+        Session owner = signup();
+        long goalId = createGoal(owner);
+        long pending = goalTask(owner, goalId, false);
+        long completed = goalTask(owner, goalId, true);
+        jdbc.update("update todo set todo_date = ? where todo_id in (?, ?)", Date.valueOf(TODAY.plusDays(10)), pending, completed);
+        Integer credits = jdbc.queryForObject("select credits from users where user_id = ?", Integer.class, owner.userId());
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"endDate\":\"2026-10-05\"}"), owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.periodAdjustment.movedCount").value(1))
+                .andExpect(jsonPath("$.data.periodAdjustment.unplacedCount").value(0));
+        assertThat(jdbc.queryForObject("select todo_date from todo where todo_id = ?", Date.class, pending).toLocalDate())
+                .isBetween(TODAY, TODAY.plusDays(1));
+        assertThat(jdbc.queryForObject("select todo_date from todo where todo_id = ?", Date.class, completed).toLocalDate())
+                .isEqualTo(TODAY.plusDays(10));
+        assertThat(jdbc.queryForObject("select credits from users where user_id = ?", Integer.class, owner.userId())).isEqualTo(credits);
+    }
+
+    @Test
+    void 빈_요일이_없으면_기간을_바꾸되_투두_원본과_실패_건수를_보존한다() throws Exception {
+        Session owner = signup();
+        long goalId = createGoal(owner);
+        long pending = goalTask(owner, goalId, false);
+        jdbc.update("update todo set todo_date = ? where todo_id = ?", Date.valueOf(TODAY.plusDays(10)), pending);
+        jdbc.update("insert into goal_fixed_schedule(goal_id,day_of_week,content) values (?,?,?),(?,?,?)",
+                goalId, "SUNDAY", "busy", goalId, "MONDAY", "busy");
+        mvc.perform(auth(patch("/api/v1/goals/" + goalId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"endDate\":\"2026-10-05\"}"), owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.periodAdjustment.movedCount").value(0))
+                .andExpect(jsonPath("$.data.periodAdjustment.unplacedCount").value(1));
+        assertThat(jdbc.queryForObject("select todo_date from todo where todo_id = ?", Date.class, pending).toLocalDate())
+                .isEqualTo(TODAY.plusDays(10));
+    }
+
+    @Test
     void 수정은_보낸_필드만_바꾸고_상세를_돌려준다() throws Exception {
         Session owner = signup();
         long goalId = createGoal(owner);
@@ -604,13 +641,14 @@ class GoalApiIntegrationTest {
     }
 
     @Test
-    void 진행_중인_목표는_삭제하면_409() throws Exception {
+    void 진행_중인_목표와_연결된_투두를_함께_삭제한다() throws Exception {
         Session owner = signup();
         long goalId = createGoal(owner);
-
+        long todoId = goalTask(owner, goalId, false);
         mvc.perform(auth(delete("/api/v1/goals/" + goalId), owner))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error.code").value("GOAL_NOT_DELETABLE"));
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("select deleted_at from goal where goal_id = ?", java.sql.Timestamp.class, goalId)).isNotNull();
+        assertThat(jdbc.queryForObject("select deleted_at from todo where todo_id = ?", java.sql.Timestamp.class, todoId)).isNotNull();
     }
 
     // ---- 완료 ----
