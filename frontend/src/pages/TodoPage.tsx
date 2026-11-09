@@ -58,7 +58,9 @@ const ERROR_MESSAGES: Record<string, string> = {
 function errorMessage(error: unknown) {
   const apiError = getApiError(error)
   if (!apiError) return FALLBACK_ERROR
-  return ERROR_MESSAGES[apiError.code] ?? apiError.message ?? FALLBACK_ERROR
+  // 400 VALIDATION_FAILED 면 서버가 칸별로 준 구체적인 문구(예: "내용은 255자 이하입니다.")를 먼저 보여 줍니다
+  const fieldMessage = apiError.fields ? Object.values(apiError.fields).find(Boolean) : undefined
+  return fieldMessage ?? ERROR_MESSAGES[apiError.code] ?? apiError.message ?? FALLBACK_ERROR
 }
 
 /** 캘린더 뱃지: 할일 · 기타 · AI 목표 투두 · 일정 */
