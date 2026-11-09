@@ -22,6 +22,8 @@ import {
   deleteSchedule,
   deleteTodo,
   getDailyTodos,
+  isRepeatingSchedule,
+  moveSchedule,
   moveTodo,
   setScheduleDone,
   toDateTime,
@@ -326,9 +328,23 @@ export default function TodoPage() {
     void run(() => (todo.kind === 'schedule' ? deleteSchedule(todo.id) : deleteTodo(todo.id)), '삭제 되었습니다.')
   }
 
-  function handleStartMove() {
+  async function handleStartMove() {
     const todo = findTodo(moreKey)
     if (!todo) return
+    if (todo.kind === 'schedule') {
+      // 반복 일정은 PATCH 가 시리즈 전체를 바꿔서, 그 날 하나만 옮길 수 없습니다.
+      try {
+        if (await isRepeatingSchedule(todo.id)) {
+          setMoreKey(null)
+          showToast('반복 일정은 날짜를 옮길 수 없어요.')
+          return
+        }
+      } catch (error) {
+        setMoreKey(null)
+        showToast(errorMessage(error))
+        return
+      }
+    }
     setMoving({ todo, target: null })
     setMoreKey(null)
     setEditKey(null)
@@ -340,7 +356,9 @@ export default function TodoPage() {
   async function handleMove() {
     if (!moving?.target) return
     const { todo, target } = moving
-    if (await run(() => moveTodo(todo.id, toDateKey(target)), '이동되었습니다.')) {
+    const to = toDateKey(target)
+    const request = () => (todo.kind === 'schedule' ? moveSchedule(todo.id, todo.date, to) : moveTodo(todo.id, to))
+    if (await run(request, '이동되었습니다.')) {
       setSelectedDate(target)
       setMoving(null)
     }
@@ -365,11 +383,13 @@ export default function TodoPage() {
 
   /**
    * 날짜 이동에서 고를 수 없는 날짜: 지난 날짜(디자이너 답변) + 원래 날짜와 그 이전(백엔드: 원래 날짜보다 뒤만 가능)
+   * 일정은 서버에 그 제한이 없어, 지난 날짜와 원래 날짜만 막습니다.
    * 날짜 키(YYYY-MM-DD)는 문자열 비교로 순서를 알 수 있습니다.
    */
   const isMoveDisabled = useMemo(() => {
     if (!moving) return undefined
     const from = moving.todo.date
+    if (moving.todo.kind === 'schedule') return (date: Date) => date < today || toDateKey(date) === from
     return (date: Date) => date < today || toDateKey(date) <= from
   }, [moving, today])
 
@@ -473,10 +493,10 @@ export default function TodoPage() {
       <TodoMoreSheet
         open={moreTodo !== undefined}
         canEdit={!moreTodo?.done}
-        canMove={moreTodo?.kind === 'todo' && !moreTodo.done}
+        canMove={moreTodo !== undefined && !moreTodo.done}
         onEdit={handleEdit}
         onDelete={handleDelete}
-        onMoveDate={handleStartMove}
+        onMoveDate={() => void handleStartMove()}
         onClose={() => setMoreKey(null)}
       />
 
