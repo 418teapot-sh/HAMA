@@ -10,7 +10,7 @@ interface TodoMoreSheetProps {
   onClose: () => void
   /** false 면 수정하기를 숨김 (완료한 투두: 먼저 완료 취소해야 수정 가능) */
   canEdit?: boolean
-  /** false 면 날짜 변경을 숨김 (완료한 투두 · 일정) */
+  /** false 면 날짜 변경을 숨김 (완료한 투두 · 일정). 반복 일정은 누른 뒤 안내하고 막습니다 */
   canMove?: boolean
 }
 

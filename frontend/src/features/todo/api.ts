@@ -208,6 +208,58 @@ export async function setScheduleDone(schedule: Pick<TodoView, 'id' | 'date' | '
   })
 }
 
+/** 일정 상세 (GET /api/v1/calendar/schedules/{id}). 일시는 'yyyy-MM-ddTHH:mm:ss' */
+interface ScheduleDetail {
+  scheduleId: number
+  startAt: string
+  endAt: string
+  allDay: boolean
+  repeatRule: string | null
+}
+
+async function getSchedule(scheduleId: number) {
+  const res = await api.get<ApiResponse<ScheduleDetail>>(`/api/v1/calendar/schedules/${scheduleId}`)
+  return res.data.data
+}
+
+/** 반복 일정인지. 반복 일정은 PATCH 가 시리즈 전체를 바꾸므로 날짜 변경을 막습니다 */
+export async function isRepeatingSchedule(scheduleId: number) {
+  return (await getSchedule(scheduleId)).repeatRule !== null
+}
+
+/** 'yyyy-MM-ddTHH:mm:ss' 의 날짜만 days 만큼 옮김 (시간은 그대로) */
+function shiftDateTime(value: string, days: number) {
+  const [date, time] = value.split('T')
+  const [y, m, d] = date.split('-').map(Number)
+  const shifted = new Date(y, m - 1, d + days)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${shifted.getFullYear()}-${pad(shifted.getMonth() + 1)}-${pad(shifted.getDate())}T${time}`
+}
+
+/** 'YYYY-MM-DD' 두 날짜의 일 수 차이 (to - from) */
+function dayDiff(from: string, to: string) {
+  const toUtc = (key: string) => {
+    const [y, m, d] = key.split('-').map(Number)
+    return Date.UTC(y, m - 1, d)
+  }
+  return Math.round((toUtc(to) - toUtc(from)) / 86_400_000)
+}
+
+/**
+ * 반복 없는 일정의 날짜 변경 (PATCH /api/v1/calendar/schedules/{id}).
+ * 시작 · 종료 일시를 같은 일 수만큼 옮겨 시간과 길이(여러 날 · 종일 포함)를 유지합니다.
+ * 날짜가 바뀌면 서버가 그 일정의 완료 기록을 지웁니다 (완료한 일정은 화면에서 날짜 변경을 숨김).
+ */
+export async function moveSchedule(scheduleId: number, fromDate: string, toDate: string) {
+  const detail = await getSchedule(scheduleId)
+  if (detail.repeatRule !== null) throw new Error('반복 일정은 날짜를 옮길 수 없어요.')
+  const days = dayDiff(fromDate, toDate)
+  await api.patch(`/api/v1/calendar/schedules/${scheduleId}`, {
+    startAt: shiftDateTime(detail.startAt, days),
+    endAt: shiftDateTime(detail.endAt, days),
+  })
+}
+
 /** 일정 삭제 (DELETE /api/v1/calendar/schedules/{id}) */
 export async function deleteSchedule(scheduleId: number) {
   await api.delete(`/api/v1/calendar/schedules/${scheduleId}`)
