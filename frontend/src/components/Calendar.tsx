@@ -20,6 +20,8 @@ type CalendarProps = {
   highlightDate?: Date | null
   /** 누를 수 없게 할 날짜 (투두 날짜 이동에서 지난 날짜) */
   isDateDisabled?: (date: Date) => boolean
+  /** 넘기면 년·월 옆에 내보내기(구름) 버튼을 보여 줌 (Figma 투두리스트_기본상태 · 캘린더 내보내기) */
+  onExport?: () => void
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
@@ -72,6 +74,25 @@ function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
   )
 }
 
+/** 구름 + 위쪽 화살표 (캘린더 내보내기) */
+function CloudUploadIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M7 19a5 5 0 0 1-.9-9.92A6.5 6.5 0 0 1 18.66 9 4.5 4.5 0 0 1 17.5 19H7Z"
+        fill="currentColor"
+      />
+      <path
+        d="M12 16v-5.5m0 0-2.25 2.25M12 10.5l2.25 2.25"
+        stroke="white"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 /**
  * 공용 캘린더 (Figma 컴포넌트: Calendar, 홈 화면에서 확인)
  * - 카드: 패딩 20 / 반경 20 / 테두리 1 Stroke / 배경 Card_Back / 그림자 Card_Shadow / 배경 흐림 10
@@ -91,6 +112,7 @@ export default function Calendar({
   onMonthChange,
   highlightDate,
   isDateDisabled,
+  onExport,
 }: CalendarProps) {
   const [today] = useState(startOfToday)
   const [viewMonth, setViewMonth] = useState(
@@ -110,9 +132,21 @@ export default function Calendar({
   return (
     <section className="flex w-full flex-col items-center gap-[20px] rounded-[20px] border border-stroke bg-card-back p-[20px] shadow-card-shadow backdrop-blur-[10px]">
       <div className="flex w-full items-center justify-between">
-        <p className="text-body-b5 text-black-black">
-          {year}년 {month + 1}월
-        </p>
+        <div className="flex items-center gap-[4px]">
+          <p className="text-body-b5 text-black-black">
+            {year}년 {month + 1}월
+          </p>
+          {onExport && (
+            <button
+              type="button"
+              aria-label="캘린더 내보내기"
+              className="flex size-[24px] items-center justify-center text-brand-main-40"
+              onClick={onExport}
+            >
+              <CloudUploadIcon />
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-[4px] text-black-gray60">
           <button
             type="button"

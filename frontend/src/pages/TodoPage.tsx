@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { getApiError } from '../api/client'
 import Calendar, { type CalendarMark } from '../components/Calendar'
+import Modal from '../components/Modal'
 import Toast from '../components/Toast'
-import { getMonthCalendar, toCalendarMarks } from '../features/calendar/api'
+import { exportCalendar, getMonthCalendar, toCalendarMarks } from '../features/calendar/api'
 import { getGoals, type GoalSummary } from '../features/goal/api'
 import { AiStateInput, AiStatePromptModal, AiStateSheet, GoalPickSheet } from '../features/todo/AiStateSheets'
 import CategoryBar, { CategoryPointer } from '../features/todo/CategoryBar'
@@ -136,6 +137,26 @@ export default function TodoPage() {
   const [busy, setBusy] = useState(false)
   const toast = useToast()
   const showToast = toast.show
+  /** 캘린더 내보내기 확인 팝업 (Figma 캘린더 내보내기) */
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  /** 보고 있는 달 1일부터 1년치 일정을 .ics 파일로 내려받습니다 */
+  const handleExport = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      await exportCalendar(month.year, month.month)
+      setExportOpen(false)
+      showToast('캘린더 파일을 내려받았어요.')
+    } catch {
+      // 실패 응답이 파일(blob)로 와서 서버 문구를 꺼내지 않고 공통 안내를 보여 줍니다
+      setExportOpen(false)
+      showToast('캘린더를 내보내지 못했어요. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const selectedKey = toDateKey(selectedDate)
 
@@ -412,6 +433,7 @@ export default function TodoPage() {
         marks={marks}
         highlightDate={moving?.target}
         isDateDisabled={isMoveDisabled}
+        onExport={moving ? undefined : () => setExportOpen(true)}
       />
 
       <div className="flex h-[24px] w-full items-center justify-between gap-[10px]">
@@ -519,6 +541,21 @@ export default function TodoPage() {
         goals={goalPicking ?? []}
         onClose={() => setGoalPicking(null)}
         onPick={handlePickGoal}
+      />
+
+      <Modal
+        open={exportOpen}
+        title="캘린더를 내보낼까요?"
+        description={
+          <>
+            캘린더를 내보내도
+            <br />
+            하마에 저장된 일정은 그대로 유지돼요.
+          </>
+        }
+        confirmText={exporting ? '내보내는 중…' : '내보내기'}
+        onCancel={() => setExportOpen(false)}
+        onConfirm={() => void handleExport()}
       />
     </main>
   )
