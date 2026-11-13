@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import icCloudUpload from '../assets/icons/ic_cloud_upload.svg'
 import { startOfToday, toDateKey } from '../utils/date'
 
 export type CalendarCategory = 'task' | 'schedule' | 'ai' | 'etc'
@@ -74,25 +75,6 @@ function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
   )
 }
 
-/** 구름 + 위쪽 화살표 (캘린더 내보내기) */
-function CloudUploadIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M7 19a5 5 0 0 1-.9-9.92A6.5 6.5 0 0 1 18.66 9 4.5 4.5 0 0 1 17.5 19H7Z"
-        fill="currentColor"
-      />
-      <path
-        d="M12 16v-5.5m0 0-2.25 2.25M12 10.5l2.25 2.25"
-        stroke="white"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
 /**
  * 공용 캘린더 (Figma 컴포넌트: Calendar, 홈 화면에서 확인)
  * - 카드: 패딩 20 / 반경 20 / 테두리 1 Stroke / 배경 Card_Back / 그림자 Card_Shadow / 배경 흐림 10
@@ -140,10 +122,10 @@ export default function Calendar({
             <button
               type="button"
               aria-label="캘린더 내보내기"
-              className="flex size-[24px] items-center justify-center text-brand-main-40"
+              className="flex size-[24px] items-center justify-center"
               onClick={onExport}
             >
-              <CloudUploadIcon />
+              <img src={icCloudUpload} alt="" className="size-[24px]" />
             </button>
           )}
         </div>
