@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import icCloudUpload from '../assets/icons/ic_cloud_upload.svg'
 import { startOfToday, toDateKey } from '../utils/date'
 
 export type CalendarCategory = 'task' | 'schedule' | 'ai' | 'etc'
@@ -20,6 +21,8 @@ type CalendarProps = {
   highlightDate?: Date | null
   /** 누를 수 없게 할 날짜 (투두 날짜 이동에서 지난 날짜) */
   isDateDisabled?: (date: Date) => boolean
+  /** 넘기면 년·월 옆에 내보내기(구름) 버튼을 보여 줌 (Figma 투두리스트_기본상태 · 캘린더 내보내기) */
+  onExport?: () => void
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
@@ -91,6 +94,7 @@ export default function Calendar({
   onMonthChange,
   highlightDate,
   isDateDisabled,
+  onExport,
 }: CalendarProps) {
   const [today] = useState(startOfToday)
   const [viewMonth, setViewMonth] = useState(
@@ -110,9 +114,21 @@ export default function Calendar({
   return (
     <section className="flex w-full flex-col items-center gap-[20px] rounded-[20px] border border-stroke bg-card-back p-[20px] shadow-card-shadow backdrop-blur-[10px]">
       <div className="flex w-full items-center justify-between">
-        <p className="text-body-b5 text-black-black">
-          {year}년 {month + 1}월
-        </p>
+        <div className="flex items-center gap-[4px]">
+          <p className="text-body-b5 text-black-black">
+            {year}년 {month + 1}월
+          </p>
+          {onExport && (
+            <button
+              type="button"
+              aria-label="캘린더 내보내기"
+              className="flex size-[24px] items-center justify-center"
+              onClick={onExport}
+            >
+              <img src={icCloudUpload} alt="" className="size-[24px]" />
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-[4px] text-black-gray60">
           <button
             type="button"
