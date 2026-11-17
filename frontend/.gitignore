@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 팀은 npm(package-lock.json)을 씁니다. 다른 패키지 매니저 lock 파일은 올리지 않습니다.
+pnpm-lock.yaml
+yarn.lock
