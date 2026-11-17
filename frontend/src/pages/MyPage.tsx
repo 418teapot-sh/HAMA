@@ -1,14 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { getApiError } from '../api/client'
-import icMascot from '../assets/icons/ic_mascot.svg'
-import icRight from '../assets/icons/ic_right.svg'
-import InputField from '../components/InputField'
-import Modal from '../components/Modal'
-import NavigationBar from '../components/NavigationBar'
-import { loadMe, logout, withdraw } from '../features/auth/api'
-import { useAuthStore } from '../features/auth/store'
-import { paths } from '../paths'
+import { getApiError } from '@/api/errors'
+import icMascot from '@/assets/icons/ic_mascot.svg'
+import icRight from '@/assets/icons/ic_right.svg'
+import InputField from '@/components/InputField'
+import Modal from '@/components/Modal'
+import NavigationBar from '@/components/NavigationBar'
+import { loadMe, logout, withdraw } from '@/features/auth/api'
+import { useAuthStore } from '@/features/auth/store'
+import { paths } from '@/paths'
 
 /** 카드: 반경 20 / 배경 Card_Back / 테두리 1 Stroke / 그림자 shadow */
 function InfoCard({ children, className = '' }: { children: ReactNode; className?: string }) {

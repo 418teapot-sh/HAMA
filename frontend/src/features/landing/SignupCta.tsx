@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { restoreSession } from '../auth/api'
-import { useAuthStore } from '../auth/store'
-import { paths } from '../../paths'
+import { restoreSession } from '@/features/auth/api'
+import { useAuthStore } from '@/features/auth/store'
+import { paths } from '@/paths'
 import LandingButton from './LandingButton'
 
 /** 모바일 버튼 · 안내 문구 사이 간격과 안내 문구 글자 (데스크톱은 둘 다 사이 12 · 18px 행간 140%(25px)) */

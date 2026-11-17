@@ -1,9 +1,9 @@
-import icBack from '../../../assets/icons/ic_back.svg'
-import icCheck from '../../../assets/icons/ic_check.svg'
-import icRightBlack from '../../../assets/icons/ic_right_black.svg'
-import { formatGoalPeriod } from '../../../utils/date'
-import type { PlanView } from '../aiApi'
-import type { GoalDetail } from '../api'
+import icBack from '@/assets/icons/ic_back.svg'
+import icCheck from '@/assets/icons/ic_check.svg'
+import icRightBlack from '@/assets/icons/ic_right_black.svg'
+import { formatGoalPeriod } from '@/utils/date'
+import type { PlanView } from '@/features/goal/aiApi'
+import type { GoalDetail } from '@/features/goal/api'
 
 type PlanProposalProps = {
   goal: GoalDetail

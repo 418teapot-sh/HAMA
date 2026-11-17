@@ -1,5 +1,5 @@
-import { api } from '../../api/client'
-import type { ApiResponse } from '../../api/types'
+import { api } from '@/api/client'
+import type { ApiResponse } from '@/api/types'
 
 /** 요청·응답 형식은 Swagger(https://api.todohama.site/swagger-ui/index.html) 기준입니다. */
 /** PLANNING(플랜 선택 전) → IN_PROGRESS(진행 중) → COMPLETED(완료 처리) 또는 PAST(종료일 지남) */

@@ -1,8 +1,8 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
-import icAdd from '../../../assets/icons/ic_add.svg'
-import Checkbox from '../../../components/Checkbox'
-import { isMeaningfulText, SCHEDULE_TEXT_ERROR } from '../validation'
-import { WEEKDAYS, type Weekday } from '../weekdays'
+import icAdd from '@/assets/icons/ic_add.svg'
+import Checkbox from '@/components/Checkbox'
+import { isMeaningfulText, SCHEDULE_TEXT_ERROR } from '@/features/goal/validation'
+import { WEEKDAYS, type Weekday } from '@/features/goal/weekdays'
 
 type FixedScheduleStepProps = {
   /** 요일별 고정 일정 제목. 고른 요일만 키가 있음 */

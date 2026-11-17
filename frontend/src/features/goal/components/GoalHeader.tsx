@@ -1,5 +1,5 @@
-import icMascot from '../../../assets/icons/ic_mascot.svg'
-import icSparkleMain from '../../../assets/icons/ic_sparkle_main.svg'
+import icMascot from '@/assets/icons/ic_mascot.svg'
+import icSparkleMain from '@/assets/icons/ic_sparkle_main.svg'
 
 /** 머리말: [마스코트 36 + 반짝이 24, 간격 8] ↔ 제목 간격 8. 제목은 Heading/H1 + 그라데이션 */
 export default function GoalHeader({ title, center = false }: { title: string; center?: boolean }) {

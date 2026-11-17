@@ -1,8 +1,8 @@
-import icBack from '../../../assets/icons/ic_back.svg'
-import Button from '../../../components/Button'
-import NavigationBar from '../../../components/NavigationBar'
-import { formatGoalPeriod } from '../../../utils/date'
-import type { GoalSummary } from '../api'
+import icBack from '@/assets/icons/ic_back.svg'
+import Button from '@/components/Button'
+import NavigationBar from '@/components/NavigationBar'
+import { formatGoalPeriod } from '@/utils/date'
+import type { GoalSummary } from '@/features/goal/api'
 import GoalHeader from './GoalHeader'
 
 type ReplanScreenProps = {

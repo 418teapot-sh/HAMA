@@ -1,8 +1,8 @@
 import { Link } from 'react-router'
-import icCheck from '../../../assets/icons/ic_check.svg'
-import icRightBlack from '../../../assets/icons/ic_right_black.svg'
-import { paths } from '../../../paths'
-import { formatGoalPeriod } from '../../../utils/date'
+import icCheck from '@/assets/icons/ic_check.svg'
+import icRightBlack from '@/assets/icons/ic_right_black.svg'
+import { paths } from '@/paths'
+import { formatGoalPeriod } from '@/utils/date'
 
 type GoalSummaryCardProps = {
   title: string

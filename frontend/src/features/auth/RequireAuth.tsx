@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router'
-import { paths } from '../../paths'
+import { paths } from '@/paths'
 import { restoreSession } from './api'
 import { useAuthStore } from './store'
 

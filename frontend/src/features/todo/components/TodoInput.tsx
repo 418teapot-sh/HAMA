@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { PlusIcon } from '../../components/TodoIcons'
-import type { TodoCategory } from './categories'
-import { SCHEDULE_TITLE_MAX, TODO_CONTENT_MAX } from './types'
+import { PlusIcon } from '@/components/Icons'
+import type { TodoCategory } from '@/features/todo/categories'
+import { SCHEDULE_TITLE_MAX, TODO_CONTENT_MAX } from '@/features/todo/types'
 
 export interface TodoInputValue {
   content: string

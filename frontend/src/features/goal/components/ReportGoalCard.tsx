@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import icCheck from '../../../assets/icons/ic_check.svg'
-import icRightBlack from '../../../assets/icons/ic_right_black.svg'
-import Button from '../../../components/Button'
-import Character from '../../../components/Character'
-import { MeatballIcon, SparkleIcon } from '../../../components/TodoIcons'
-import { formatGoalPeriod } from '../../../utils/date'
-import type { GoalSummary, GoalTask } from '../api'
+import icCheck from '@/assets/icons/ic_check.svg'
+import icRightBlack from '@/assets/icons/ic_right_black.svg'
+import Button from '@/components/Button'
+import Character from '@/components/Character'
+import { MeatballIcon, SparkleIcon } from '@/components/Icons'
+import { formatGoalPeriod } from '@/utils/date'
+import type { GoalSummary, GoalTask } from '@/features/goal/api'
 
 type ReportGoalCardProps = {
   goal: GoalSummary

@@ -1,5 +1,5 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
-import { useAuthStore } from '../features/auth/store'
+import { useAuthStore } from '@/features/auth/store'
 import type { ApiResponse } from './types'
 
 /** 배포 백엔드 주소. 공개 주소라 코드에 둬도 됩니다. */
@@ -87,11 +87,3 @@ api.interceptors.response.use(
     return Promise.reject(error)
   },
 )
-
-/** 실패 응답에서 백엔드 에러 정보를 꺼냅니다. 에러 분기는 message 가 아니라 code 로 합니다(README). */
-export function getApiError(error: unknown) {
-  if (axios.isAxiosError<ApiResponse<null>>(error)) {
-    return error.response?.data?.error ?? null
-  }
-  return null
-}

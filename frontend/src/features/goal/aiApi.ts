@@ -1,7 +1,12 @@
-import { api } from '../../api/client'
-import type { ApiResponse } from '../../api/types'
+import { api } from '@/api/client'
+import type { ApiResponse } from '@/api/types'
 import { createGoal, type DayOfWeek } from './api'
 import type { Weekday } from './weekdays'
+
+/**
+ * 목표 만들기 흐름 API: 입력으로 목표 생성 → AI 플랜(A · B) 생성 · 다시 만들기 → 플랜 선택.
+ * 만들어진 목표의 조회 · 삭제 · 리포트는 api.ts 에 있습니다.
+ */
 
 /** 요청·응답 형식은 Swagger(https://api.todohama.site/swagger-ui/index.html) 기준입니다. */
 
