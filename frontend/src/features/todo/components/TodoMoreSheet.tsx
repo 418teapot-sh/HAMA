@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import BottomSheet from '../../components/BottomSheet'
-import { ForwardArrowIcon, PenIcon, TrashIcon } from '../../components/TodoIcons'
+import BottomSheet from '@/components/BottomSheet'
+import { ForwardArrowIcon, PenIcon, TrashIcon } from '@/components/Icons'
 
 interface TodoMoreSheetProps {
   open: boolean

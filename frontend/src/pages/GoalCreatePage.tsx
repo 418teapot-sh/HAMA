@@ -1,44 +1,21 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import icClose from '../assets/icons/ic_close.svg'
-import NavigationBar from '../components/NavigationBar'
-import { getApiError } from '../api/client'
-import { createGoalFromInput, generatePlans, selectPlan, type PlanView } from '../features/goal/aiApi'
-import { deleteGoal, getGoal, type GoalDetail } from '../features/goal/api'
-import FixedScheduleStep from '../features/goal/components/FixedScheduleStep'
-import { GoalStepCard, GoalStepInput, GoalStepValue } from '../features/goal/components/GoalStepCard'
-import GoalHeader from '../features/goal/components/GoalHeader'
-import PlanProposal from '../features/goal/components/PlanProposal'
-import { loadMe } from '../features/auth/api'
-import { useAuthStore } from '../features/auth/store'
-import CreditShortageModal from '../features/payment/CreditShortageModal'
-import { GOAL_TEXT_ERROR, isMeaningfulText } from '../features/goal/validation'
-import type { Weekday } from '../features/goal/weekdays'
-import { paths } from '../paths'
-import { toDateKey } from '../utils/date'
-
-/** 'YYYY.MM.DD' 형식인지 */
-const DATE_PATTERN = /^\d{4}\.\d{2}\.\d{2}$/
-
-/** 목표 기간 최대 일수 (시작일 포함, 백엔드 기준) */
-const MAX_PERIOD_DAYS = 365
-
-/** 'YYYY.MM.DD' 형식이고 달력에 있는 날짜인지 (2월 30일 등을 걸러냄) */
-function isValidDate(value: string) {
-  if (!DATE_PATTERN.test(value)) return false
-  const [year, month, day] = value.split('.').map(Number)
-  const date = new Date(year, month - 1, day)
-  return date.getMonth() === month - 1 && date.getDate() === day
-}
-
-/** 'YYYY.MM.DD' → 'YYYY-MM-DD' (API 형식) */
-const toApiDate = (date: string) => date.replaceAll('.', '-')
-
-/** 숫자만 남기고 'YYYY.MM.DD' 모양으로 점을 넣음. 예: '20260808' → '2026.08.08', '20261' → '2026.1' */
-function formatDateInput(value: string) {
-  const digits = value.replace(/\D/g, '').slice(0, 8)
-  return [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6)].filter(Boolean).join('.')
-}
+import icClose from '@/assets/icons/ic_close.svg'
+import NavigationBar from '@/components/NavigationBar'
+import { getApiError } from '@/api/errors'
+import { createGoalFromInput, generatePlans, selectPlan, type PlanView } from '@/features/goal/aiApi'
+import { deleteGoal, getGoal, type GoalDetail } from '@/features/goal/api'
+import FixedScheduleStep from '@/features/goal/components/FixedScheduleStep'
+import { GoalStepCard, GoalStepInput, GoalStepValue } from '@/features/goal/components/GoalStepCard'
+import GoalHeader from '@/features/goal/components/GoalHeader'
+import PlanProposal from '@/features/goal/components/PlanProposal'
+import { loadMe } from '@/features/auth/api'
+import { useAuthStore } from '@/features/auth/store'
+import CreditShortageModal from '@/features/payment/CreditShortageModal'
+import { GOAL_TEXT_ERROR, isMeaningfulText } from '@/features/goal/validation'
+import type { Weekday } from '@/features/goal/weekdays'
+import { paths } from '@/paths'
+import { dateError, formatDateInput, isValidDate, periodError, toApiDate } from '@/features/goal/period'
 
 /** hint: 제목 아래 말풍선 문구. 고정 일정 단계는 그 요일에 투두를 만들지 않는다고 알려줌 (사용자 피드백) */
 const STEPS = [
@@ -50,30 +27,6 @@ const STEPS = [
 
 /** 입력 단계가 끝난 뒤 화면: AI 진행 중 → 완료 (또는 실패) → 플랜 제안 */
 type Phase = 'input' | 'loading' | 'done' | 'error' | 'plans'
-
-/** 날짜 입력칸 오류 문구. 아직 건드리지 않았으면 표시하지 않음 */
-function dateError(label: string, value: string) {
-  if (!value) return `${label}을 입력해주세요.`
-  if (!isValidDate(value)) return '예: 2026.08.08 처럼 입력해주세요.'
-  return undefined
-}
-
-/** 시작일 포함 며칠짜리 기간인지. 둘 다 'YYYY.MM.DD' */
-function periodDays(startDate: string, endDate: string) {
-  const toUtc = (value: string) => {
-    const [year, month, day] = value.split('.').map(Number)
-    return Date.UTC(year, month - 1, day)
-  }
-  return (toUtc(endDate) - toUtc(startDate)) / 86_400_000 + 1
-}
-
-/** 기간 오류 문구. 백엔드 GOAL_INVALID_PERIOD · GOAL_PERIOD_TOO_LONG 과 같은 기준 */
-function periodError(startDate: string, endDate: string) {
-  if (endDate < startDate) return '종료일은 시작일 이후여야 해요.'
-  if (toApiDate(endDate) < toDateKey(new Date())) return '종료일은 오늘 이후여야 해요.'
-  if (periodDays(startDate, endDate) > MAX_PERIOD_DAYS) return '목표 기간은 최대 1년이에요.'
-  return undefined
-}
 
 /**
  * 목표 추가 (Figma: 새로운 AI 목표-입력 전 · 입력 후 / 오류 · 일정 입력 및 AI 진행)

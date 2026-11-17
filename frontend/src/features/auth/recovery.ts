@@ -1,7 +1,4 @@
-import { getApiError } from '../../api/client'
-
-/** 서버가 문구를 주지 않았을 때(네트워크 오류 등) 보여줄 문구. 회원가입 화면과 같습니다. */
-export const FALLBACK_ERROR = '잠시 후 다시 시도해 주세요'
+import { FALLBACK_ERROR, getApiError } from '@/api/errors'
 
 /**
  * 계정 찾기 요청 실패를 화면에 나눠 보여 줍니다 (회원가입 화면과 같은 방식).

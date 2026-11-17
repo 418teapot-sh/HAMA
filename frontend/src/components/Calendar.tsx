@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import icCloudUpload from '../assets/icons/ic_cloud_upload.svg'
-import { startOfToday, toDateKey } from '../utils/date'
+import icCloudUpload from '@/assets/icons/ic_cloud_upload.svg'
+import { startOfToday, toDateKey } from '@/utils/date'
 
 export type CalendarCategory = 'task' | 'schedule' | 'ai' | 'etc'
 

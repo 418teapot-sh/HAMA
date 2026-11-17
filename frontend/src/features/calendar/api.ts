@@ -1,7 +1,7 @@
-import { api } from '../../api/client'
-import type { ApiResponse } from '../../api/types'
-import type { CalendarCategory, CalendarMark } from '../../components/Calendar'
-import { toDateKey } from '../../utils/date'
+import { api } from '@/api/client'
+import type { ApiResponse } from '@/api/types'
+import type { CalendarCategory, CalendarMark } from '@/components/Calendar'
+import { toDateKey } from '@/utils/date'
 
 /** FIXED·PERSONAL = 고정·개인 일정, AI_GOAL = AI 목표 투두, TASK = 일반 할일, OTHER = 기타 (#223) */
 export type CalendarItemType = 'FIXED' | 'PERSONAL' | 'AI_GOAL' | 'TASK' | 'OTHER'

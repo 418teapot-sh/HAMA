@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { fileURLToPath } from 'node:url'
 import { defineConfig, loadEnv } from 'vite'
 
 // https://vite.dev/config/
@@ -10,6 +11,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    resolve: {
+      // import '@/components/Button' = src/components/Button (tsconfig.app.json 의 paths 와 같이 바꿉니다)
+      alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    },
     server: {
       /**
        * npm run dev 에서는 브라우저가 localhost:5173/api 로만 요청하고, Vite 가 백엔드로 대신 전달합니다.

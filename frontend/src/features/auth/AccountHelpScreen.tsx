@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
-import icClose from '../../assets/icons/ic_close.svg'
-import NavigationBar from '../../components/NavigationBar'
-import { paths } from '../../paths'
+import icClose from '@/assets/icons/ic_close.svg'
+import NavigationBar from '@/components/NavigationBar'
+import { paths } from '@/paths'
 
 interface AccountHelpScreenProps {
   title: string

@@ -1,5 +1,5 @@
-import { api, refreshAccessToken } from '../../api/client'
-import type { ApiResponse } from '../../api/types'
+import { api, refreshAccessToken } from '@/api/client'
+import type { ApiResponse } from '@/api/types'
 import { useAuthStore, type User } from './store'
 
 /** 요청·응답 형식은 Swagger(https://api.todohama.site/swagger-ui/index.html) 기준입니다. */

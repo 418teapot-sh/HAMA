@@ -1,4 +1,4 @@
-import type { CalendarCategory } from '../../components/Calendar'
+import type { CalendarCategory } from '@/components/Calendar'
 
 /**
  * 투두 화면의 카테고리 4개

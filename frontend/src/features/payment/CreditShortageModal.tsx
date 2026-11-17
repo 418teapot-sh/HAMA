@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { loadMe } from '../auth/api'
-import IconAlert from '../../components/IconAlert'
-import { SparkleIcon } from '../../components/TodoIcons'
-import { paths } from '../../paths'
+import { loadMe } from '@/features/auth/api'
+import IconAlert from '@/components/IconAlert'
+import { SparkleIcon } from '@/components/Icons'
+import { paths } from '@/paths'
 
 interface CreditShortageModalProps {
   open: boolean

@@ -1,7 +1,7 @@
 import { isRouteErrorResponse, useNavigate, useRouteError } from 'react-router'
-import Button from '../components/Button'
-import GoalHeader from '../features/goal/components/GoalHeader'
-import { paths } from '../paths'
+import Button from '@/components/Button'
+import GoalHeader from '@/features/goal/components/GoalHeader'
+import { paths } from '@/paths'
 
 /**
  * 없는 주소 · 화면 오류 (디자인 없음, 목표 추가 완료 화면과 같은 머리말 + 공용 Button)

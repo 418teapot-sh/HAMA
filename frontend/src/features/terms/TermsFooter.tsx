@@ -1,4 +1,4 @@
-import { paths } from '../../paths'
+import { paths } from '@/paths'
 import { OPERATOR_INFO, POLICY_DOCS } from './policies'
 import PolicyLink from './PolicyLink'
 

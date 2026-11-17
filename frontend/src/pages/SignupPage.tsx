@@ -1,18 +1,18 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { getApiError } from '../api/client'
-import Agreement, { type AgreementItem } from '../components/Agreement'
-import Button from '../components/Button'
-import InputField from '../components/InputField'
-import NavigationBar from '../components/NavigationBar'
-import Toast from '../components/Toast'
-import { signup, type SignupRequest } from '../features/auth/api'
-import { useToast } from '../hooks/useToast'
-import { paths } from '../paths'
-import icBack from '../assets/icons/ic_back.svg'
-import logoHama from '../assets/logo/logo_hama.svg'
-import icEyesNoSee from '../assets/icons/ic_eyes_nosee.svg'
-import icEyesSee from '../assets/icons/ic_eyes_see.svg'
+import { FALLBACK_ERROR, getApiError } from '@/api/errors'
+import Agreement, { type AgreementItem } from '@/components/Agreement'
+import Button from '@/components/Button'
+import InputField from '@/components/InputField'
+import NavigationBar from '@/components/NavigationBar'
+import Toast from '@/components/Toast'
+import { signup, type SignupRequest } from '@/features/auth/api'
+import { useToast } from '@/hooks/useToast'
+import { paths } from '@/paths'
+import icBack from '@/assets/icons/ic_back.svg'
+import logoHama from '@/assets/logo/logo_hama.svg'
+import icEyesNoSee from '@/assets/icons/ic_eyes_nosee.svg'
+import icEyesSee from '@/assets/icons/ic_eyes_see.svg'
 
 type AgreementKey = 'termsAgreed' | 'privacyAgreed' | 'ageConfirmed' | 'marketingAgreed'
 
@@ -83,7 +83,7 @@ export default function SignupPage() {
         if (otherMessage) toast.show(otherMessage)
       } else {
         // TODO: 그 밖의 실패 안내 디자인이 없어 토스트에 백엔드 문구를 보여줌. 확인 필요
-        toast.show(apiError?.message ?? '잠시 후 다시 시도해 주세요')
+        toast.show(apiError?.message ?? FALLBACK_ERROR)
       }
     } finally {
       setSubmitting(false)
