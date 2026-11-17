@@ -1,5 +1,5 @@
-import icCheckBoxOff from '../assets/icons/ic_checkBox_off.svg'
-import icCheckBoxOn from '../assets/icons/ic_checkBox_on.svg'
+import icCheckBoxOff from '@/assets/icons/ic_checkBox_off.svg'
+import icCheckBoxOn from '@/assets/icons/ic_checkBox_on.svg'
 
 interface CheckboxProps {
   id: string

@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router'
-import hippo from '../../assets/landing/hippo.webp'
-import { paths } from '../../paths'
-import { restoreSession } from '../auth/api'
-import { useAuthStore } from '../auth/store'
+import hippo from '@/assets/landing/hippo.webp'
+import { paths } from '@/paths'
+import { restoreSession } from '@/features/auth/api'
+import { useAuthStore } from '@/features/auth/store'
 
 /**
  * 이용약관 헤더 (Figma 헤더)

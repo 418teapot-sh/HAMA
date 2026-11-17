@@ -1,4 +1,4 @@
-import { paths } from '../../paths'
+import { paths } from '@/paths'
 
 /**
  * 약관 · 정책 문서 3개 (이용약관 · 환불 및 청약철회 정책 · 개인정보처리방침)

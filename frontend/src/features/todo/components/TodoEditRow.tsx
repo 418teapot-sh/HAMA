@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
-import Character from '../../components/Character'
-import { CheckIcon } from '../../components/TodoIcons'
-import { EDITABLE_CATEGORIES, getCategory, type TodoCategoryKey } from './categories'
-import { SCHEDULE_TITLE_MAX, TODO_CONTENT_MAX } from './types'
+import Character from '@/components/Character'
+import { CheckIcon } from '@/components/Icons'
+import { EDITABLE_CATEGORIES, getCategory, type TodoCategoryKey } from '@/features/todo/categories'
+import { SCHEDULE_TITLE_MAX, TODO_CONTENT_MAX } from '@/features/todo/types'
 
 export interface TodoEditValue {
   title: string

@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import icRight from '../assets/icons/ic_right.svg'
+import icRight from '@/assets/icons/ic_right.svg'
 import Checkbox from './Checkbox'
 
 export interface AgreementItem {

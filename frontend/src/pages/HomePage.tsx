@@ -1,24 +1,21 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { getApiError } from '../api/client'
-import icRightBlack from '../assets/icons/ic_right_black.svg'
-import Calendar, { type CalendarMark } from '../components/Calendar'
-import Toast from '../components/Toast'
-import { getMonthCalendar, toCalendarMarks } from '../features/calendar/api'
-import { getCurrentGoal, getGoalTasks, type GoalSummary, type GoalTask } from '../features/goal/api'
-import GoalSummaryCard from '../features/goal/components/GoalSummaryCard'
-import { AiStatePromptModal } from '../features/todo/AiStateSheets'
-import TodoCard, { TodoEmpty } from '../features/todo/TodoCard'
-import TodoItem from '../features/todo/TodoItem'
-import { completeTodo, getDailyTodos, setScheduleDone, uncompleteTodo } from '../features/todo/api'
-import type { TodoView } from '../features/todo/types'
-import { useToast } from '../hooks/useToast'
+import { getErrorMessage } from '@/api/errors'
+import icRightBlack from '@/assets/icons/ic_right_black.svg'
+import Calendar from '@/components/Calendar'
+import Toast from '@/components/Toast'
+import { useMonthMarks } from '@/features/calendar/useMonthMarks'
+import { getCurrentGoal, getGoalTasks, type GoalSummary, type GoalTask } from '@/features/goal/api'
+import GoalSummaryCard from '@/features/goal/components/GoalSummaryCard'
+import { AiStatePromptModal } from '@/features/todo/components/AiStateSheets'
+import TodoCard, { TodoEmpty } from '@/features/todo/components/TodoCard'
+import TodoItem from '@/features/todo/components/TodoItem'
+import { completeTodo, getDailyTodos, setScheduleDone, uncompleteTodo } from '@/features/todo/api'
+import type { TodoView } from '@/features/todo/types'
+import { useToast } from '@/hooks/useToast'
 import type { TodoPageState } from './TodoPage'
-import { paths } from '../paths'
-import { formatKoreanDate, toDateKey } from '../utils/date'
-
-/** 서버가 문구를 주지 않았을 때(네트워크 오류 등) 보여줄 문구 (투두 화면과 같음) */
-const FALLBACK_ERROR = '잠시 후 다시 시도해 주세요'
+import { paths } from '@/paths'
+import { formatKoreanDate, toDateKey } from '@/utils/date'
 
 /**
  * 홈 (Figma: 홈)
@@ -39,7 +36,6 @@ export default function HomePage() {
     year: selectedDate.getFullYear(),
     month: selectedDate.getMonth() + 1,
   }))
-  const [marks, setMarks] = useState<Record<string, CalendarMark[]>>({})
 
   const navigate = useNavigate()
   const toast = useToast()
@@ -49,6 +45,7 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false)
   /** 늘리면 목록 · 캘린더 뱃지를 다시 불러옵니다 (체크 뒤) */
   const [reloadKey, setReloadKey] = useState(0)
+  const marks = useMonthMarks(viewMonth.year, viewMonth.month, reloadKey)
   /** 완료 뒤 "현재 상태를 입력할까요?" 팝업을 띄울 AI 목표 투두 */
   const [promptTodo, setPromptTodo] = useState<TodoView | null>(null)
   const selectedKey = toDateKey(selectedDate)
@@ -78,23 +75,6 @@ export default function HomePage() {
       ignore = true
     }
   }, [])
-
-  // 캘린더: 보고 있는 달이 바뀔 때마다
-  useEffect(() => {
-    let ignore = false
-
-    getMonthCalendar(viewMonth.year, viewMonth.month)
-      .then((items) => {
-        if (!ignore) setMarks(toCalendarMarks(items))
-      })
-      .catch(() => {
-        if (!ignore) setMarks({})
-      })
-
-    return () => {
-      ignore = true
-    }
-  }, [viewMonth.year, viewMonth.month, reloadKey])
 
   // 고른 날짜의 투두 · 일정
   useEffect(() => {
@@ -131,7 +111,7 @@ export default function HomePage() {
         if (todo.category === 'ai') setPromptTodo(todo)
       }
     } catch (error) {
-      showToast(getApiError(error)?.message ?? FALLBACK_ERROR)
+      showToast(getErrorMessage(error))
     } finally {
       setBusy(false)
       setReloadKey((key) => key + 1)

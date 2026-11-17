@@ -1,5 +1,5 @@
-import { ToastBubble } from '../../components/Toast'
-import { formatKoreanDate } from '../../utils/date'
+import { ToastBubble } from '@/components/Toast'
+import { formatKoreanDate } from '@/utils/date'
 
 interface MoveDateHeaderProps {
   /** 옮길 날짜 (아직 고르지 않았으면 null) */

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import BottomSheet from '../../../components/BottomSheet'
-import { PenIcon, SparkleIcon, TrashIcon } from '../../../components/TodoIcons'
+import BottomSheet from '@/components/BottomSheet'
+import { PenIcon, SparkleIcon, TrashIcon } from '@/components/Icons'
 
 type GoalMoreSheetProps = {
   open: boolean

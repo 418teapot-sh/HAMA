@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
-import BottomSheet from '../../components/BottomSheet'
-import Modal from '../../components/Modal'
-import { ToastBubble } from '../../components/Toast'
-import { SparkleIcon } from '../../components/TodoIcons'
-import type { GoalSummary } from '../goal/api'
+import BottomSheet from '@/components/BottomSheet'
+import Modal from '@/components/Modal'
+import { ToastBubble } from '@/components/Toast'
+import { SparkleIcon } from '@/components/Icons'
+import type { GoalSummary } from '@/features/goal/api'
 
 /**
  * AI 목표 투두를 완료했을 때 뜨는 팝업 (Figma AI 목표 현재 상태 입력 흐름 170:15254)

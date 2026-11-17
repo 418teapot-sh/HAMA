@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
-import icPen from '../../../assets/icons/ic_pen.svg'
-import icPenError from '../../../assets/icons/ic_pen_error.svg'
-import icSparkle from '../../../assets/icons/ic_sparkle.svg'
+import icPen from '@/assets/icons/ic_pen.svg'
+import icPenError from '@/assets/icons/ic_pen_error.svg'
+import icSparkle from '@/assets/icons/ic_sparkle.svg'
 
 /**
  * 목표 추가 단계 카드 (Figma: 새로운 AI 목표 > 목표 / 현재 상태 / 진행할 기간 카드)

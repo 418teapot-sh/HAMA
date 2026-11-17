@@ -1,7 +1,7 @@
-import Character from '../../components/Character'
-import { MeatballIcon, SparkleIcon, TodoCheckIcon } from '../../components/TodoIcons'
-import { AI_GENERATED_STYLE, getCategory } from './categories'
-import type { TodoView } from './types'
+import Character from '@/components/Character'
+import { MeatballIcon, SparkleIcon, TodoCheckIcon } from '@/components/Icons'
+import { AI_GENERATED_STYLE, getCategory } from '@/features/todo/categories'
+import type { TodoView } from '@/features/todo/types'
 
 interface TodoItemProps {
   todo: TodoView

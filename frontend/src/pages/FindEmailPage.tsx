@@ -1,14 +1,14 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
-import Button from '../components/Button'
-import InputField from '../components/InputField'
-import Toast from '../components/Toast'
-import AccountHelpScreen, { HelpNote } from '../features/auth/AccountHelpScreen'
-import { submitEmailInquiry } from '../features/auth/api'
-import { splitRecoveryError } from '../features/auth/recovery'
-import { EMAIL_FORMAT_ERROR, isValidEmail } from '../features/auth/validation'
-import { useToast } from '../hooks/useToast'
-import { paths } from '../paths'
+import Button from '@/components/Button'
+import InputField from '@/components/InputField'
+import Toast from '@/components/Toast'
+import AccountHelpScreen, { HelpNote } from '@/features/auth/AccountHelpScreen'
+import { submitEmailInquiry } from '@/features/auth/api'
+import { splitRecoveryError } from '@/features/auth/recovery'
+import { EMAIL_FORMAT_ERROR, isValidEmail } from '@/features/auth/validation'
+import { useToast } from '@/hooks/useToast'
+import { paths } from '@/paths'
 
 /**
  * 이메일 찾기 (Figma UI > 이메일, 비밀번호 찾기)

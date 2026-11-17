@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { getApiError } from '../api/client'
-import icMascot from '../assets/icons/ic_mascot.svg'
-import Character from '../components/Character'
-import Modal from '../components/Modal'
-import NavigationBar from '../components/NavigationBar'
-import Toast from '../components/Toast'
-import { loadMe } from '../features/auth/api'
+import { getApiError } from '@/api/errors'
+import icMascot from '@/assets/icons/ic_mascot.svg'
+import Character from '@/components/Character'
+import Modal from '@/components/Modal'
+import NavigationBar from '@/components/NavigationBar'
+import Toast from '@/components/Toast'
+import { loadMe } from '@/features/auth/api'
 import {
   deleteGoal,
   getGoalReview,
@@ -16,14 +16,14 @@ import {
   replanGoal,
   type GoalSummary,
   type GoalTask,
-} from '../features/goal/api'
-import GoalMoreSheet from '../features/goal/components/GoalMoreSheet'
-import ReplanScreen from '../features/goal/components/ReplanScreen'
-import ReportGoalCard from '../features/goal/components/ReportGoalCard'
-import { useAuthStore } from '../features/auth/store'
-import CreditShortageModal from '../features/payment/CreditShortageModal'
-import { useToast } from '../hooks/useToast'
-import { paths } from '../paths'
+} from '@/features/goal/api'
+import GoalMoreSheet from '@/features/goal/components/GoalMoreSheet'
+import ReplanScreen from '@/features/goal/components/ReplanScreen'
+import ReportGoalCard from '@/features/goal/components/ReportGoalCard'
+import { useAuthStore } from '@/features/auth/store'
+import CreditShortageModal from '@/features/payment/CreditShortageModal'
+import { useToast } from '@/hooks/useToast'
+import { paths } from '@/paths'
 
 /** ENDED = 완료 처리한 목표(COMPLETED) + 종료일이 지난 목표(PAST) */
 type Tab = 'IN_PROGRESS' | 'ENDED'

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useDesktopZoom } from '../landing/useDesktopZoom'
+import { useDesktopZoom } from '@/features/landing/useDesktopZoom'
 import { articleId, type PolicyDoc } from './policies'
 import TermsArticle, { PolicyBlocks, TermsDivider } from './TermsArticle'
 import TermsFooter from './TermsFooter'

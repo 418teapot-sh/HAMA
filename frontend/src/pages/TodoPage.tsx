@@ -1,22 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { getApiError } from '../api/client'
-import Calendar, { type CalendarMark } from '../components/Calendar'
-import Modal from '../components/Modal'
-import Toast from '../components/Toast'
-import { exportCalendar, getMonthCalendar, toCalendarMarks } from '../features/calendar/api'
-import { getGoals, type GoalSummary } from '../features/goal/api'
-import { AiStateInput, AiStatePromptModal, AiStateSheet, GoalPickSheet } from '../features/todo/AiStateSheets'
-import CategoryBar, { CategoryPointer } from '../features/todo/CategoryBar'
-import MoveDateHeader from '../features/todo/MoveDateHeader'
-import TodoCard, { TodoEmpty } from '../features/todo/TodoCard'
-import TodoEditRow, { type TodoEditValue } from '../features/todo/TodoEditRow'
-import TodoInput, { type TodoInputValue } from '../features/todo/TodoInput'
-import TodoItem from '../features/todo/TodoItem'
-import TodoMoreSheet from '../features/todo/TodoMoreSheet'
+import { getErrorMessage } from '@/api/errors'
+import Calendar from '@/components/Calendar'
+import Toast from '@/components/Toast'
+import CalendarExportModal from '@/features/calendar/components/CalendarExportModal'
+import { useMonthMarks } from '@/features/calendar/useMonthMarks'
+import { getGoals, type GoalSummary } from '@/features/goal/api'
+import { AiStateInput, AiStatePromptModal, AiStateSheet, GoalPickSheet } from '@/features/todo/components/AiStateSheets'
+import CategoryBar, { CategoryPointer } from '@/features/todo/components/CategoryBar'
+import MoveDateHeader from '@/features/todo/components/MoveDateHeader'
+import TodoCard, { TodoEmpty } from '@/features/todo/components/TodoCard'
+import TodoEditRow, { type TodoEditValue } from '@/features/todo/components/TodoEditRow'
+import TodoInput, { type TodoInputValue } from '@/features/todo/components/TodoInput'
+import TodoItem from '@/features/todo/components/TodoItem'
+import TodoMoreSheet from '@/features/todo/components/TodoMoreSheet'
 import {
   completeTodo,
-  convertCategory,
   createGoalTodo,
   createSchedule,
   createTodo,
@@ -27,25 +26,20 @@ import {
   moveSchedule,
   moveTodo,
   setScheduleDone,
-  toDateTime,
   uncompleteTodo,
-  updateScheduleTitle,
   updateStatusNote,
-  updateTodo,
-} from '../features/todo/api'
-import { getCategory, type TodoCategoryKey } from '../features/todo/categories'
-import type { TodoView } from '../features/todo/types'
-import { useToast } from '../hooks/useToast'
-import { formatKoreanDate, startOfToday, toDateKey } from '../utils/date'
+} from '@/features/todo/api'
+import { getCategory, type TodoCategoryKey } from '@/features/todo/categories'
+import { buildSaveRequest, toTodoCategory } from '@/features/todo/saveTodoEdit'
+import type { TodoView } from '@/features/todo/types'
+import { useToast } from '@/hooks/useToast'
+import { formatKoreanDate, startOfToday, toDateKey } from '@/utils/date'
 
 /**
  * 토스트 위치: 화면 내용 맨 위에서 415px (캘린더 카드 아래쪽 위에 겹침)
  * Figma 투두리스트_삭제 알림 · 투두리스트_날짜 이동(이동 뒤) 모두 Frame 2085668192 안에서 top 415, 가로 가운데
  */
 const TOAST_TOP = 415
-
-/** 서버가 문구를 주지 않았을 때(네트워크 오류 등) 보여줄 문구. 회원가입 화면과 같습니다. */
-const FALLBACK_ERROR = '잠시 후 다시 시도해 주세요'
 
 /** 에러 코드별 안내 (서버 문구보다 화면에 맞는 문구가 필요한 것만) */
 const ERROR_MESSAGES: Record<string, string> = {
@@ -57,19 +51,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 }
 
 function errorMessage(error: unknown) {
-  const apiError = getApiError(error)
-  if (!apiError) return FALLBACK_ERROR
-  // 400 VALIDATION_FAILED 면 서버가 칸별로 준 구체적인 문구(예: "내용은 255자 이하입니다.")를 먼저 보여 줍니다
-  const fieldMessage = apiError.fields ? Object.values(apiError.fields).find(Boolean) : undefined
-  return fieldMessage ?? ERROR_MESSAGES[apiError.code] ?? apiError.message ?? FALLBACK_ERROR
-}
-
-/** 캘린더 뱃지: 할일 · 기타 · AI 목표 투두 · 일정 */
-const MARK_TYPES = new Set(['TASK', 'OTHER', 'AI_GOAL', 'FIXED', 'PERSONAL'])
-
-/** 화면 분류 → 백엔드 투두 종류 (할일 · 기타) */
-function toTodoCategory(key: TodoCategoryKey): 'TASK' | 'OTHER' {
-  return key === 'etc' ? 'OTHER' : 'TASK'
+  return getErrorMessage(error, ERROR_MESSAGES)
 }
 
 /**
@@ -120,7 +102,6 @@ export default function TodoPage() {
   const [goalPicking, setGoalPicking] = useState<GoalSummary[] | null>(null)
   const [todos, setTodos] = useState<TodoView[]>([])
   const [loaded, setLoaded] = useState(false)
-  const [marks, setMarks] = useState<Record<string, CalendarMark[]>>({})
   /** 더보기 시트를 연 투두 (key) */
   const [moreKey, setMoreKey] = useState<string | null>(null)
   /** sparkle 시트를 연 AI 투두 (key) */
@@ -139,24 +120,6 @@ export default function TodoPage() {
   const showToast = toast.show
   /** 캘린더 내보내기 확인 팝업 (Figma 캘린더 내보내기) */
   const [exportOpen, setExportOpen] = useState(false)
-  const [exporting, setExporting] = useState(false)
-
-  /** 보고 있는 달 1일부터 1년치 일정을 .ics 파일로 내려받습니다 */
-  const handleExport = async () => {
-    if (exporting) return
-    setExporting(true)
-    try {
-      await exportCalendar(month.year, month.month)
-      setExportOpen(false)
-      showToast('캘린더 파일을 내려받았어요.')
-    } catch {
-      // 실패 응답이 파일(blob)로 와서 서버 문구를 꺼내지 않고 공통 안내를 보여 줍니다
-      setExportOpen(false)
-      showToast('캘린더를 내보내지 못했어요. 잠시 후 다시 시도해 주세요.')
-    } finally {
-      setExporting(false)
-    }
-  }
 
   const selectedKey = toDateKey(selectedDate)
 
@@ -196,19 +159,7 @@ export default function TodoPage() {
   }, [selectedKey, reloadKey, showToast, navigate, location.pathname])
 
 
-  useEffect(() => {
-    let ignore = false
-    getMonthCalendar(month.year, month.month)
-      .then((items) => {
-        if (!ignore) setMarks(toCalendarMarks(items.filter((item) => MARK_TYPES.has(item.type))))
-      })
-      .catch(() => {
-        // 캘린더 뱃지는 보조 정보라, 실패해도 목록은 그대로 씁니다.
-      })
-    return () => {
-      ignore = true
-    }
-  }, [month.year, month.month, reloadKey])
+  const marks = useMonthMarks(month.year, month.month, reloadKey)
 
   /** 요청 하나를 보내고, 끝나면 목록 · 캘린더를 다시 불러옵니다. 실패하면 토스트 */
   async function run(request: () => Promise<unknown>, successMessage?: string) {
@@ -297,51 +248,8 @@ export default function TodoPage() {
 
   /** 수정 저장: 내용 + 분류. 할일 ↔ 기타는 PATCH, 일정과 오가는 것은 전환 API */
   async function handleSave(todo: TodoView, value: TodoEditValue) {
-    const titleChanged = value.title !== todo.title
-    const categoryChanged = value.category !== todo.category
-    if (!titleChanged && !categoryChanged) {
-      setEditKey(null)
-      return
-    }
-
-    let request: () => Promise<unknown>
-    if (todo.kind === 'schedule') {
-      if (value.category === 'schedule') {
-        request = () => updateScheduleTitle(todo.id, value.title)
-      } else {
-        // 일정 → 할일 · 기타: 같은 날짜, 시간 없음
-        request = async () => {
-          const converted = await convertCategory({
-            sourceType: 'PERSONAL',
-            refId: todo.id,
-            targetType: toTodoCategory(value.category),
-            todoDate: todo.date,
-            startTime: null,
-            endTime: null,
-          })
-          if (titleChanged) await updateTodo(converted.refId, { content: value.title })
-        }
-      }
-    } else if (value.category === 'schedule') {
-      // 할일 · 기타 → 일정: 고른 시간으로
-      request = async () => {
-        const converted = await convertCategory({
-          sourceType: todo.apiCategory === 'OTHER' ? 'OTHER' : 'TASK',
-          refId: todo.id,
-          targetType: 'PERSONAL',
-          startAt: toDateTime(todo.date, value.startTime!),
-          endAt: toDateTime(todo.date, value.endTime!),
-        })
-        if (titleChanged) await updateScheduleTitle(converted.refId, value.title)
-      }
-    } else {
-      request = () =>
-        updateTodo(todo.id, {
-          ...(titleChanged ? { content: value.title } : {}),
-          ...(categoryChanged && todo.category !== 'ai' ? { category: toTodoCategory(value.category) } : {}),
-        })
-    }
-    if (await run(request)) setEditKey(null)
+    const request = buildSaveRequest(todo, value)
+    if (!request || (await run(request))) setEditKey(null)
   }
 
   function handleDelete() {
@@ -543,19 +451,12 @@ export default function TodoPage() {
         onPick={handlePickGoal}
       />
 
-      <Modal
+      <CalendarExportModal
         open={exportOpen}
-        title="캘린더를 내보낼까요?"
-        description={
-          <>
-            캘린더를 내보내도
-            <br />
-            하마에 저장된 일정은 그대로 유지돼요.
-          </>
-        }
-        confirmText={exporting ? '내보내는 중…' : '내보내기'}
-        onCancel={() => setExportOpen(false)}
-        onConfirm={() => void handleExport()}
+        year={month.year}
+        month={month.month}
+        onClose={() => setExportOpen(false)}
+        onDone={showToast}
       />
     </main>
   )

@@ -1,6 +1,6 @@
-import Character from '../../components/Character'
-import { PlusIcon } from '../../components/TodoIcons'
-import { TODO_CATEGORIES, type TodoCategoryKey } from './categories'
+import Character from '@/components/Character'
+import { PlusIcon } from '@/components/Icons'
+import { TODO_CATEGORIES, type TodoCategoryKey } from '@/features/todo/categories'
 
 interface CategoryBarProps {
   selected: TodoCategoryKey | null

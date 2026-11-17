@@ -1,6 +1,6 @@
-import { api } from '../../api/client'
-import type { ApiResponse } from '../../api/types'
-import type { CalendarItem } from '../calendar/api'
+import { api } from '@/api/client'
+import type { ApiResponse } from '@/api/types'
+import type { CalendarItem } from '@/features/calendar/api'
 import type { TodoCategoryKey } from './categories'
 import type { TodoApiCategory, TodoView } from './types'
 
