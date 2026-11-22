@@ -124,3 +124,10 @@ body {
     cursor: default;
   }
 }
+
+/* 공지 팝업의 하마 인사 (손 흔들기) */
+@keyframes hama-wave {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  10%, 30% { transform: rotate(16deg); }
+  20%, 40% { transform: rotate(-8deg); }
+}
