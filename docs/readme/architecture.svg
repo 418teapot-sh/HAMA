@@ -7,7 +7,7 @@
       .box{fill:#fff;stroke:#c9d6ea;stroke-width:1.5}
       .t{font-size:16px;font-weight:700;fill:#042558;text-anchor:middle}
       .s{font-size:12.5px;fill:#5b6b82;text-anchor:middle}
-      .l{font-size:12px;fill:#3b5b8c}
+      .l{font-size:12px;fill:#3b5b8c;paint-order:stroke;stroke:#f4f8fe;stroke-width:5px;stroke-linejoin:round}
       .ln{stroke:#3b5b8c;stroke-width:1.6;fill:none;marker-end:url(#a)}
       .dash{stroke-dasharray:6 5}
     </style>
@@ -76,21 +76,21 @@
   <path class="ln" d="M150 270 L290 182"/>
   <text class="l" x="160" y="215">DNS</text>
   <path class="ln" d="M150 360 L300 440"/>
-  <text class="l" x="160" y="412">www.todohama.site</text>
+  <text class="l" x="110" y="448">www.todohama.site</text>
   <path class="ln" d="M210 315 L513 315"/>
-  <text class="l" x="300" y="306">api.todohama.site /api/v1</text>
+  <text class="l" x="290" y="302">api.todohama.site /api/v1</text>
   <path class="ln dash" d="M450 160 L560 273"/>
-  <text class="l" x="470" y="236">alias</text>
+  <text class="l" x="462" y="244">alias</text>
   <path class="ln" d="M665 315 L718 315"/>
   <path class="ln" d="M825 388 L825 488"/>
   <path class="ln dash" d="M600 186 L740 256"/>
-  <text class="l" x="610" y="232">env</text>
+  <text class="l" x="612" y="240" style="stroke:#e8f0fc">env</text>
   <path class="ln dash" d="M825 186 L825 256"/>
-  <text class="l" x="832" y="220">pull</text>
+  <text class="l" x="834" y="224" style="stroke:#e8f0fc">pull</text>
   <path class="ln" d="M930 290 L998 185"/>
   <path class="ln" d="M930 325 L998 325"/>
   <path class="ln" d="M998 475 L932 370"/>
-  <text class="l" x="945" y="440">webhook</text>
+  <text class="l" x="972" y="412">webhook</text>
   <path class="ln dash" d="M360 520 L360 640 L1082 640 L1082 512"/>
-  <text class="l" x="620" y="632">Paddle.js checkout</text>
+  <text class="l" x="660" y="628">Paddle.js checkout</text>
 </svg>
