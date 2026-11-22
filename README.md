@@ -118,3 +118,7 @@ npm run dev
 - [협업 규칙](CONTRIBUTING.md): 이슈·브랜치·커밋·PR 형식, 머지 조건
 - [백엔드 개발 가이드](backend/README.md): 설정, DB 마이그레이션, 주의사항
 - [프론트엔드 개발 가이드](frontend/README.md): 기술 스택, 폴더 구조, 인증 흐름
+
+## 라이선스
+
+코드는 [MIT License](LICENSE) 를 따릅니다. 로고 · 하마 캐릭터 · 장표 이미지 등 디자인 에셋은 라이선스에 포함되지 않습니다.
