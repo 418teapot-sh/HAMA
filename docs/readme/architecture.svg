@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" font-family="Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Segoe UI', sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#3b5b8c"/>
+    </marker>
+    <style>
+      .box{fill:#fff;stroke:#c9d6ea;stroke-width:1.5}
+      .t{font-size:16px;font-weight:700;fill:#042558;text-anchor:middle}
+      .s{font-size:12.5px;fill:#5b6b82;text-anchor:middle}
+      .l{font-size:12px;fill:#3b5b8c}
+      .ln{stroke:#3b5b8c;stroke-width:1.6;fill:none;marker-end:url(#a)}
+      .dash{stroke-dasharray:6 5}
+    </style>
+  </defs>
+  <rect width="1200" height="680" rx="20" fill="#f4f8fe"/>
+  <text x="40" y="44" font-size="22" font-weight="800" fill="#042558">HAMA Service Architecture</text>
+
+  <!-- Client -->
+  <rect class="box" x="40" y="270" width="170" height="90" rx="12"/>
+  <text class="t" x="125" y="308">User</text>
+  <text class="s" x="125" y="330">Web Browser (Mobile)</text>
+
+  <!-- Route 53 -->
+  <rect class="box" x="270" y="110" width="180" height="70" rx="12"/>
+  <text class="t" x="360" y="140">Route 53</text>
+  <text class="s" x="360" y="162">todohama.site DNS</text>
+
+  <!-- Vercel -->
+  <rect class="box" x="270" y="440" width="180" height="80" rx="12"/>
+  <text class="t" x="360" y="472">Vercel</text>
+  <text class="s" x="360" y="494">React 19 + Vite (www)</text>
+
+  <!-- AWS -->
+  <rect x="490" y="70" width="470" height="530" rx="16" fill="#e8f0fc" stroke="#9db6dc" stroke-width="1.5" stroke-dasharray="8 6"/>
+  <text x="510" y="96" font-size="14" font-weight="700" fill="#3b5b8c">AWS · ap-northeast-2</text>
+
+  <rect class="box" x="515" y="120" width="150" height="64" rx="12"/>
+  <text class="t" x="590" y="147">SSM</text>
+  <text class="s" x="590" y="167">Parameter Store</text>
+
+  <rect class="box" x="720" y="120" width="210" height="64" rx="12"/>
+  <text class="t" x="825" y="147">ECR</text>
+  <text class="s" x="825" y="167">Docker image</text>
+
+  <rect class="box" x="515" y="275" width="150" height="80" rx="12"/>
+  <text class="t" x="590" y="308">ALB</text>
+  <text class="s" x="590" y="330">HTTPS · ACM</text>
+
+  <rect x="705" y="225" width="240" height="180" rx="14" fill="none" stroke="#9db6dc" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="933" y="400" font-size="12" font-weight="700" fill="#3b5b8c" text-anchor="end">Auto Scaling Group</text>
+  <rect class="box" x="720" y="258" width="210" height="130" rx="12"/>
+  <text class="t" x="825" y="290">EC2 · Docker</text>
+  <text class="s" x="825" y="314">Spring Boot 4 · Java 21</text>
+  <text class="s" x="825" y="334">Spring Security · JWT</text>
+  <text class="s" x="825" y="354">JPA · Flyway</text>
+
+  <rect class="box" x="720" y="490" width="210" height="80" rx="12"/>
+  <text class="t" x="825" y="524">RDS</text>
+  <text class="s" x="825" y="546">MySQL 8</text>
+
+  <!-- External -->
+  <text x="1005" y="96" font-size="14" font-weight="700" fill="#3b5b8c">External</text>
+  <rect class="box" x="1000" y="140" width="165" height="70" rx="12"/>
+  <text class="t" x="1082" y="170">Liner API</text>
+  <text class="s" x="1082" y="191">AI 목표 · 투두 생성</text>
+
+  <rect class="box" x="1000" y="290" width="165" height="70" rx="12"/>
+  <text class="t" x="1082" y="320">Resend</text>
+  <text class="s" x="1082" y="341">인증 메일</text>
+
+  <rect class="box" x="1000" y="440" width="165" height="70" rx="12"/>
+  <text class="t" x="1082" y="470">Paddle</text>
+  <text class="s" x="1082" y="491">크레딧 결제</text>
+
+  <!-- arrows -->
+  <path class="ln" d="M150 270 L290 182"/>
+  <text class="l" x="160" y="215">DNS</text>
+  <path class="ln" d="M150 360 L300 440"/>
+  <text class="l" x="160" y="412">www.todohama.site</text>
+  <path class="ln" d="M210 315 L513 315"/>
+  <text class="l" x="300" y="306">api.todohama.site /api/v1</text>
+  <path class="ln dash" d="M450 160 L560 273"/>
+  <text class="l" x="470" y="236">alias</text>
+  <path class="ln" d="M665 315 L718 315"/>
+  <path class="ln" d="M825 388 L825 488"/>
+  <path class="ln dash" d="M600 186 L740 256"/>
+  <text class="l" x="610" y="232">env</text>
+  <path class="ln dash" d="M825 186 L825 256"/>
+  <text class="l" x="832" y="220">pull</text>
+  <path class="ln" d="M930 290 L998 185"/>
+  <path class="ln" d="M930 325 L998 325"/>
+  <path class="ln" d="M998 475 L932 370"/>
+  <text class="l" x="945" y="440">webhook</text>
+  <path class="ln dash" d="M360 520 L360 640 L1082 640 L1082 512"/>
+  <text class="l" x="620" y="632">Paddle.js checkout</text>
+</svg>

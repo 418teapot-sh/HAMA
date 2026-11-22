@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" font-family="Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Segoe UI', sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="#3b5b8c"/>
+    </marker>
+    <style>
+      .box{fill:#fff;stroke:#c9d6ea;stroke-width:1.5}
+      .t{font-size:16px;font-weight:700;fill:#042558;text-anchor:middle}
+      .s{font-size:12.5px;fill:#5b6b82;text-anchor:middle}
+      .row{font-size:14px;font-weight:700;fill:#3b5b8c}
+      .ln{stroke:#3b5b8c;stroke-width:1.6;fill:none;marker-end:url(#a)}
+    </style>
+  </defs>
+  <rect width="1200" height="420" rx="20" fill="#f4f8fe"/>
+  <text x="40" y="44" font-size="22" font-weight="800" fill="#042558">CI / CD</text>
+
+  <!-- row 1: PR -->
+  <text class="row" x="40" y="96">feature → develop (PR)</text>
+  <rect class="box" x="40" y="110" width="190" height="80" rx="12"/>
+  <text class="t" x="135" y="143">Pull Request</text>
+  <text class="s" x="135" y="165">이슈 번호 브랜치</text>
+
+  <rect class="box" x="290" y="110" width="250" height="80" rx="12"/>
+  <text class="t" x="415" y="138">GitHub Actions CI</text>
+  <text class="s" x="415" y="160">BE  ./gradlew test · build</text>
+  <text class="s" x="415" y="178">FE  oxlint · tsc · vite build</text>
+
+  <rect class="box" x="600" y="110" width="230" height="80" rx="12"/>
+  <text class="t" x="715" y="138">PR 검사</text>
+  <text class="s" x="715" y="160">PR 제목 형식 · 라벨 자동 지정</text>
+  <text class="s" x="715" y="178">main 은 develop 에서만</text>
+
+  <rect class="box" x="890" y="110" width="270" height="80" rx="12"/>
+  <text class="t" x="1025" y="143">Vercel Preview</text>
+  <text class="s" x="1025" y="165">미리보기 주소를 PR 댓글로</text>
+
+  <path class="ln" d="M230 150 L288 150"/>
+  <path class="ln" d="M540 150 L598 150"/>
+  <path class="ln" d="M830 150 L888 150"/>
+
+  <!-- row 2: main -->
+  <text class="row" x="40" y="246">develop → main (Release)</text>
+  <rect class="box" x="40" y="260" width="190" height="120" rx="12"/>
+  <text class="t" x="135" y="315">main merge</text>
+  <text class="s" x="135" y="337">BE · FE 동시 배포</text>
+
+  <rect class="box" x="290" y="260" width="250" height="52" rx="12"/>
+  <text class="t" x="415" y="291">OIDC → AWS 역할</text>
+  <rect class="box" x="600" y="260" width="230" height="52" rx="12"/>
+  <text class="t" x="715" y="291">ECR push (SHA · latest)</text>
+  <rect class="box" x="890" y="260" width="270" height="52" rx="12"/>
+  <text class="t" x="1025" y="284">ASG Instance Refresh</text>
+  <text class="s" x="1025" y="302">실패 시 이전 이미지로 롤백</text>
+
+  <rect class="box" x="290" y="328" width="250" height="52" rx="12"/>
+  <text class="t" x="415" y="359">vercel pull · build</text>
+  <rect class="box" x="600" y="328" width="560" height="52" rx="12"/>
+  <text class="t" x="880" y="359">vercel deploy --prod → www.todohama.site</text>
+
+  <path class="ln" d="M230 286 L288 286"/>
+  <path class="ln" d="M540 286 L598 286"/>
+  <path class="ln" d="M830 286 L888 286"/>
+  <path class="ln" d="M230 354 L288 354"/>
+  <path class="ln" d="M540 354 L598 354"/>
+</svg>
