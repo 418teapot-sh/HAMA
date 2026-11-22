@@ -1,4 +1,5 @@
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, Outlet } from 'react-router'
+import Notices from './components/Notices'
 import RequireAuth from './features/auth/RequireAuth'
 import MobileLayout from './layouts/MobileLayout'
 import TabLayout from './layouts/TabLayout'
@@ -24,6 +25,13 @@ export const router = createBrowserRouter([
   {
     // 화면을 그리다 오류가 나면 라우터 기본 화면 대신 ErrorPage, 없는 주소는 '*' 로 같은 화면
     errorElement: <ErrorPage />,
+    // 공지 팝업은 한 번만 붙여 두고, 띄울 화면은 Notices 가 주소로 고릅니다
+    element: (
+      <>
+        <Outlet />
+        <Notices />
+      </>
+    ),
     children: [
       // 랜딩 · 약관 · 정책 페이지는 넓은 화면에서 데스크톱 디자인으로 보여 주므로 모바일 폭(402) 레이아웃 밖에 둡니다.
       { path: paths.landing, element: <LandingPage /> },
