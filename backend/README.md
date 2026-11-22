@@ -1,6 +1,40 @@
 # HAMA Backend
 
-Spring Boot 4 · Java 21 · MySQL 8 · Flyway
+목표를 적으면 AI가 할 일로 쪼개 주는 투두 서비스 **하마**의 백엔드입니다.
+
+| | |
+|---|---|
+| API | https://api.todohama.site |
+| 기술 | Spring Boot 4 · Java 21 · MySQL 8 · Flyway · JWT |
+| 인프라 | AWS ALB · ASG(EC2, Docker) · RDS · ECR · SSM ([구조도](../README.md#서비스-구조도)) |
+| 협업 규칙 | [CONTRIBUTING.md](../CONTRIBUTING.md) |
+
+## 실행 방법
+
+```bash
+cd backend
+docker compose up -d   # 로컬 MySQL
+./gradlew bootRun      # http://localhost:8080
+```
+
+| 명령 | 설명 |
+| --- | --- |
+| `./gradlew bootRun` | 서버 실행 (Swagger: http://localhost:8080/swagger-ui.html, 로컬에서만) |
+| `./gradlew test` | 전체 테스트 + 커버리지 리포트 |
+| `./gradlew build` | 배포용 jar |
+
+## 도메인 · 담당
+
+`com.hama.domain` 아래 도메인별 패키지, 공통 코드는 `com.hama.global` 에 있습니다.
+
+| 패키지 | 내용 | 담당 |
+| --- | --- | --- |
+| `auth` · `user` | 회원가입 · 이메일 인증 · 로그인(JWT) · 계정 찾기 · 탈퇴 | 송승환 |
+| `payment` | Paddle 크레딧 결제 · 웹훅 · 환불 | 송승환 |
+| `todo` · `schedule` · `calendar` | 투두 · 고정 일정 · 월간 캘린더 · .ics 내보내기 | 장선우 |
+| `goal` · `goalai` | 목표 · AI 플랜 생성 · 리포트 · 재계산 | 김지윤 |
+| `checkin` | 목표 시작 · 중간 · 종료 체크인 | 김지윤 |
+| 인프라 · CI/CD | AWS 배포 · GitHub Actions | 송승환 |
 
 ## 설정
 
