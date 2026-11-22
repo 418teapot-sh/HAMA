@@ -4,6 +4,8 @@
 
 ### 목표를 오늘의 할 일로 바꾸는 AI, 하마
 
+멋쟁이사자처럼 14기 데모데이 · 운영 2026.10.31 ~ 2026.11.23
+
 [![Deploy Backend](https://github.com/418teapot-sh/HAMA/actions/workflows/deploy-backend.yml/badge.svg?branch=main&event=push)](https://github.com/418teapot-sh/HAMA/actions/workflows/deploy-backend.yml)
 [![Deploy Frontend](https://github.com/418teapot-sh/HAMA/actions/workflows/deploy-frontend.yml/badge.svg?branch=main&event=push)](https://github.com/418teapot-sh/HAMA/actions/workflows/deploy-frontend.yml)
 
@@ -99,25 +101,11 @@
 
 <br>
 
-## 로컬 실행
-
-```bash
-# 백엔드 (JDK 21, Docker 필요)
-cd backend
-docker compose up -d
-./gradlew bootRun
-
-# 프론트엔드
-cd frontend
-npm install
-npm run dev
-```
-
 ## 문서
 
 - [협업 규칙](CONTRIBUTING.md): 이슈·브랜치·커밋·PR 형식, 머지 조건
-- [백엔드 개발 가이드](backend/README.md): 설정, DB 마이그레이션, 주의사항
-- [프론트엔드 개발 가이드](frontend/README.md): 기술 스택, 폴더 구조, 인증 흐름
+- [백엔드 개발 가이드](backend/README.md): 실행 방법, 설정, 도메인 · 담당, DB 마이그레이션, 코드 규칙
+- [프론트엔드 개발 가이드](frontend/README.md): 실행 방법, 기술 스택, 폴더 구조, 인증 흐름
 
 ## 라이선스
 
