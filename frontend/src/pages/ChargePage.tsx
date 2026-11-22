@@ -119,7 +119,7 @@ export default function ChargePage() {
         <div className="flex flex-col gap-[2px] text-caption-cap3 text-black-gray60">
           <p>목표 생성·일정 재계산 시 각각 1회 차감돼요.</p>
           {/* Figma 는 "구매일부터 1년 유효" 이지만 약관(서비스 종료일까지 사용)에 맞춤 · 민서 확인 */}
-          <p>일회성 결제 · 자동 결제 없음 · 서비스 종료일(2026년 11월 20일)까지 사용</p>
+          <p>일회성 결제 · 자동 결제 없음 · 서비스 종료일(2026년 11월 23일)까지 사용</p>
         </div>
       </main>
 
@@ -128,13 +128,14 @@ export default function ChargePage() {
           <span className="text-body-b8 text-brand-main">{plan.credits}회 충전</span>
           <span className="text-body-b3 text-black-black">{formatPrice(plan.price)}</span>
         </div>
+        {/* 서비스 종료(11/23)를 앞두고 결제를 막음. 다시 열려면 disabled · 문구 · 색을 되돌리면 됨 */}
         <button
           type="button"
-          disabled={paying}
+          disabled
           onClick={() => void handlePay()}
-          className="flex h-[48px] w-full items-center justify-center rounded-[12px] bg-brand-main px-[20px] py-[12px] text-body-b3 text-white-w1"
+          className="flex h-[48px] w-full items-center justify-center rounded-[12px] bg-black-gray20 px-[20px] py-[12px] text-body-b3 text-black-gray60"
         >
-          {formatPrice(plan.price)} 결제하기
+          서비스 종료로 결제가 중단됐어요
         </button>
         {/* #253: 달러 결제라 카드사 해외 결제 수수료 안내를 한 줄 더함 (하단 영역이 16px 늘어 본문 pb 도 같이 늘림) */}
         <p className="text-center text-caption-cap3 whitespace-pre-line text-black-gray60">
