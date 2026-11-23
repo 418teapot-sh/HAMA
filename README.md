@@ -39,7 +39,7 @@
 <img src="docs/readme/slides/slide-15.webp" width="100%">
 <img src="docs/readme/slides/slide-16.webp" width="100%">
 
-### [하마 바로가기](https://www.todohama.site)
+### [하마 바로가기](https://www.todohama.site) ![서비스 종료](https://img.shields.io/badge/서비스_종료-2026.11.23-lightgrey)
 
 </div>
 
